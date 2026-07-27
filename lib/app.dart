@@ -4,9 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 
-/// Codex Mobile Pro 应用入口 Widget
-///
-/// 配置 Material 3 主题、GoRouter 路由。
 class CodexMobileApp extends ConsumerWidget {
   const CodexMobileApp({super.key});
 
@@ -19,7 +16,6 @@ class CodexMobileApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
       routerConfig: router,
     );
   }
