@@ -10,7 +10,7 @@ import io.flutter.plugin.common.MethodChannel
 /// 注册 MethodChannel，处理 Flutter ↔ Native 通信。
 class MainActivity : FlutterActivity() {
 
-    private val termuxBridge = TermuxBridge()
+    private val termuxBridge by lazy { TermuxBridge(this) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

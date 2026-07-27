@@ -59,10 +59,34 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
     setState(() => _isRunning = true);
     try {
       _envCheck = await TermuxService.checkEnvironment();
+      _addLog('');
+      _addLog('═══ Termux ═══');
+      _addLog('  已安装:  ${_envCheck!.termuxInstalled ? "✅" : "❌"}');
       _addLog('  bash 文件存在: ${_envCheck!.bashExists}');
-      _addLog('  home 目录存在: ${_envCheck!.termuxHomeExists}');
-      _addLog('  bash 可执行: ${_envCheck!.bashExecutable}');
-      _addLog('  → 整体可用: ${_envCheck!.isAvailable}');
+      _addLog('  bash 可读:   ${_envCheck!.bashCanRead}');
+      _addLog('  bash 可执行: ${_envCheck!.bashCanExecute}');
+      _addLog('  bash 可运行: ${_envCheck!.bashWorks ? "✅" : "❌"}');
+      if (_envCheck!.bashLastStderr.isNotEmpty) {
+        _addLog('  bash 错误:   ${_envCheck!.bashLastStderr}');
+      }
+      _addLog('  Intent API:  ${_envCheck!.termuxIntentAvailable ? "✅" : "❌"}');
+      _addLog('');
+      _addLog('═══ 系统 shell 降级 ═══');
+      _addLog('  sh 存在:    ${_envCheck!.systemShExists}');
+      _addLog('  sh 可执行:  ${_envCheck!.systemShCanExecute}');
+      _addLog('  sh 可运行:  ${_envCheck!.shWorks ? "✅" : "❌"}');
+      if (_envCheck!.shLastStderr.isNotEmpty) {
+        _addLog('  sh 错误:    ${_envCheck!.shLastStderr}');
+      }
+      _addLog('');
+      _addLog('═══ 结论 ═══');
+      if (_envCheck!.termuxMode) {
+        _addLog('  ✅ Termux 原生模式可用');
+      } else if (_envCheck!.fallbackAvailable) {
+        _addLog('  ⚠️  Termux 不可用，使用系统 shell 降级');
+      } else {
+        _addLog('  ❌ 无可用的 shell 环境');
+      }
     } catch (e) {
       _addLog('❌ 环境检查失败: $e');
     }
