@@ -1,0 +1,55 @@
+name: codex_mobile_pro
+description: 手机上的 AI IDE — 一键部署、国内直连、中文交互
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 状态管理
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+
+  # 路由
+  go_router: ^14.8.1
+
+  # 网络
+  http: ^1.3.0
+  web_socket_channel: ^3.0.2
+
+  # 本地存储
+  shared_preferences: ^2.3.5
+  flutter_secure_storage: ^9.2.5
+
+  # UI 组件
+  flutter_markdown: ^0.7.7
+  flutter_highlight: ^0.7.0
+  google_fonts: ^6.2.1
+
+  # 工具
+  path: ^1.9.1
+  path_provider: ^2.1.5
+  intl: ^0.20.2
+  logger: ^2.5.0
+  equatable: ^2.0.7
+  uuid: ^4.5.1
+  collection: ^1.19.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  riverpod_generator: ^2.6.3
+  build_runner: ^2.4.14
+  mockito: ^5.4.6
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/

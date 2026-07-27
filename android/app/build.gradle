@@ -1,0 +1,60 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+android {
+    namespace "com.codexmobile.app"
+    compileSdk 35
+    ndkVersion flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    defaultConfig {
+        applicationId "com.codexmobile.app"
+        minSdk 29          // Android 10+
+        targetSdk 35       // Android 15
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
+        profile {
+            signingConfig signingConfigs.debug
+        }
+        release {
+            signingConfig signingConfigs.debug
+            // TODO: Sprint 9 — 配置正式签名
+        }
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+    // Kotlin 标准库
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+
+    // AndroidX 核心
+    implementation 'androidx.core:core-ktx:1.15.0'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+
+    // 前台服务（后台运行）
+    implementation 'androidx.work:work-runtime-ktx:2.10.0'
+
+    // Material 3 组件
+    implementation 'com.google.android.material:material:1.12.0'
+}

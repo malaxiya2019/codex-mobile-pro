@@ -1,0 +1,35 @@
+# Flutter
+.dart_tool/
+.packages
+build/
+*.js
+*.js.map
+
+# Android
+android/.gradle/
+android/app/build/
+android/local.properties
+*.iml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dart
+*.g.dart
+*.freezed.dart
+.generator/
+
+# Logs
+*.log
+
+# Env
+.env
+.env.local

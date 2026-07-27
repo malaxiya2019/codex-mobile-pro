@@ -1,0 +1,133 @@
+# ============================================================
+#  Codex Mobile Pro — CI Pipeline
+#  每次 push / pull_request 自动运行：
+#   1. Flutter Analyze (静态分析)
+#   2. Dart Format 检查
+#   3. Flutter Test (单元测试 + Widget 测试)
+#   4. Android Debug Build
+# ============================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop, 'sprint-*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ============================================================
+  #  Job 1: 静态分析 + 格式检查
+  # ============================================================
+  analyze:
+    name: 🔍 Analyze & Format
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.x
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Dart format check
+        run: dart format --set-exit-if-changed lib/ test/
+
+      - name: Flutter analyze
+        run: flutter analyze --fatal-infos
+
+  # ============================================================
+  #  Job 2: 测试
+  # ============================================================
+  test:
+    name: 🧪 Tests
+    needs: analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.x
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run tests with coverage
+        run: flutter test --coverage --machine > test_report.json
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-report
+          path: test_report.json
+
+  # ============================================================
+  #  Job 3: Android Debug Build
+  # ============================================================
+  build-android:
+    name: 📦 Android Debug Build
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.x
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Android APK (debug)
+        run: flutter build apk --debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+
+  # ============================================================
+  #  Job 4: 构建报告 (可选, 汇总构建信息)
+  # ============================================================
+  report:
+    name: 📋 Build Report
+    needs: [analyze, test, build-android]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check build status
+        run: |
+          echo "## 📋 CI Build Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 Analyze & Format | ${{ needs.analyze.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧪 Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Android Build | ${{ needs.build-android.result }} |" >> $GITHUB_STEP_SUMMARY
