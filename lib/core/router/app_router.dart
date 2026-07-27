@@ -1,22 +1,24 @@
-import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/home/views/home_page.dart';
 import '../../features/termux/views/termux_test_page.dart';
 import 'route_names.dart';
 
 /// GoRouter 路由配置
-final appRouterProvider = GoRouter(
-  initialLocation: RouteNames.home,
-  routes: [
-    GoRoute(
-      path: RouteNames.home,
-      name: 'home',
-      builder: (context, state) => const HomePage(),
-    ),
-    GoRoute(
-      path: RouteNames.termuxTest,
-      name: 'termuxTest',
-      builder: (context, state) => const TermuxTestPage(),
-    ),
-  ],
-);
+final appRouterProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    initialLocation: RouteNames.home,
+    routes: [
+      GoRoute(
+        path: RouteNames.home,
+        name: 'home',
+        builder: (context, state) => const HomePage(),
+      ),
+      GoRoute(
+        path: RouteNames.termuxTest,
+        name: 'termuxTest',
+        builder: (context, state) => const TermuxTestPage(),
+      ),
+    ],
+  );
+});

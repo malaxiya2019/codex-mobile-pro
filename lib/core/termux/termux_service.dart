@@ -52,7 +52,7 @@ class TermuxService {
 
   /// 检查 Termux 环境是否可用
   static Future<TermuxEnvCheck> checkEnvironment() async {
-    final map = await _channel.invokeMethod<Map>('checkEnvironment');
+    final map = await _channel.invokeMethod<Map<String, dynamic>>('checkEnvironment');
     return TermuxEnvCheck(
       bashExists: map?['bash_exists'] as bool? ?? false,
       termuxHomeExists: map?['termux_home_exists'] as bool? ?? false,
@@ -62,7 +62,7 @@ class TermuxService {
 
   /// 执行单条命令
   static Future<TermuxResult> execute(String command) async {
-    final map = await _channel.invokeMethod<Map>('execute', {
+    final map = await _channel.invokeMethod<Map<String, dynamic>>('execute', {
       'command': command,
     });
     return TermuxResult(
