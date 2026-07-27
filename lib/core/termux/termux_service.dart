@@ -115,7 +115,7 @@ class TermuxService {
       exitCode: _int(map['exitCode'], -1),
       stdout: _str(map['stdout']),
       stderr: _str(map['stderr']),
-      durationMs: _int(map['durationMs'], 0),
+      durationMs: _int(map['durationMs']),
     );
   }
 
