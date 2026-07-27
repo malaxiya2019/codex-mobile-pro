@@ -1,3 +1,5 @@
+import 'app_exception.dart';
+
 /// Result 模式 — 显式处理成功/失败
 ///
 /// Service 层统一返回 Result 类型，调用方必须处理两种情况。

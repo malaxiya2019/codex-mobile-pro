@@ -1,9 +1,3 @@
-/// Codex Mobile Pro — 手机上的 AI IDE
-///
-/// 将 Codex CLI、DeepSeek、GitHub、Termux 深度整合，
-/// 实现真正的移动端软件开发。
-library codex_mobile_pro;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -31,5 +25,9 @@ void main() {
     ),
   );
 
-  runApp(const ProviderScope(child: CodexMobileApp()));
+  runApp(
+    const ProviderScope(
+      child: CodexMobileApp(),
+    ),
+  );
 }

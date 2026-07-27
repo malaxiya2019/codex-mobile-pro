@@ -17,13 +17,9 @@ class CodexMobileApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'Codex Mobile Pro',
       debugShowCheckedModeBanner: false,
-
-      // Material 3 主题（亮/暗自适应）
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
-
-      // GoRouter 路由
       routerConfig: router,
     );
   }

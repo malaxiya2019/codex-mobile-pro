@@ -1,7 +1,8 @@
-/// 统一日志服务
+/// Codex Mobile Pro — 统一日志服务
 ///
 /// 封装日志记录功能，支持级别过滤和文件落盘。
 /// 后续可扩展为异步写入日志文件。
+library log_service;
 
 import 'package:flutter/foundation.dart';
 
@@ -63,8 +64,5 @@ class LogService {
     final output = '[$timestamp][${level.label}][$tag] $message';
 
     debugPrint(output);
-
-    // TODO: Sprint 1 — 实现文件落盘
-    // TODO: Sprint 9 — 实现日志查看器
   }
 }
