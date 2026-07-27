@@ -1,24 +1,17 @@
 #!/usr/bin/env bash
-# ============================================================
-#  codex-zh — 一键启动中文 Codex
-#  等价于 cyo --zh
-# ============================================================
+# 一键启动中文 Codex（相当于 cyo --zh）
 
 # 自动启动 mimo2codex
 if ! lsof -i :8788 >/dev/null 2>&1; then
     echo "[codex-zh] 启动 mimo2codex..."
-    nohup mimo2codex --model ds --port 8788 \
-    > ~/mimo2codex.log 2>&1 &
-    sleep 1.5
+    nohup mimo2codex --model ds --port 8788 > ~/mimo2codex.log 2>&1 &
+    sleep 2
 fi
-
-export NODE_PATH="$(npm root -g):$NODE_PATH"
 
 ZH_PROMPT="以后所有自然语言使用简体中文回答。
 分析、计划、修改说明、总结均使用中文。
 代码、命令、文件路径、日志保持原文。"
 
 CODEX_SANDBOX_NETWORK_DISABLED=0 \
-codex \
---dangerously-bypass-approvals-and-sandbox \
+codex --dangerously-bypass-approvals-and-sandbox \
 "$ZH_PROMPT" "$@"
