@@ -23,7 +23,7 @@ dependencies:
 
   # 本地存储
   shared_preferences: ^2.3.5
-  flutter_secure_storage: ^9.2.5
+  flutter_secure_storage: ^10.3.1
 
   # UI 组件
   flutter_markdown: ^0.7.7
