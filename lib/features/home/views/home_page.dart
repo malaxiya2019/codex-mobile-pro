@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/counter_provider.dart';
-import '../providers/home_state_provider.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -12,7 +11,6 @@ class HomePage extends ConsumerWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final counter = ref.watch(counterProvider);
-    final homeState = ref.watch(homeStateProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -114,10 +112,10 @@ class HomePage extends ConsumerWidget {
                 children: [
                   Text('环境信息', style: theme.textTheme.titleSmall),
                   const SizedBox(height: 12),
-                  _InfoRow(label: 'Flutter', value: '3.x'),
-                  _InfoRow(label: 'Dart', value: '3.5+'),
-                  _InfoRow(label: 'Android', value: '10–15 (API 29–35)'),
-                  _InfoRow(label: '架构', value: 'Material 3 + Riverpod'),
+                  const _InfoRow(label: 'Flutter', value: '3.x'),
+                  const _InfoRow(label: 'Dart', value: '3.5+'),
+                  const _InfoRow(label: 'Android', value: '10–15 (API 29–35)'),
+                  const _InfoRow(label: '架构', value: 'Material 3 + Riverpod'),
                 ],
               ),
             ),
@@ -125,7 +123,6 @@ class HomePage extends ConsumerWidget {
         ],
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
         onDestinationSelected: (index) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('页面 ${index + 1} — 后续 Sprint 实现')),
