@@ -40,13 +40,21 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 #  1. 检测平台
 # ============================================================
 detect_platform() {
-    if [ -d "/data/data/com.termux" ]; then
-        echo "termux"
-    elif [ -f /etc/os-release ]; then
-        echo "linux"
-    else
-        echo "unknown"
+    # 1) 检查 proot 容器
+    if [ -f /run/proot.pid ] 2>/dev/null; then
+        echo "linux"; return
     fi
+    # 2) 检查是否在容器中（非 init 进程）
+    CMD1=$(cat /proc/1/cmdline 2>/dev/null | tr "\000" " " | head -c 60)
+    if [ -n "$CMD1" ] && [ "$CMD1" != "/sbin/init " ] && [ "$CMD1" != "/init " ]; then
+        echo "linux"; return
+    fi
+    # 3) Termux（需要 TERMUX_VERSION 环境变量确认）
+    if [ -d "/data/data/com.termux" ] && [ -n "$TERMUX_VERSION" ]; then
+        echo "termux"; return
+    fi
+    # 4) 普通 Linux
+    if [ -f /etc/os-release ]; then echo "linux"; else echo "unknown"; fi
 }
 PLATFORM=$(detect_platform)
 info "检测到平台: ${PLATFORM}"
