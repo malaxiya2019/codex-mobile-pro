@@ -4,6 +4,10 @@ set -euo pipefail
 # ============================================================
 #  Codex Mobile Pro — 一键部署脚本
 #  基于预编译二进制包安装，无需 npm
+# 检测是否在 proot 容器中
+if [ -f /run/proot.pid ] || [ "$(cat /proc/1/cmdline 2>/dev/null | tr "\0" " ")" != "/sbin/init " ]; then
+    export PROOT=1
+fi
 #  支持 Termux (Android) / Linux 服务器
 #  版本: 1.0.0
 # ============================================================
@@ -20,7 +24,7 @@ warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 err()   { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # ---------- 检查 root ----------
-if [ "$EUID" = 0 ]; then
+if [ "$EUID" = 0 ] && [ "$PROOT" != "1" ]; then
     err "请勿使用 root 用户运行此脚本！"
     exit 1
 fi
