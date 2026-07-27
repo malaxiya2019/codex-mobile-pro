@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:go_router/go_router.dart';
+import '../../../core/router/route_names.dart';
 import '../providers/counter_provider.dart';
 
 class HomePage extends ConsumerWidget {
@@ -19,6 +20,11 @@ class HomePage extends ConsumerWidget {
         backgroundColor: colorScheme.surfaceContainer,
         actions: [
           IconButton(
+            icon: const Icon(Icons.terminal),
+            tooltip: 'Termux 通信验证',
+            onPressed: () => context.push(RouteNames.termuxTest),
+          ),
+          IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: '设置',
             onPressed: () {
@@ -32,7 +38,6 @@ class HomePage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // 状态卡片
           Card(
             elevation: 0,
             color: colorScheme.primaryContainer,
@@ -52,7 +57,6 @@ class HomePage extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
-          // Riverpod 计数器验证
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -61,10 +65,7 @@ class HomePage extends ConsumerWidget {
                   Text('Riverpod 状态管理验证', style: theme.textTheme.titleSmall),
                   const SizedBox(height: 20),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 16,
-                      horizontal: 32,
-                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
                     decoration: BoxDecoration(
                       color: colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(12),
@@ -103,7 +104,6 @@ class HomePage extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
-          // 环境信息
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -124,14 +124,18 @@ class HomePage extends ConsumerWidget {
       ),
       bottomNavigationBar: NavigationBar(
         onDestinationSelected: (index) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('页面 ${index + 1} — 后续 Sprint 实现')),
-          );
+          if (index == 1) {
+            context.push(RouteNames.termuxTest);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('页面 ${index + 1} — 后续 Sprint 实现')),
+            );
+          }
         },
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: '首页'),
+          NavigationDestination(icon: Icon(Icons.terminal_outlined), selectedIcon: Icon(Icons.terminal), label: 'Termux'),
           NavigationDestination(icon: Icon(Icons.chat_outlined), selectedIcon: Icon(Icons.chat), label: 'AI'),
-          NavigationDestination(icon: Icon(Icons.terminal_outlined), selectedIcon: Icon(Icons.terminal), label: '终端'),
           NavigationDestination(icon: Icon(Icons.folder_outlined), selectedIcon: Icon(Icons.folder), label: '文件'),
         ],
       ),
@@ -149,9 +153,7 @@ class _StatusHeader extends StatelessWidget {
       children: [
         Icon(Icons.check_circle, color: colorScheme.primary, size: 28),
         const SizedBox(width: 12),
-        Text('系统状态', style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-        )),
+        Text('系统状态', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
       ],
     );
   }
@@ -162,11 +164,7 @@ class _StatusRow extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _StatusRow({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
+  const _StatusRow({required this.label, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {

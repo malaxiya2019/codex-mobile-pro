@@ -1,9 +1,26 @@
 package com.codexmobile.app
 
+import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 
 /// Codex Mobile Pro 主 Activity
 ///
-/// Flutter 入口 Activity。
-/// MethodChannel 注册等操作由 Flutter Engine 自动管理。
-class MainActivity : FlutterActivity()
+/// 注册 MethodChannel，处理 Flutter ↔ Native 通信。
+class MainActivity : FlutterActivity() {
+
+    private val termuxBridge = TermuxBridge()
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+
+        // 注册 Termux 通信通道
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            TermuxBridge.CHANNEL
+        ).setMethodCallHandler { call, result ->
+            termuxBridge.onMethodCall(call, result)
+        }
+    }
+}

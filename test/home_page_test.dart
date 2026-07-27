@@ -17,7 +17,7 @@ void main() {
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(find.text('首页'), findsOneWidget);
       expect(find.text('AI'), findsOneWidget);
-      expect(find.text('终端'), findsOneWidget);
+      expect(find.text('Termux'), findsOneWidget);
       expect(find.text('文件'), findsOneWidget);
     });
 
