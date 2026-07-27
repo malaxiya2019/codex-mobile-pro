@@ -85,36 +85,50 @@ class TermuxService {
 
   /// 检查环境（完整诊断）
   static Future<TermuxEnvCheck> checkEnvironment() async {
-    final map = await _channel
-        .invokeMethod<Map<Object?, Object?>>('checkEnvironment');
+    final result = await _channel.invokeMethod<dynamic>('checkEnvironment');
+    final map = result as Map<dynamic, dynamic>? ?? <dynamic, dynamic>{};
     return TermuxEnvCheck(
-      termuxInstalled: map?['termux_installed'] as bool? ?? false,
-      bashExists: map?['bash_exists'] as bool? ?? false,
-      bashCanRead: map?['bash_can_read'] as bool? ?? false,
-      bashCanExecute: map?['bash_can_execute'] as bool? ?? false,
-      bashWorks: map?['bash_works'] as bool? ?? false,
-      bashLastStderr: map?['bash_last_stderr'] as String? ?? '',
-      termuxHomeExists: map?['termux_home_exists'] as bool? ?? false,
-      systemShExists: map?['system_sh_exists'] as bool? ?? false,
-      systemShCanExecute: map?['system_sh_can_execute'] as bool? ?? false,
-      shWorks: map?['sh_works'] as bool? ?? false,
-      shLastStderr: map?['sh_last_stderr'] as String? ?? '',
-      termuxIntentAvailable: map?['termux_intent_available'] as bool? ?? false,
-      isAvailable: map?['is_available'] as bool? ?? false,
-      fallbackAvailable: map?['fallback_available'] as bool? ?? false,
+      termuxInstalled: _bool(map['termux_installed']),
+      bashExists: _bool(map['bash_exists']),
+      bashCanRead: _bool(map['bash_can_read']),
+      bashCanExecute: _bool(map['bash_can_execute']),
+      bashWorks: _bool(map['bash_works']),
+      bashLastStderr: _str(map['bash_last_stderr']),
+      termuxHomeExists: _bool(map['termux_home_exists']),
+      systemShExists: _bool(map['system_sh_exists']),
+      systemShCanExecute: _bool(map['system_sh_can_execute']),
+      shWorks: _bool(map['sh_works']),
+      shLastStderr: _str(map['sh_last_stderr']),
+      termuxIntentAvailable: _bool(map['termux_intent_available']),
+      isAvailable: _bool(map['is_available']),
+      fallbackAvailable: _bool(map['fallback_available']),
     );
   }
 
   /// 执行单条命令（自动降级）
   static Future<TermuxResult> execute(String command) async {
-    final map = await _channel.invokeMethod<Map<Object?, Object?>>('execute', {
+    final result = await _channel.invokeMethod<dynamic>('execute', {
       'command': command,
     });
+    final map = result as Map<dynamic, dynamic>? ?? <dynamic, dynamic>{};
     return TermuxResult(
-      exitCode: map?['exitCode'] as int? ?? -1,
-      stdout: map?['stdout'] as String? ?? '',
-      stderr: map?['stderr'] as String? ?? '',
-      durationMs: map?['durationMs'] as int? ?? 0,
+      exitCode: _int(map['exitCode'], -1),
+      stdout: _str(map['stdout']),
+      stderr: _str(map['stderr']),
+      durationMs: _int(map['durationMs'], 0),
     );
+  }
+
+  /// 安全转换 bool
+  static bool _bool(dynamic value) => value == true;
+
+  /// 安全转换 String
+  static String _str(dynamic value) => value?.toString() ?? '';
+
+  /// 安全转换 int
+  static int _int(dynamic value, [int defaultValue = 0]) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return defaultValue;
   }
 }

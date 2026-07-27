@@ -38,6 +38,40 @@ class TermuxBridge(private val context: Context? = null) {
         private const val SYSTEM_SH = "/system/bin/sh"
 
         private const val TIMEOUT_MS = 30_000L
+
+        // 工作目录：使用应用自己的目录（Android 10+ 无法访问 Termux 私有目录）
+        private var _workDir: java.io.File? = null
+    }
+
+    // 获取有效的可写工作目录
+    private fun getWorkDir(): java.io.File {
+        if (_workDir == null) {
+            _workDir = try {
+                // 优先使用应用缓存目录（一定可写）
+                context?.cacheDir?.also {
+                    Log.d(TAG, "工作目录（cacheDir）: ${it.absolutePath}")
+                }
+            } catch (e: Exception) {
+                null
+            }
+            if (_workDir == null) {
+                _workDir = try {
+                    context?.filesDir?.also {
+                        Log.d(TAG, "工作目录（filesDir）: ${it.absolutePath}")
+                    }
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            // 最后降级
+            if (_workDir == null) {
+                _workDir = java.io.File("/data/local/tmp").also {
+                    it.mkdirs()
+                    Log.d(TAG, "工作目录（/data/local/tmp）: ${it.absolutePath}")
+                }
+            }
+        }
+        return _workDir!!
     }
 
     // ──────────────────────────────────────────────
@@ -160,7 +194,7 @@ class TermuxBridge(private val context: Context? = null) {
     private fun tryExec(shell: String, command: String, startTime: Long): ExecResult? {
         return try {
             val process = ProcessBuilder(shell, "-c", command)
-                .directory(java.io.File(TERMUX_HOME))
+                .directory(getWorkDir())
                 .redirectErrorStream(false)
                 .start()
 
