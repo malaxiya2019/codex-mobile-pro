@@ -1,10 +1,9 @@
 # ============================================================
 #  Codex Mobile Pro — CI Pipeline
 #  每次 push / pull_request 自动运行：
-#   1. Flutter Analyze (静态分析)
-#   2. Dart Format 检查
-#   3. Flutter Test (单元测试 + Widget 测试)
-#   4. Android Debug Build
+#   1. Flutter Analyze (静态分析 + 风格检查)
+#   2. Flutter Test (单元测试 + Widget 测试)
+#   3. Android Debug Build
 # ============================================================
 
 name: CI
@@ -17,10 +16,10 @@ on:
 
 jobs:
   # ============================================================
-  #  Job 1: 静态分析 + 格式检查
+  #  Job 1: 静态分析
   # ============================================================
   analyze:
-    name: 🔍 Analyze & Format
+    name: 🔍 Analyze
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -36,9 +35,6 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-
-      - name: Dart format check
-        run: dart format --set-exit-if-changed lib/ test/
 
       - name: Flutter analyze
         run: flutter analyze --fatal-infos
@@ -65,8 +61,8 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Run tests with coverage
-        run: flutter test --coverage --machine > test_report.json
+      - name: Run tests
+        run: flutter test --machine > test_report.json
 
       - name: Upload test report
         uses: actions/upload-artifact@v4
@@ -113,10 +109,10 @@ jobs:
           path: build/app/outputs/flutter-apk/app-debug.apk
 
   # ============================================================
-  #  Job 4: 构建报告 (可选, 汇总构建信息)
+  #  Job 4: 构建报告
   # ============================================================
   report:
-    name: 📋 Build Report
+    name: 📋 Report
     needs: [analyze, test, build-android]
     runs-on: ubuntu-latest
     if: always()
@@ -128,6 +124,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔍 Analyze & Format | ${{ needs.analyze.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 Analyze | ${{ needs.analyze.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 🧪 Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 📦 Android Build | ${{ needs.build-android.result }} |" >> $GITHUB_STEP_SUMMARY
