@@ -7,11 +7,7 @@ import '../lib/app.dart';
 void main() {
   group('HomePage — Material 3 验证', () {
     testWidgets('首页正确渲染', (tester) async {
-      await tester.pumpWidget(
-        const ProviderScope(
-          child: CodexMobileApp(),
-        ),
-      );
+      await tester.pumpWidget(const ProviderScope(child: CodexMobileApp()));
 
       // 验证标题
       expect(find.text('Codex Mobile Pro'), findsOneWidget);
@@ -30,11 +26,7 @@ void main() {
     });
 
     testWidgets('Riverpod 计数器交互正常', (tester) async {
-      await tester.pumpWidget(
-        const ProviderScope(
-          child: CodexMobileApp(),
-        ),
-      );
+      await tester.pumpWidget(const ProviderScope(child: CodexMobileApp()));
 
       // 初始值应为 0
       expect(find.text('0'), findsOneWidget);

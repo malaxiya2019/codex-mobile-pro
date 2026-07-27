@@ -18,18 +18,14 @@ sealed class AppException implements Exception {
 
 /// 网络异常
 class NetworkException extends AppException {
-  const NetworkException({
-    super.message = '网络连接失败',
-    super.originalError,
-  }) : super(code: 'E_NET');
+  const NetworkException({super.message = '网络连接失败', super.originalError})
+    : super(code: 'E_NET');
 }
 
 /// API 异常
 class ApiException extends AppException {
-  const ApiException({
-    super.message = 'API 请求异常',
-    super.originalError,
-  }) : super(code: 'E_API');
+  const ApiException({super.message = 'API 请求异常', super.originalError})
+    : super(code: 'E_API');
 }
 
 /// 命令执行异常
@@ -47,24 +43,18 @@ class ExecException extends AppException {
 
 /// 文件操作异常
 class FileException extends AppException {
-  const FileException({
-    super.message = '文件操作失败',
-    super.originalError,
-  }) : super(code: 'E_FILE');
+  const FileException({super.message = '文件操作失败', super.originalError})
+    : super(code: 'E_FILE');
 }
 
 /// 配置异常
 class ConfigException extends AppException {
-  const ConfigException({
-    super.message = '配置异常',
-    super.originalError,
-  }) : super(code: 'E_CFG');
+  const ConfigException({super.message = '配置异常', super.originalError})
+    : super(code: 'E_CFG');
 }
 
 /// 权限异常
 class PermissionException extends AppException {
-  const PermissionException({
-    super.message = '权限不足',
-    super.originalError,
-  }) : super(code: 'E_PERM');
+  const PermissionException({super.message = '权限不足', super.originalError})
+    : super(code: 'E_PERM');
 }

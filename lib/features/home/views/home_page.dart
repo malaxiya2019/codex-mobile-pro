@@ -102,10 +102,7 @@ class HomePage extends ConsumerWidget {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  Text(
-                    'Riverpod 状态管理验证',
-                    style: theme.textTheme.titleSmall,
-                  ),
+                  Text('Riverpod 状态管理验证', style: theme.textTheme.titleSmall),
                   const SizedBox(height: 20),
 
                   // 计数器显示
@@ -135,17 +132,20 @@ class HomePage extends ConsumerWidget {
                     children: [
                       // Material 3 FilledButton
                       FilledButton.tonal(
-                        onPressed: () => ref.read(counterProvider.notifier).decrement(),
+                        onPressed: () =>
+                            ref.read(counterProvider.notifier).decrement(),
                         child: const Icon(Icons.remove),
                       ),
                       const SizedBox(width: 16),
                       FilledButton(
-                        onPressed: () => ref.read(counterProvider.notifier).reset(),
+                        onPressed: () =>
+                            ref.read(counterProvider.notifier).reset(),
                         child: const Text('重置'),
                       ),
                       const SizedBox(width: 16),
                       FilledButton.tonal(
-                        onPressed: () => ref.read(counterProvider.notifier).increment(),
+                        onPressed: () =>
+                            ref.read(counterProvider.notifier).increment(),
                         child: const Icon(Icons.add),
                       ),
                     ],
@@ -164,10 +164,7 @@ class HomePage extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '环境信息',
-                    style: theme.textTheme.titleSmall,
-                  ),
+                  Text('环境信息', style: theme.textTheme.titleSmall),
                   const SizedBox(height: 12),
                   _InfoRow(label: 'Flutter', value: '3.x'),
                   _InfoRow(label: 'Dart', value: '3.5+'),
@@ -234,19 +231,16 @@ class _StatusRow extends StatelessWidget {
         Container(
           width: 8,
           height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 8),
         Text(label, style: Theme.of(context).textTheme.bodyMedium),
         const Spacer(),
         Text(
           value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
         ),
       ],
     );
@@ -271,8 +265,8 @@ class _InfoRow extends StatelessWidget {
             child: Text(
               label,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           Text(value, style: Theme.of(context).textTheme.bodyMedium),

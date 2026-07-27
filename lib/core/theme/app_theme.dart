@@ -12,17 +12,17 @@ class AppTheme {
 
   // ── 亮色主题 ──
   static ThemeData get light => ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: _primaryLight,
-        brightness: Brightness.light,
-        fontFamily: 'Roboto',
-      );
+    useMaterial3: true,
+    colorSchemeSeed: _primaryLight,
+    brightness: Brightness.light,
+    fontFamily: 'Roboto',
+  );
 
   // ── 暗色主题 ──
   static ThemeData get dark => ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: _primaryDark,
-        brightness: Brightness.dark,
-        fontFamily: 'Roboto',
-      );
+    useMaterial3: true,
+    colorSchemeSeed: _primaryDark,
+    brightness: Brightness.dark,
+    fontFamily: 'Roboto',
+  );
 }

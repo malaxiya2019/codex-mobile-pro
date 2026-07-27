@@ -31,9 +31,5 @@ void main() {
     ),
   );
 
-  runApp(
-    const ProviderScope(
-      child: CodexMobileApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: CodexMobileApp()));
 }
