@@ -120,10 +120,18 @@ install_codex_binary() {
         info "从项目目录找到安装包..."
         tar -xzf "${SCRIPT_DIR}/${CODEX_PKG}" -C "$LOCAL_LIB/codex"
     else
-        warn "未找到预编译包，尝试 npm 安装备选方案..."
-        npm install -g @openai/codex
-        ok "npm 安装完成（备选方案）"
-        return
+        warn "本地未找到预编译包，尝试从 Gitee Release 下载..."
+        RELEASE_URL="https://gitee.com/liang2050/codex-mobile-pro/releases/download/v1.0.0/${CODEX_PKG}"
+        if curl -sL --max-time 120 "$RELEASE_URL" -o "/tmp/${CODEX_PKG}"; then
+            info "从 Gitee Release 下载成功！"
+            tar -xzf "/tmp/${CODEX_PKG}" -C "$LOCAL_LIB/codex"
+            rm -f "/tmp/${CODEX_PKG}"
+        else
+            warn "下载失败，尝试 npm 安装备选方案..."
+            npm install -g @openai/codex
+            ok "npm 安装完成（备选方案）"
+            return
+        fi
     fi
 
     chmod +x "$LOCAL_LIB/codex/bin/codex" 2>/dev/null || true
