@@ -1,0 +1,13 @@
+{
+  "name": "lnn",
+  "version": "1.0.0",
+  "description": "Liquid Neural Network (LNN/LTC) — 液态时间常数神经网络，支持分类和回归",
+  "source_repo": "https://github.com/cserajdeep/LIQUID-NEURAL-NETWORK-LNN",
+  "skills": [
+    {
+      "name": "lnn",
+      "path": "SKILL.md",
+      "description": "使用 Liquid Time-Constant (LTC) 网络进行分类/回归任务。用户提到 LNN、液态神经网络、时间常数网络时触发。"
+    }
+  ]
+}

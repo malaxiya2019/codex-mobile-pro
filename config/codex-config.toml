@@ -1,0 +1,25 @@
+# ============================================================
+#  Codex 配置文件 — Codex Mobile Pro
+#  DeepSeek + mimo2codex 代理配置
+# ============================================================
+
+model = "deepseek-chat"
+model_provider = "deepseek"
+model_context_window = 128000
+model_reasoning_effort = "high"
+
+[model_providers.deepseek]
+name = "DeepSeek (via mimo2codex)"
+base_url = "http://127.0.0.1:8788/v1"
+wire_api = "responses"
+requires_openai_auth = false
+env_key = "DEEPSEEK_API_KEY"
+
+[projects."/data/data/com.termux/files/home"]
+trust_level = "trusted"
+
+[tui.model_availability_nux]
+"gpt-5.5" = 4
+
+[features]
+apps = false

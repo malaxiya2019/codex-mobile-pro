@@ -1,0 +1,14 @@
+# OpenAI agent metadata for SimpleCADAPI skill
+display_name: SimpleCAD API
+short_description: CAD 建模 Python SDK — 用于 AI Agent 驱动的 CAD 模型生成
+default_prompt: |
+  使用 SimpleCADAPI（OCP-native Python SDK）创建 CAD 模型时使用此技能。
+  适用于：
+  1. 创建基本几何体（长方体、圆柱体、球体等）
+  2. 执行布尔运算（并集、差集、交集）
+  3. 应用特征（倒角、圆角、抽壳）
+  4. 使用约束草图
+  5. 创建装配体和零部件
+  6. 导出为 STEP/STL/FreeCAD 格式
+  7. 使用 GraphSession 实现可重放建模
+  8. 使用 QL 进行几何查询
