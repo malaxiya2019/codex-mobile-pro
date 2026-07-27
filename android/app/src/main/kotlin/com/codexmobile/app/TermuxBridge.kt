@@ -1,6 +1,7 @@
 package com.codexmobile.app
 
 import android.util.Log
+import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -98,7 +99,7 @@ class TermuxBridge {
     /**
      * 处理 MethodChannel 调用
      */
-    fun onMethodCall(call: MethodChannel.MethodCall, result: MethodChannel.Result) {
+    fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "execute" -> {
                 val command = call.argument<String>("command") ?: ""
