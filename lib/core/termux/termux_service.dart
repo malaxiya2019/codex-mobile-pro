@@ -1,8 +1,3 @@
-/// Codex Mobile Pro — Termux 通信服务
-///
-/// 通过 MethodChannel 与 Native (Kotlin) 桥交互，
-/// 在 Termux 环境中执行命令并获取输出。
-
 import 'package:flutter/services.dart';
 
 /// Termux 命令执行结果

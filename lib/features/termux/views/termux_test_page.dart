@@ -208,7 +208,7 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.terminal, size: 48, color: colorScheme.onSurfaceVariant.withOpacity( 0.3)),
+                          Icon(Icons.terminal, size: 48, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
                           const SizedBox(height: 12),
                           Text('点击"检查环境"或"全部测试"开始验证', style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant)),
                         ],
@@ -221,11 +221,11 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
                       itemBuilder: (context, index) {
                         final log = _logs[index];
                         Color? color;
-                        if (log.startsWith('❌')) color = Colors.red;
-                        else if (log.startsWith('✅')) color = Colors.green;
-                        else if (log.startsWith('⚡')) color = Colors.amber;
-                        else if (log.startsWith('  → exitCode=0')) color = Colors.green;
-                        else if (log.startsWith('  → exitCode=')) color = Colors.red;
+                        if (log.startsWith('❌')) { color = Colors.red; }
+                        else if (log.startsWith('✅')) { color = Colors.green; }
+                        else if (log.startsWith('⚡')) { color = Colors.amber; }
+                        else if (log.startsWith('  → exitCode=0')) { color = Colors.green; }
+                        else if (log.startsWith('  → exitCode=')) { color = Colors.red; }
                         return Padding(
                           padding: const EdgeInsets.symmetric(vertical: 1),
                           child: Text(
