@@ -1,8 +1,7 @@
 # 📱 Codex Mobile Pro
 
-> **手机上的 AI 编程助手 — 一键部署，中文交互，国内直连**
-
-在 Android 手机（Termux）或 Linux 服务器上一键搭建 Codex AI 编程环境，使用 DeepSeek API 直连，无需翻墙。
+> **手机/电脑上的 AI 编程助手 — 一键部署，中文交互，国内直连**
+> 支持 Termux (Android) / Ubuntu / Linux 服务器
 
 ---
 
@@ -19,16 +18,9 @@
 
 ---
 
-## 🎯 适用人群
-
-- 国内开发者、学生党
-- 想在手机上用 AI 写代码
-- 不想折腾环境配置
-- 需要中文交互的 AI 编程助手
-
----
-
 ## 🖥️ 快速开始
+
+### 📱 Termux (Android)
 
 ```bash
 # 1. 进入项目目录
@@ -41,7 +33,25 @@ bash deploy.sh
 cyo --zh
 ```
 
+### 🐧 Ubuntu / Linux
+
+```bash
+# 1. 进入项目目录
+cd ~/codex-mobile-pro
+
+# 2. 一键安装（自动使用 sudo）
+bash deploy.sh
+
+# 3. 重新加载 shell 配置
+source ~/.bashrc
+
+# 4. 启动（中文模式）
+cyo --zh
+```
+
 > 详细教程 → [docs/快速上手.md](docs/快速上手.md)
+> 常见问题 → [docs/常见问题.md](docs/常见问题.md)
+> 进阶玩法 → [docs/进阶玩法.md](docs/进阶玩法.md)
 
 ---
 
@@ -49,19 +59,19 @@ cyo --zh
 
 ```
 codex-mobile-pro/
-├── deploy.sh              # 一键安装脚本
+├── deploy.sh              # 一键安装脚本 (Termux/Linux 自适应)
 ├── backup-codex.sh        # 备份脚本
 ├── restore-codex.sh       # 恢复脚本
 ├── bin/
 │   └── codex-zh           # 中文快捷启动
 ├── config/
-│   ├── codex-config.toml  # Codex 配置
+│   ├── codex-config.toml  # Codex 配置（自动适配路径）
 │   └── bashrc-additions.sh # Shell 快捷命令
 ├── docs/
 │   ├── 快速上手.md
 │   ├── 常见问题.md
 │   └── 进阶玩法.md
-└── skills/                # 预装 Skills 包
+└── skills/                # 43 个预装 Skills
 ```
 
 ---

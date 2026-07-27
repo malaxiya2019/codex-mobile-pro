@@ -1,6 +1,7 @@
 # ============================================================
 #  Codex 配置文件 — Codex Mobile Pro
 #  DeepSeek + mimo2codex 代理配置
+#  $HOME 会被 deploy.sh 自动替换为实际路径
 # ============================================================
 
 model = "deepseek-chat"
@@ -15,7 +16,7 @@ wire_api = "responses"
 requires_openai_auth = false
 env_key = "DEEPSEEK_API_KEY"
 
-[projects."/data/data/com.termux/files/home"]
+[projects."__HOME_DIR__"]
 trust_level = "trusted"
 
 [tui.model_availability_nux]

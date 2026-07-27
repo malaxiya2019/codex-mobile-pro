@@ -194,7 +194,7 @@ setup_codex_config() {
 
     # 复制预调优配置
     if [ -f "${SCRIPT_DIR}/config/codex-config.toml" ]; then
-        cp "${SCRIPT_DIR}/config/codex-config.toml" "${CODE_DIR}/config.toml"
+        sed "s|__HOME_DIR__|$HOME_DIR|g" "${SCRIPT_DIR}/config/codex-config.toml" > "${CODE_DIR}/config.toml"
         ok "Codex 配置已部署"
     else
         warn "未找到 codex-config.toml，将使用默认配置"
