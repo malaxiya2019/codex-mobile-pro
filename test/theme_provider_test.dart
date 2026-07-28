@@ -133,7 +133,9 @@ void main() {
 
     test('自定义字体应用到主题', () {
       final theme = AppTheme.light(fontFamily: 'Noto Sans SC');
-      expect(theme.fontFamily, 'Noto Sans SC');
+      // fontFamily 在 Flutter 3.44.8+ 中不再是 ThemeData 的 getter
+      // 改用 textTheme 验证字体已正确设置
+      expect(theme.textTheme.bodyLarge?.fontFamily, 'Noto Sans SC');
     });
 
     test('M3 启用', () {
