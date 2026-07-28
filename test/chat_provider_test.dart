@@ -11,6 +11,8 @@ import 'package:codex_mobile_pro/features/ai/providers/chat_provider.dart';
 // ══════════════════════════════════════════════
 
 class MockChatEngine implements IChatEngine {
+  @override
+  String systemPrompt = "";
   final Map<String, ChatSession> _sessions = {};
   final Map<String, GenerationStatus> _statuses = {};
   final Map<String, StreamController<String>> _streamControllers = {};

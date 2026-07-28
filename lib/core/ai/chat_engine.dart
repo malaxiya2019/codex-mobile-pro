@@ -254,6 +254,9 @@ class TokenContextManager {
 /// ```
 abstract class IChatEngine {
   // ── Session 管理 ──
+  /// 系统提示词（可运行时修改）
+  String systemPrompt;
+
 
   /// 创建新会话
   ChatSession createSession({String? title, Map<String, dynamic>? metadata});
