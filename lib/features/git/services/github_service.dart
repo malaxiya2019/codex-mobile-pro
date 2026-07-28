@@ -19,6 +19,9 @@ class GitHubService {
   static const String _userKey = 'github_user';
 
   String? _token;
+
+  /// 获取当前 Access Token
+  String? get accessToken => _token;
   Map<String, dynamic>? _userInfo;
 
   /// 是否已登录
