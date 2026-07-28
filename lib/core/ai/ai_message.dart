@@ -37,6 +37,9 @@ enum ChatRole {
 }
 
 /// 单条聊天消息
+///
+/// 用于 Provider 架构的消息模型。
+/// [metadata] 用于携带文件引用、Selection、Token 信息等扩展属性。
 class ChatMessage {
   final String id;
   final ChatRole role;
@@ -44,12 +47,19 @@ class ChatMessage {
   final DateTime timestamp;
   final bool isStreaming;
 
+  /// 扩展元数据
+  ///
+  /// 不参与 API 序列化，仅用于引擎层内部传递上下文。
+  /// 支持：文件引用、Selection、Workspace Context、Token 信息、Provider 信息等。
+  final Map<String, dynamic>? metadata;
+
   const ChatMessage({
     required this.id,
     required this.role,
     required this.content,
     required this.timestamp,
     this.isStreaming = false,
+    this.metadata,
   });
 
   ChatMessage copyWith({
@@ -58,6 +68,7 @@ class ChatMessage {
     String? content,
     DateTime? timestamp,
     bool? isStreaming,
+    Map<String, dynamic>? metadata,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -65,10 +76,13 @@ class ChatMessage {
       content: content ?? this.content,
       timestamp: timestamp ?? this.timestamp,
       isStreaming: isStreaming ?? this.isStreaming,
+      metadata: metadata ?? this.metadata,
     );
   }
 
   /// 转换为 API 请求格式
+  ///
+  /// 注意：[metadata] 不参与序列化，不影响现有调用方。
   Map<String, dynamic> toApiMap() {
     return {
       'role': role.apiValue,
