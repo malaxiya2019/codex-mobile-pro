@@ -255,7 +255,7 @@ class TokenContextManager {
 abstract class IChatEngine {
   // ── Session 管理 ──
   /// 系统提示词（可运行时修改）
-  String systemPrompt;
+  abstract String systemPrompt;
 
 
   /// 创建新会话
@@ -338,6 +338,7 @@ class ChatEngine implements IChatEngine {
   final Map<String, ChatSession> _sessions = {};
   final Map<String, GenerationStatus> _generationStatuses = {};
 
+  @override
   /// 默认系统提示词
   String systemPrompt;
 

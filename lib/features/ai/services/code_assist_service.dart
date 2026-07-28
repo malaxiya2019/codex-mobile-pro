@@ -199,7 +199,6 @@ class CodeAssistService {
     required String userContent,
   }) async {
     final sessionId = _getOrCreateSession();
-    final session = _engine.getSession(sessionId)!;
 
     // 使用引擎的 streamMessage 获取非流式响应
     final result = await _engine.sendMessage(

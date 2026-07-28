@@ -5,7 +5,6 @@ import '../services/git_service.dart';
 import '../../../core/logger/log_service.dart';
 import '../../../core/ai/ai_provider.dart';
 import '../../editor/providers/editor_provider.dart';
-import '../../editor/extensions/code_review.dart';
 
 /// Git 操作页面
 ///
@@ -312,7 +311,7 @@ class _GitOperationsPageState extends ConsumerState<GitOperationsPage> {
     try {
       // 获取 git diff
       final diff = await _gitService.diff(_clonePath!);
-      if (!diff.success || diff.output == null || diff.output!.isEmpty) {
+      if (diff == null || diff.isEmpty) {
         if (mounted) {
           _showSnackBar('没有检测到变更内容');
         }
@@ -350,7 +349,7 @@ scope：影响范围
           ChatMessageInput(role: 'user', content: '''根据以下 git diff 生成 commit message：
 
 \`\`\`diff
-${diff.output!.length > 8000 ? diff.output!.substring(0, 8000) + '\n... (截断)' : diff.output!}
+${diff.length > 8000 ? diff.substring(0, 8000) + '\n... (截断)' : diff}
 \`\`\`
 
 Return JSON output only.'''),
@@ -367,8 +366,7 @@ Return JSON output only.'''),
           final jsonStr = response.substring(jsonStart, jsonEnd + 1);
           final msgMatch = RegExp(r'"message"\s*:\s*"(.+?)"\s*[,}]', dotAll: true).firstMatch(jsonStr);
           if (msgMatch != null) {
-            return msgMatch.group(1)!.replaceAll('\n', '
-');
+            return msgMatch.group(1)!.replaceAll('\\n', '\n');
           }
         }
       } catch (_) {}
