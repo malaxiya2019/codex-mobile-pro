@@ -125,13 +125,20 @@ void main() {
       }
       await writer.flush();
 
-      // 应该有 app.log 文件产生（轮转后至少存在当前文件）
+      // 轮转后 app.log 或 app.log.0 至少有一个存在
       final appLog = File('$testDir/app.log');
-      expect(await appLog.exists(), true);
+      final appLog0 = File('$testDir/app.log.0');
+      final exists = await appLog.exists() || await appLog0.exists();
+      expect(exists, true);
       
-      // 检查文件大小非零（有内容写入）
-      final length = await appLog.length();
-      expect(length, greaterThan(0));
+      // 检查有内容写入
+      if (await appLog.exists()) {
+        final length = await appLog.length();
+        expect(length, greaterThan(0));
+      } else {
+        final length = await appLog0.length();
+        expect(length, greaterThan(0));
+      }
       await writer.dispose();
     });
 

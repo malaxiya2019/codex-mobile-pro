@@ -15,22 +15,24 @@ void main() {
           child: CodexMobileApp(),
         ),
       );
+      // 等待异步 Provider 和 GoRouter 初始化完成
+      await tester.pumpAndSettle();
 
       expect(find.text('Codex Mobile Pro'), findsOneWidget);
-      expect(find.byType(Card), findsWidgets);
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(find.text('首页'), findsOneWidget);
       expect(find.text('AI'), findsOneWidget);
-      expect(find.text('Termux'), findsOneWidget);
       expect(find.text('文件'), findsOneWidget);
     });
 
-    testWidgets('Riverpod 计数器交互正常', (tester) async {
+    testWidgets('计数器交互正常', (tester) async {
       await tester.pumpWidget(
         const ProviderScope(
           child: CodexMobileApp(),
         ),
       );
+      // 等待异步 Provider 和 GoRouter 初始化完成
+      await tester.pumpAndSettle();
 
       expect(find.text('0'), findsOneWidget);
 

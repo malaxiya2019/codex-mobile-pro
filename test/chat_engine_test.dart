@@ -655,20 +655,25 @@ void main() {
       test('并发生成抛出异常', () async {
         final session = engine.createSession();
 
-        // 开始第一个流
+        // 开始第一个流并立即订阅（async* 生成器需要 listen 才开始执行）
         final stream = engine.streamMessage(
           sessionId: session.sessionId,
           content: '第一轮',
         );
+        final sub = stream.listen((_) {});
 
-        // 尝试第二个流
+        // 给生成器一点时间设置 streaming 状态
+        await Future.delayed(Duration.zero);
+
+        // 尝试第二个流应抛出 sessionBusy
         expect(
           engine.streamMessage(sessionId: session.sessionId, content: '第二轮'),
           emitsError(isA<ChatEngineException>()),
         );
 
-        // 清理第一个流
-        await for (final _ in stream) {}
+        // 清理
+        sub.cancel();
+        engine.stopGeneration(session.sessionId);
       });
 
       test('流式提供者失败时抛出异常', () async {

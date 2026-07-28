@@ -41,10 +41,18 @@ class SseParser {
 
   /// 转换原始字节流为 SSE 事件流
   StreamTransformer<List<int>, SseEvent> get byteTransformer {
+    // 缓冲所有字节块，在流关闭时统一处理
+    final chunks = <int>[];
     return StreamTransformer<List<int>, SseEvent>.fromHandlers(
       handleData: (data, sink) {
-        final text = utf8.decode(data, allowMalformed: true);
-        // 使用上面的 _transformer 处理文本
+        chunks.addAll(data);
+      },
+      handleDone: (sink) {
+        if (chunks.isEmpty) {
+          sink.close();
+          return;
+        }
+        final text = utf8.decode(chunks, allowMalformed: true);
         final controller = StreamController<String>();
         controller.stream.transform(_transformer).listen(
           (event) => sink.add(event),

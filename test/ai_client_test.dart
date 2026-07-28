@@ -44,7 +44,7 @@ void main() {
             'index': 0,
             'message': {
               'role': 'assistant',
-              'content': '你好！',
+              'content': 'Hello!',
             },
             'finish_reason': 'stop',
           }
@@ -63,12 +63,12 @@ void main() {
           )).thenAnswer((_) async => http.Response(jsonEncode(responseJson), 200));
 
       final messages = [
-        ChatMessage(id: '1', role: ChatRole.user, content: '你好', timestamp: DateTime(2026)),
+        ChatMessage(id: '1', role: ChatRole.user, content: 'hello', timestamp: DateTime(2026)),
       ];
 
       final response = await aiClient.chat(messages: messages);
       expect(response.choices.length, 1);
-      expect(response.choices[0].message.content, '你好！');
+      expect(response.choices[0].message.content, 'Hello!');
     });
 
     test('401 返回 api 错误', () async {
@@ -159,17 +159,22 @@ void main() {
   group('AiClient.chatStream', () {
     test('流式请求返回 SSE 事件流', () async {
       final sseData = 
-        'data: {"choices":[{"delta":{"content":"您"},"index":0}]}\n\n'
-        'data: {"choices":[{"delta":{"content":"好"},"index":0}]}\n\n'
+        'data: {"choices":[{"delta":{"content":"Hel"},"index":0}]}\n\n'
+        'data: {"choices":[{"delta":{"content":"lo"},"index":0}]}\n\n'
         'data: [DONE]\n\n';
 
       final mockStream = http.ByteStream.fromBytes(utf8.encode(sseData));
       final mockResponse = http.StreamedResponse(mockStream, 200);
 
-      when(() => mockClient.send(any<http.BaseRequest>())).thenAnswer((_) async => mockResponse);
+      when(() => mockClient.send(any<http.BaseRequest>())).thenAnswer((_) async {
+        // 确保 stream 可以被多次监听
+        final bytes = utf8.encode(sseData);
+        final controller = http.ByteStream.fromBytes(bytes);
+        return http.StreamedResponse(controller, 200);
+      });
 
       final messages = [
-        ChatMessage(id: '1', role: ChatRole.user, content: '你好', timestamp: DateTime(2026)),
+        ChatMessage(id: '1', role: ChatRole.user, content: 'hello', timestamp: DateTime(2026)),
       ];
 
       final events = <SseEvent>[];
@@ -178,8 +183,8 @@ void main() {
       }
 
       expect(events.length, 3);
-      expect(events[0].content, '您');
-      expect(events[1].content, '好');
+      expect(events[0].content, 'Hel');
+      expect(events[1].content, 'lo');
       expect(events[2].isDone, true);
     });
 

@@ -122,7 +122,10 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      // 等待 _load() 完成（避免异步初始化覆盖后续操作）
+      // 等待 _load() 完成避免异步初始化覆盖后续操作
+      await Future.delayed(const Duration(milliseconds: 50));
+      // 再触发一次 read 确保 Provider 稳定
+      container.read(workspaceProvider);
       await Future.delayed(Duration.zero);
 
       final notifier = container.read(workspaceProvider.notifier);

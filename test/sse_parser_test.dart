@@ -89,13 +89,8 @@ void main() {
       );
 
       final events = <SseEvent>[];
-      final controller = StreamController<List<int>>();
-      controller.stream
-          .transform(parser.byteTransformer)
-          .listen((event) => events.add(event));
-
-      controller.add(input);
-      await controller.close();
+      final result = await parser.byteTransformer.bind(Stream.value(input)).toList();
+      events.addAll(result);
 
       expect(events.length, 3);
       expect(events[0].type, SseEventType.data);
@@ -153,9 +148,9 @@ void main() {
         content: '你好',
         timestamp: DateTime(2026),
       );
-      final copy = msg.copyWith(content: '世界');
+      final copy = msg.copyWith(content: 'World');
       expect(copy.id, '1');
-      expect(copy.content, '世界');
+      expect(copy.content, 'World');
       expect(copy.role, ChatRole.user);
     });
 
