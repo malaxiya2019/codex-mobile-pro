@@ -29,10 +29,7 @@ class Strings {
   //  通用
   // ══════════════════════════════════════
 
-  String get appName => _t(
-    'Codex Mobile Pro',
-    'Codex Mobile Pro',
-  );
+  String get appName => _t('Codex Mobile Pro', 'Codex Mobile Pro');
 
   String get ok => _t('确定', 'OK');
   String get cancel => _t('取消', 'Cancel');
@@ -77,8 +74,12 @@ class Strings {
   String get aiClearConfirm => _t('确定要清空当前对话吗？', 'Clear current conversation?');
   String get aiClearTitle => _t('清空对话', 'Clear Chat');
   String get aiEmptyTitle => _t('AI 编程助手', 'AI Coding Assistant');
-  String get aiEmptyDesc => _t('输入问题开始对话\n支持代码生成、解释、调试', 'Start a conversation\nCode generation, explanation, debugging');
-  String get aiProxyNotRunning => _t('mimo2codex 代理未运行', 'mimo2codex proxy is not running');
+  String get aiEmptyDesc => _t(
+    '输入问题开始对话\n支持代码生成、解释、调试',
+    'Start a conversation\nCode generation, explanation, debugging',
+  );
+  String get aiProxyNotRunning =>
+      _t('mimo2codex 代理未运行', 'mimo2codex proxy is not running');
   String get aiServiceReady => _t('AI 服务就绪', 'AI Service Ready');
   String get aiServiceConnecting => _t('正在连接...', 'Connecting...');
   String get aiServiceError => _t('服务异常', 'Service Error');
@@ -125,12 +126,33 @@ class Strings {
     '应用遇到意外错误，请尝试重新启动。如果问题持续，请联系支持。',
     'An unexpected error occurred. Please restart the app. Contact support if the issue persists.',
   );
-  String get errorRetryMsg => _t(
-    '请稍后重试，或返回上一页。',
-    'Please try again later or go back.',
-  );
+  String get errorRetryMsg =>
+      _t('请稍后重试，或返回上一页。', 'Please try again later or go back.');
   String get errorDebugInfo => _t('调试信息', 'Debug Info');
   String get errorCopy => _t('复制错误信息', 'Copy Error Info');
+
+  // ══════════════════════════════════════
+  //  工作区
+  // ══════════════════════════════════════
+
+  String get workspaceListTitle => _t('工作区管理', 'Workspaces');
+  String get workspaceCreateTitle => _t('新建工作区', 'New Workspace');
+  String get workspaceNameHint => _t('工作区名称', 'Workspace Name');
+  String get workspaceTemplateLabel => _t('选择模板', 'Choose Template');
+  String get workspaceEmpty => _t('还没有工作区', 'No Workspaces Yet');
+  String get workspaceEmptyDesc =>
+      _t('创建工作区来管理项目', 'Create a workspace to manage your projects');
+  String get workspaceCurrent => _t('当前', 'Current');
+  String get workspaceSelect => _t('切换到此工作区', 'Select');
+  String get workspaceSwitch => _t('切换工作区', 'Switch');
+  String get workspaceDeleteConfirm => _t('确定要删除工作区', 'Delete workspace');
+  String get workspaceCreated => _t('工作区已创建', 'Workspace Created');
+  String get workspaceProjects => _t('个项目', ' projects');
+  String get workspaceInfo => _t('当前工作区', 'Current Workspace');
+  String get workspaceQuickNew => _t('新建项目', 'New Project');
+  String get workspaceQuickOpen => _t('打开项目', 'Open Project');
+  String get workspaceQuickAi => _t('AI 编程', 'AI Code');
+  String get workspaceQuickTerminal => _t('终端', 'Terminal');
 
   // ── 内部辅助 ──
 

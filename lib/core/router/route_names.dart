@@ -7,4 +7,9 @@ abstract class RouteNames {
   static const themeSettings = '/theme-settings';
   static const localeSettings = '/locale-settings';
   static const appSettings = '/settings';
+
+  // ── 工作区 ──
+  static const workspaceList = '/workspaces';
+  static const workspaceCreate = '/workspaces/create';
+  static const workspaceDetail = '/workspaces/:id';
 }

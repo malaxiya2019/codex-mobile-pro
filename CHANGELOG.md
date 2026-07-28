@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+### 🏗️ Sprint 2：工作区管理 ✅
+
+#### 📁 工作区数据模型
+- `features/workspace/workspace_model.dart` — Workspace/ProjectRef/WorkspaceTemplate 数据模型，完整 JSON 序列化
+
+#### ⚡ 工作区状态管理
+- `features/workspace/workspace_provider.dart` — `WorkspaceNotifier`：CRUD 操作、当前工作区切换、SharedPreferences 持久化、项目管理
+
+#### 🖥️ 工作区管理 UI
+- `features/workspace/views/workspace_list_page.dart` — 工作区列表页（卡片布局、模板图标、当前标记、空状态引导、删除确认）
+- `features/workspace/views/workspace_create_dialog.dart` — 创建对话框（命名 + 5 种模板选择）
+
+#### 🏠 首页仪表盘增强
+- `lib/features/home/views/home_page.dart` — 工作区信息卡片（当前工作区/空状态）、快捷操作芯片、AI 状态显示
+
+#### 🔗 路由注册
+- `lib/core/router/route_names.dart` — 新增工作区路由路径
+- `lib/core/router/app_router.dart` — 注册 WorkspaceListPage 路由
+- `lib/core/router/route_guard.dart` — 工作区路由权限配置
+
+#### 🌐 国际化扩展
+- `lib/core/i18n/strings.dart` — 新增 17 条工作区相关字符串
+
+#### 🧪 测试
+- `test/workspace_model_test.dart` — 22 个用例（模型/序列化/容错）
+- `test/workspace_provider_test.dart` — 14 个用例（CRUD/切换/持久化）
+
+---
+
 ### 🏗️ Sprint 1：项目框架 ✅
 
 #### 🎨 主题系统完善
@@ -28,33 +57,3 @@
 
 #### 🔒 路由守卫
 - `core/router/route_guard.dart` — 权限体系：PermissionLevel（4 级）、UserRole（4 级）、AuthState/AuthNotifier、RoutePermissions（页面权限映射 + GoRouter redirect 重定向）
-- `core/router/app_router.dart` — 集成 redirect 守卫
-- 预留：login/logout、Token 管理、会员系统接口
-
-#### 🧪 测试（新增 55 用例）
-- `test/theme_provider_test.dart` — 13 用例
-- `test/log_service_test.dart` — 10 用例
-- `test/error_handler_test.dart` — 10 用例
-- `test/locale_test.dart` — 10 用例
-- `test/route_guard_test.dart` — 12 用例
-
-#### 📋 文档
-- `docs/sprints/sprint-1-开发报告.md`
-
----
-
-### 🔬 Sprint 0 — Milestone 0.5：性能基线 ✅
-
-#### 📊 性能打点基础设施
-- `core/performance/performance_tracker.dart` — 性能事件跟踪器
-- `core/performance/performance_provider.dart` — Riverpod Provider 封装
-- `main.dart` / `app.dart` — 集成 app_start + app_ready 打点
-- `scripts/benchmark/*.sh` — 3 个 ADB 测量脚本
-- `test/performance_tracker_test.dart` — 9 用例
-- `test/performance_benchmark_test.dart` — 10 用例
-- `docs/sprints/sprint-0/milestone-0.5-性能基线.md`
-
-### 🔬 Sprint 0 — Milestone 0.4：AI 通信验证 ✅
-### 🔬 Sprint 0 — Milestone 0.3：依赖检测验证 ✅
-### 🔬 Sprint 0 — Milestone 0.2：Termux 通信验证 ✅
-### 🔬 Sprint 0 — Milestone 0.1：环境验证 ✅

@@ -6,6 +6,7 @@ import '../../features/deploy/views/deploy_page.dart';
 import '../../features/ai/views/ai_chat_page.dart';
 import '../../features/settings/views/theme_settings_page.dart';
 import '../../features/settings/views/locale_settings_page.dart';
+import '../../features/workspace/views/workspace_list_page.dart';
 import 'route_guard.dart';
 import 'route_names.dart';
 
@@ -57,6 +58,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.localeSettings,
         name: 'localeSettings',
         builder: (context, state) => const LocaleSettingsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.workspaceList,
+        name: 'workspaceList',
+        builder: (context, state) => const WorkspaceListPage(),
       ),
     ],
   );

@@ -121,6 +121,7 @@ class RoutePermissions {
       case RouteNames.termuxTest:
       case RouteNames.themeSettings:
       case RouteNames.localeSettings:
+      case RouteNames.workspaceList:
         return PermissionLevel.public;
 
       case RouteNames.deploy:
