@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/git_repository.dart';
-import '../providers/git_provider.dart';
 import '../services/git_service.dart';
 import '../../../core/logger/log_service.dart';
 

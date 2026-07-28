@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/github_pr.dart';
 import '../providers/github_pr_provider.dart';
-import '../../../core/theme/theme_provider.dart';
 
 /// Pull Request 列表页
 class PrListPage extends ConsumerWidget {

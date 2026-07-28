@@ -54,7 +54,7 @@ void main() {
         // 模拟处理一个 token chunk
         accumulated += 'token_$i ';
         // 模拟字符串操作（类似 AI 响应渲染）
-        final formatted = accumulated.split(' ').join('\n');
+        accumulated.split(' ').join('\n'); // formatted
         final elapsed = DateTime.now().difference(start).inMicroseconds;
         times.add(elapsed);
       }
