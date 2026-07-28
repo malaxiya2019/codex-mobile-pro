@@ -27,8 +27,8 @@ class ShellInfo {
 
   /// 终端启动参数
   List<String> get launchArgs {
-    // Android 系统 shell 不支持 -i 交互模式
-    return [];
+    // 交互模式：Termux Bash 和 Android 系统 sh 都支持 -i
+    return isAvailable ? ['-i'] : [];
   }
 
   /// 终端启动是否使用 runInShell

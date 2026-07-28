@@ -17,7 +17,7 @@ void main() {
       expect(info.isAvailable, true);
       expect(info.isTermuxBash, true);
       expect(info.friendlyDescription, 'Termux Bash');
-      expect(info.launchArgs, isEmpty);
+      expect(info.launchArgs, ['-i']);
       expect(info.useRunInShell, false);
     });
 
@@ -33,7 +33,7 @@ void main() {
       expect(info.isTermuxBash, false);
       expect(info.isTermuxAccessible, false);
       expect(info.friendlyDescription, 'Android 系统 Shell');
-      expect(info.launchArgs, isEmpty);
+      expect(info.launchArgs, ['-i']);
       expect(info.useRunInShell, false);
     });
 
@@ -79,18 +79,18 @@ void main() {
       expect(info, isA<ShellInfo>());
     });
 
-    test('launchArgs 始终返回空列表（Android shell 不支持 -i）', () {
+    test('launchArgs 可用 Shell 返回 -i 交互模式', () {
       final termuxInfo = ShellInfo(
         type: ShellType.termuxBash,
         shellPath: '/data/data/com.termux/files/usr/bin/bash',
       );
-      expect(termuxInfo.launchArgs, isEmpty);
+      expect(termuxInfo.launchArgs, ['-i']);
 
       final shInfo = ShellInfo(
         type: ShellType.systemSh,
         shellPath: '/system/bin/sh',
       );
-      expect(shInfo.launchArgs, isEmpty);
+      expect(shInfo.launchArgs, ['-i']);
 
       const unknownInfo = ShellInfo(
         type: ShellType.unknown,
@@ -99,12 +99,18 @@ void main() {
       expect(unknownInfo.launchArgs, isEmpty);
     });
 
-    test('useRunInShell 始终返回 false（使用绝对路径）', () {
-      final info = ShellInfo(
+    test('useRunInShell 绝对路径返回 false，相对路径返回 true', () {
+      final absInfo = ShellInfo(
         type: ShellType.termuxBash,
         shellPath: '/data/data/com.termux/files/usr/bin/bash',
       );
-      expect(info.useRunInShell, false);
+      expect(absInfo.useRunInShell, false);
+
+      final relInfo = ShellInfo(
+        type: ShellType.systemSh,
+        shellPath: 'sh',
+      );
+      expect(relInfo.useRunInShell, true);
     });
   });
 
