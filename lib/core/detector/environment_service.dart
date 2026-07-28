@@ -37,6 +37,13 @@ class ShellCommandResult {
   bool get isSuccess => exitCode == 0;
 }
 
+/// Shell 检测结果
+class _ResolvedShell {
+  final String shellPath;
+  final bool runInShell;
+  const _ResolvedShell({required this.shellPath, required this.runInShell});
+}
+
 /// 环境服务
 ///
 /// 统一负责检测 Termux 环境，并通过 Termux Shell 执行检测命令。
@@ -45,12 +52,71 @@ class EnvironmentService {
   static const _termuxPrefix = '/data/data/com.termux/files/usr';
   static const _termuxHome = '/data/data/com.termux/files/home';
 
+  static _ResolvedShell? _cachedShell;
+
+  /// 解析当前系统可用的 Shell
+  ///
+  /// 优先级：
+  /// 1. /system/bin/sh（Android 系统 Shell，适用于真机）
+  /// 2. bash（非 Android 环境，如 CI）
+  /// 3. sh（兜底）
+  static Future<_ResolvedShell> _resolveShell() async {
+    if (_cachedShell != null) return _cachedShell!;
+
+    // 优先级 1：/system/bin/sh（Android）
+    try {
+      final result = await Process.run(
+        '/system/bin/sh',
+        ['-c', 'echo ok'],
+        runInShell: false,
+      );
+      if (result.exitCode == 0) {
+        _cachedShell = const _ResolvedShell(
+          shellPath: '/system/bin/sh',
+          runInShell: false,
+        );
+        return _cachedShell!;
+      }
+    } catch (_) {
+      // /system/bin/sh 不可用（非 Android 环境）
+    }
+
+    // 优先级 2：bash（CI/桌面环境）
+    try {
+      final result = await Process.run(
+        'bash',
+        ['-c', 'echo ok'],
+        runInShell: true,
+      );
+      if (result.exitCode == 0) {
+        _cachedShell = const _ResolvedShell(
+          shellPath: 'bash',
+          runInShell: true,
+        );
+        return _cachedShell!;
+      }
+    } catch (_) {}
+
+    // 优先级 3：sh（兜底）
+    _cachedShell = const _ResolvedShell(
+      shellPath: 'sh',
+      runInShell: true,
+    );
+    return _cachedShell!;
+  }
+
+  /// 清除缓存的 Shell（用于测试或重新检测）
+  static void clearShellCache() {
+    _cachedShell = null;
+  }
+
   /// 检查 Termux 环境
   ///
   /// 通过执行命令来检测 Termux 是否可用，
   /// 而非检查文件/目录是否存在。
   /// Android 11+ 的 Scoped Storage 限制 App 访问其他应用数据目录，
   /// 但通过 /system/bin/sh 执行命令可以绕过此限制。
+  /// 在非 Android 环境（如 CI）自动降级为普通 sh/bash 检测。
   static Future<TermuxEnvironmentCheck> checkTermux() async {
     LogService.info('EnvService', '检查 Termux 环境...');
 
@@ -61,49 +127,49 @@ class EnvironmentService {
     String? homePath;
 
     try {
-      // 尝试直接运行 Termux bash 来检测
-      // 使用 /system/bin/sh 来启动 Termux bash，绕过文件权限限制
+      final shell = await _resolveShell();
+
+      // 尝试检测 Termux 环境
+      // 优先通过 Android 系统 shell 检测 Termux bash
+      // 在非 Android 环境，此命令会失败但不会崩溃
+      final detectionCommand =
+          'if [ -d $_termuxPrefix ]; then '
+          '  echo "TERMUX_DIR_OK"; '
+          '  if [ -x $_termuxPrefix/bin/bash ]; then '
+          '    echo "TERMUX_BASH_OK"; '
+          '    echo "HOME:$_termuxHome"; '
+          '    echo "PREFIX:$_termuxPrefix"; '
+          '  fi; '
+          'else '
+          '  echo "NO_TERMUX"; '
+          'fi';
+
       final bashResult = await Process.run(
-        '/system/bin/sh',
-        [
-          '-c',
-          'if [ -x $_termuxPrefix/bin/bash ]; then '
-          'echo "TERMUX_OK"; '
-          'echo "HOME:$_termuxHome"; '
-          'echo "PREFIX:$_termuxPrefix"; '
-          'else echo "TERMUX_NO"; fi',
-        ],
-        runInShell: false,
+        shell.shellPath,
+        ['-c', detectionCommand],
+        runInShell: shell.runInShell,
       );
 
       final stdout = (bashResult.stdout as String?)?.trim() ?? '';
       LogService.info('EnvService', '  Termux bash 检测结果: ${stdout.split("\n").first}');
 
-      if (stdout.contains('TERMUX_OK')) {
+      if (stdout.contains('TERMUX_BASH_OK')) {
         termuxInstalled = true;
         hasTermuxUsr = true;
         hasTermuxHome = true;
         prefixPath = _termuxPrefix;
         homePath = _termuxHome;
         LogService.info('EnvService', '  ✅ Termux 已安装 (bash 可执行)');
+      } else if (stdout.contains('TERMUX_DIR_OK')) {
+        // 有目录但 bash 不可执行（精简版）
+        termuxInstalled = true;
+        hasTermuxUsr = true;
+        hasTermuxHome = true;
+        prefixPath = _termuxPrefix;
+        homePath = _termuxHome;
+        LogService.info('EnvService', '  ⚠️ Termux 目录存在 (bash 不可执行)');
       } else {
-        // 再检查下是否有 Termux 目录（仅日志，不依赖）
-        final lsResult = await Process.run(
-          '/system/bin/sh',
-          ['-c', 'ls $_termuxPrefix/bin/ 2>/dev/null | head -5 || echo "NO_ACCESS"'],
-          runInShell: false,
-        );
-        final lsOut = (lsResult.stdout as String?)?.trim() ?? '';
-        if (lsOut.contains('bash') || lsOut.contains('pkg')) {
-          termuxInstalled = true;
-          hasTermuxUsr = true;
-          hasTermuxHome = true;
-          prefixPath = _termuxPrefix;
-          homePath = _termuxHome;
-          LogService.info('EnvService', '  ✅ Termux 已安装 (目录可访问)');
-        } else {
-          LogService.info('EnvService', '  ❌ Termux 未安装或不可访问');
-        }
+        LogService.info('EnvService', '  ❌ Termux 未安装或不可访问');
       }
     } catch (e) {
       LogService.error('EnvService', '  检查失败: $e');
@@ -134,6 +200,7 @@ class EnvironmentService {
   ///
   /// 优先使用 Termux Bash，如果不可用则自动降级到系统 Shell。
   /// 始终设置完整的 Termux 环境变量。
+  /// 在非 Android 环境（如 CI）自动使用系统 sh/bash。
   static Future<ShellCommandResult> executeInTermux({
     required String command,
     String? shellPath,
@@ -151,22 +218,29 @@ class EnvironmentService {
         shell = shellPath;
         runInShell = false;
       } else {
-        // 自动检测 Termux Bash
-        // 通过执行命令验证，而非 File.exists()（Android 沙箱限制）
-        final bashCheck = await Process.run(
-          '/system/bin/sh',
-          ['-c', 'if [ -x $_termuxPrefix/bin/bash ]; then echo "YES"; else echo "NO"; fi'],
-          runInShell: false,
-        );
-        final bashAvailable = (bashCheck.stdout as String?)?.trim() == 'YES';
-        
-        if (bashAvailable) {
-          shell = '$_termuxPrefix/bin/bash';
-          runInShell = false;
+        // 自动检测可用 Shell
+        final resolvedShell = await _resolveShell();
+
+        // 如果是 Android 环境，尝试检测 Termux Bash
+        if (resolvedShell.shellPath == '/system/bin/sh') {
+          final bashCheck = await Process.run(
+            '/system/bin/sh',
+            ['-c', 'if [ -x $_termuxPrefix/bin/bash ]; then echo "YES"; else echo "NO"; fi'],
+            runInShell: false,
+          );
+          final bashAvailable = (bashCheck.stdout as String?)?.trim() == 'YES';
+
+          if (bashAvailable) {
+            shell = '$_termuxPrefix/bin/bash';
+            runInShell = false;
+          } else {
+            shell = resolvedShell.shellPath;
+            runInShell = resolvedShell.runInShell;
+          }
         } else {
-          // 降级到系统 shell（绝对路径，确保可用）
-          shell = '/system/bin/sh';
-          runInShell = false;
+          // 非 Android 环境，直接使用解析的 shell
+          shell = resolvedShell.shellPath;
+          runInShell = resolvedShell.runInShell;
         }
       }
 

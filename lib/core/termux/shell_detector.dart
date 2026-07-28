@@ -8,7 +8,7 @@ enum ShellType {
   unknown,      // 未知 / 无可用
 }
 
-/// Shell 检测结果
+/// Shell 信息
 class ShellInfo {
   final ShellType type;
   final String shellPath;
@@ -32,7 +32,10 @@ class ShellInfo {
   }
 
   /// 终端启动是否使用 runInShell
-  bool get useRunInShell => false; // 全部使用绝对路径
+  bool get useRunInShell {
+    // 非绝对路径（如 bash、sh）需要 runInShell
+    return !shellPath.startsWith('/');
+  }
 
   /// 友好的中文描述
   String get friendlyDescription {
@@ -56,20 +59,22 @@ class ShellInfo {
 ///
 /// 自动检测设备上可用的 Shell。
 /// 只返回绝对路径，避免 Process.start 因 PATH 找不到文件而崩溃。
+/// 在非 Android 环境（如 CI）自动降级为 sh/bash。
 ///
 /// 优先级：
 /// 1. /data/data/com.termux/files/usr/bin/bash（Termux Bash）
 /// 2. /system/bin/sh（Android 系统 Shell）
+/// 3. bash（非 Android 环境，如 CI）
+/// 4. sh（兜底）
 class ShellDetector {
   static const _termuxPrefix = '/data/data/com.termux/files/usr';
   static const _termuxHome = '/data/data/com.termux/files/home';
 
-  /// 检测可用 Shell
+  /// 检测可用的 Shell
   static Future<ShellInfo> detect() async {
     LogService.info('ShellDetector', '开始检测可用 Shell...');
 
     // 优先级 1：$PREFIX/bin/bash（Termux Bash）
-    // 尝试直接运行命令来验证，而非只检查文件存在（Scoped Storage 限制）
     final termuxBash = await _tryExecuteShell(
       shellPath: '$_termuxPrefix/bin/bash',
       label: 'Termux Bash',
@@ -88,7 +93,6 @@ class ShellDetector {
     }
 
     // 优先级 2：/system/bin/sh（Android 系统 Shell）
-    // 这是 Android 上最可靠的 Shell，总是存在
     final systemSh = await _tryExecuteShell(
       shellPath: '/system/bin/sh',
       label: 'Android 系统 Shell',
@@ -103,29 +107,33 @@ class ShellDetector {
       );
     }
 
-    // 兜底：尝试 sh（绝对路径下的 sh）
-    try {
-      final whichResult = await Process.run(
-        '/system/bin/sh',
-        ['-c', 'command -v sh 2>/dev/null || which sh 2>/dev/null || echo "/system/bin/sh"'],
-        runInShell: false,
+    // 优先级 3：bash（非 Android 环境，如 CI）
+    final bash = await _tryExecuteShell(
+      shellPath: 'bash',
+      label: '系统 Bash',
+    );
+    if (bash != null) {
+      LogService.info('ShellDetector', '✅ 使用系统 Bash');
+      return ShellInfo(
+        type: ShellType.systemSh,
+        shellPath: 'bash',
+        version: bash,
       );
-      final shPath = (whichResult.stdout as String?)?.trim() ?? '/system/bin/sh';
-      if (shPath.isNotEmpty) {
-        final shResult = await _tryExecuteShell(
-          shellPath: shPath,
-          label: '系统 sh (fallback)',
-        );
-        if (shResult != null) {
-          LogService.info('ShellDetector', '✅ 兜底使用: $shPath');
-          return ShellInfo(
-            type: ShellType.systemSh,
-            shellPath: shPath,
-            version: shResult,
-          );
-        }
-      }
-    } catch (_) {}
+    }
+
+    // 优先级 4：sh（兜底）
+    final sh = await _tryExecuteShell(
+      shellPath: 'sh',
+      label: '系统 sh',
+    );
+    if (sh != null) {
+      LogService.info('ShellDetector', '✅ 使用系统 sh');
+      return ShellInfo(
+        type: ShellType.systemSh,
+        shellPath: 'sh',
+        version: sh,
+      );
+    }
 
     LogService.error('ShellDetector', '❌ 无可用 Shell');
     return const ShellInfo(
@@ -156,11 +164,14 @@ class ShellDetector {
         }
       }
 
+      // 非绝对路径的 shell 需要 runInShell
+      final useRunInShell = !shellPath.startsWith('/');
+
       // 尝试执行 --version
       final result = await Process.run(
         shellPath,
         ['--version'],
-        runInShell: false,
+        runInShell: useRunInShell,
         environment: env,
       );
 
@@ -180,7 +191,7 @@ class ShellDetector {
       final okResult = await Process.run(
         shellPath,
         ['-c', 'echo shell_available'],
-        runInShell: false,
+        runInShell: useRunInShell,
         environment: env,
       );
       if (okResult.exitCode == 0) {
@@ -204,19 +215,12 @@ class ShellDetector {
       'PATH': '$_termuxPrefix/bin:/system/bin:/usr/bin:/bin',
       'LANG': 'zh_CN.UTF-8',
       'TERM': 'xterm-256color',
+      'TMPDIR': '$_termuxPrefix/tmp',
     };
   }
 
-  /// 获取终端启动所需的完整环境变量
+  /// 公开的 Termux 环境变量获取方法
   static Map<String, String> getTermuxEnvironment() {
-    return {
-      'HOME': _termuxHome,
-      'PREFIX': _termuxPrefix,
-      'PATH': '$_termuxPrefix/bin:/system/bin:/usr/bin:/bin',
-      'LANG': 'zh_CN.UTF-8',
-      'TERM': 'xterm-256color',
-      'TMPDIR': '$_termuxPrefix/tmp',
-      'SHELL': '$_termuxPrefix/bin/bash',
-    };
+    return _getTermuxEnv();
   }
 }
