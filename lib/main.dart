@@ -4,8 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
 import 'core/logger/log_service.dart';
+import 'core/performance/performance_tracker.dart';
 
 void main() {
+  // 标记启动开始
+  PerformanceTracker.instance.markAppStart();
+
   WidgetsFlutterBinding.ensureInitialized();
 
   // 初始化日志系统

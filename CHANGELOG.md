@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+### 🔬 Sprint 0 — Milestone 0.5：性能基线 ✅
+
+#### 📊 性能打点基础设施
+- `core/performance/performance_tracker.dart` — 性能事件跟踪器（单例）
+  - 事件记录（时间戳/内存/CPU）
+  - 页面加载耗时跟踪
+  - AI 请求延迟记录（首 Token / 完整响应 / 成功率）
+  - 统计摘要生成
+  - Markdown 报告导出
+- `core/performance/performance_provider.dart` — Riverpod Provider 封装
+- `main.dart` / `app.dart` — 集成 app_start + app_ready 打点
+
+#### 📐 性能测量脚本
+- `scripts/benchmark/measure_startup.sh` — ADB 冷/热启动测量（可配置次数）
+- `scripts/benchmark/measure_memory.sh` — ADB 内存/CPU 占用分阶段采集
+- `scripts/benchmark/measure_ai_latency.sh` — curl 流式请求延迟测量（首 Token + 完整响应）
+
+#### 🧪 性能基准测试
+- `test/performance_tracker_test.dart` — 9 用例：Tracker 基本功能、统计、reset、Markdown
+- `test/performance_benchmark_test.dart` — 10 用例：打点延迟、模拟页面加载、Token 处理、消息列表重建、Markdown 解析、状态更新、SSE 解析、内存压力、摘要一致性
+
+#### 📋 文档
+- `docs/sprints/sprint-0/milestone-0.5-性能基线.md` — 完整基线报告（目标值/测量方法/采集表/退化检查清单/阈值）
+
+---
+
 ### 🔬 Sprint 0 — Milestone 0.4：AI 通信验证 ✅
 
 #### 🏗️ AI 核心层
@@ -76,7 +102,7 @@
 - `features/termux/views/termux_test_page.dart` — 通信验证 UI
   - 🔍 环境检查（Termux + 系统 shell 完整诊断）
   - 🚀 基础命令测试（10 条命令）
-  - 🔣 特殊字符测试（10 种场景：$、"、'、\、`、|、中文、换行、重定向）
+  - 🔣 特殊字符测试（10 种场景：$、"、'、\\、`、|、中文、换行、重定向）
   - 🔥 批量压力测试（50 次连续调用 + 统计报表）
   - 🏁 完整验证套件（一键运行所有测试）
   - 🎨 彩色输出、进度条、快捷命令芯片
