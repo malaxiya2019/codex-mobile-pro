@@ -7,15 +7,13 @@ ShellInfo _mockShellInfo({
   ShellType type = ShellType.systemSh,
   String path = '/system/bin/sh',
   String version = 'sh (Android)',
-  bool pty = false,
-  bool tmux = false,
+  bool termuxAccessible = false,
 }) {
   return ShellInfo(
     type: type,
     shellPath: path,
     version: version,
-    hasPtySupport: pty,
-    hasTmuxSupport: tmux,
+    isTermuxAccessible: termuxAccessible,
   );
 }
 
@@ -26,13 +24,12 @@ void main() {
         type: ShellType.termuxBash,
         path: '/data/data/com.termux/files/usr/bin/bash',
         version: 'GNU bash, version 5.2.26',
-        pty: true,
-        tmux: true,
+        termuxAccessible: true,
       );
       expect(info.friendlyDescription, 'Termux Bash');
       expect(info.isAvailable, true);
       expect(info.isTermuxBash, true);
-      expect(info.hasPtySupport, true);
+      expect(info.isTermuxAccessible, true);
     });
 
     test('系统 sh 描述正确', () {

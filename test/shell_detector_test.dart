@@ -8,33 +8,17 @@ void main() {
         type: ShellType.termuxBash,
         shellPath: '/data/data/com.termux/files/usr/bin/bash',
         version: 'GNU bash, version 5.2.26(1)-release',
-        hasPtySupport: true,
-        hasTmuxSupport: true,
+        isTermuxAccessible: true,
       );
 
       expect(info.type, ShellType.termuxBash);
       expect(info.shellPath, '/data/data/com.termux/files/usr/bin/bash');
       expect(info.version, contains('GNU bash'));
-      expect(info.hasPtySupport, true);
-      expect(info.hasTmuxSupport, true);
       expect(info.isAvailable, true);
       expect(info.isTermuxBash, true);
       expect(info.friendlyDescription, 'Termux Bash');
-    });
-
-    test('System Bash 信息正确', () {
-      final info = ShellInfo(
-        type: ShellType.systemBash,
-        shellPath: 'bash',
-        version: 'GNU bash, version 5.0',
-        hasPtySupport: false,
-        hasTmuxSupport: false,
-      );
-
-      expect(info.type, ShellType.systemBash);
-      expect(info.isAvailable, true);
-      expect(info.isTermuxBash, false);
-      expect(info.friendlyDescription, '系统 Bash');
+      expect(info.launchArgs, isEmpty);
+      expect(info.useRunInShell, false);
     });
 
     test('Android System Shell 信息正确', () {
@@ -47,9 +31,10 @@ void main() {
       expect(info.shellPath, '/system/bin/sh');
       expect(info.isAvailable, true);
       expect(info.isTermuxBash, false);
-      expect(info.hasPtySupport, false);
-      expect(info.hasTmuxSupport, false);
+      expect(info.isTermuxAccessible, false);
       expect(info.friendlyDescription, 'Android 系统 Shell');
+      expect(info.launchArgs, isEmpty);
+      expect(info.useRunInShell, false);
     });
 
     test('Unknown Shell 信息正确', () {
@@ -65,9 +50,8 @@ void main() {
     });
 
     test('ShellType 枚举值正确', () {
-      expect(ShellType.values.length, 4);
+      expect(ShellType.values.length, 3);
       expect(ShellType.values, contains(ShellType.termuxBash));
-      expect(ShellType.values, contains(ShellType.systemBash));
       expect(ShellType.values, contains(ShellType.systemSh));
       expect(ShellType.values, contains(ShellType.unknown));
     });
@@ -77,16 +61,14 @@ void main() {
         type: ShellType.termuxBash,
         shellPath: '/data/data/com.termux/files/usr/bin/bash',
         version: '5.2.26',
-        hasPtySupport: true,
-        hasTmuxSupport: false,
+        isTermuxAccessible: true,
       );
 
       final str = info.toString();
       expect(str, contains('termuxBash'));
       expect(str, contains('/data/data/com.termux/files/usr/bin/bash'));
       expect(str, contains('5.2.26'));
-      expect(str, contains('pty=true'));
-      expect(str, contains('tmux=false'));
+      expect(str, contains('termuxAccessible=true'));
     });
 
     test('const 构造函数可用', () {
@@ -95,6 +77,34 @@ void main() {
         shellPath: '',
       );
       expect(info, isA<ShellInfo>());
+    });
+
+    test('launchArgs 始终返回空列表（Android shell 不支持 -i）', () {
+      final termuxInfo = ShellInfo(
+        type: ShellType.termuxBash,
+        shellPath: '/data/data/com.termux/files/usr/bin/bash',
+      );
+      expect(termuxInfo.launchArgs, isEmpty);
+
+      final shInfo = ShellInfo(
+        type: ShellType.systemSh,
+        shellPath: '/system/bin/sh',
+      );
+      expect(shInfo.launchArgs, isEmpty);
+
+      const unknownInfo = ShellInfo(
+        type: ShellType.unknown,
+        shellPath: '',
+      );
+      expect(unknownInfo.launchArgs, isEmpty);
+    });
+
+    test('useRunInShell 始终返回 false（使用绝对路径）', () {
+      final info = ShellInfo(
+        type: ShellType.termuxBash,
+        shellPath: '/data/data/com.termux/files/usr/bin/bash',
+      );
+      expect(info.useRunInShell, false);
     });
   });
 
@@ -134,8 +144,8 @@ void main() {
 
       expect(
         shell.type,
-        anyOf(ShellType.termuxBash, ShellType.systemBash, ShellType.systemSh),
-        reason: 'Shell 类型应为 termuxBash / systemBash / systemSh 之一',
+        anyOf(ShellType.termuxBash, ShellType.systemSh),
+        reason: 'Shell 类型应为 termuxBash / systemSh 之一',
       );
     });
   });

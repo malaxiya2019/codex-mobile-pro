@@ -46,33 +46,64 @@ class EnvironmentService {
   static const _termuxHome = '/data/data/com.termux/files/home';
 
   /// 检查 Termux 环境
+  ///
+  /// 通过执行命令来检测 Termux 是否可用，
+  /// 而非检查文件/目录是否存在。
+  /// Android 11+ 的 Scoped Storage 限制 App 访问其他应用数据目录，
+  /// 但通过 /system/bin/sh 执行命令可以绕过此限制。
   static Future<TermuxEnvironmentCheck> checkTermux() async {
     LogService.info('EnvService', '检查 Termux 环境...');
 
     bool termuxInstalled = false;
     bool hasTermuxHome = false;
     bool hasTermuxUsr = false;
+    String? prefixPath;
+    String? homePath;
 
     try {
-      // 检查 Termux 主目录
-      final homeDir = Directory(_termuxHome);
-      hasTermuxHome = await homeDir.exists();
-      LogService.info('EnvService', '  $_termuxHome: ${hasTermuxHome ? "存在" : "不存在"}');
+      // 尝试直接运行 Termux bash 来检测
+      // 使用 /system/bin/sh 来启动 Termux bash，绕过文件权限限制
+      final bashResult = await Process.run(
+        '/system/bin/sh',
+        [
+          '-c',
+          'if [ -x $_termuxPrefix/bin/bash ]; then '
+          'echo "TERMUX_OK"; '
+          'echo "HOME:$_termuxHome"; '
+          'echo "PREFIX:$_termuxPrefix"; '
+          'else echo "TERMUX_NO"; fi',
+        ],
+        runInShell: false,
+      );
 
-      // 检查 Termux usr 目录
-      final usrDir = Directory(_termuxPrefix);
-      hasTermuxUsr = await usrDir.exists();
-      LogService.info('EnvService', '  $_termuxPrefix: ${hasTermuxUsr ? "存在" : "不存在"}');
+      final stdout = (bashResult.stdout as String?)?.trim() ?? '';
+      LogService.info('EnvService', '  Termux bash 检测结果: ${stdout.split("\n").first}');
 
-      // 检查 Termux 包管理器（pkg 命令是否存在）
-      if (hasTermuxUsr) {
-        final pkgFile = File('$_termuxPrefix/bin/pkg');
-        termuxInstalled = await pkgFile.exists();
-      }
-
-      // 如果 usr 存在但 pkg 不存在，可能还是 Termux（只是精简版）
-      if (!termuxInstalled && hasTermuxUsr) {
+      if (stdout.contains('TERMUX_OK')) {
         termuxInstalled = true;
+        hasTermuxUsr = true;
+        hasTermuxHome = true;
+        prefixPath = _termuxPrefix;
+        homePath = _termuxHome;
+        LogService.info('EnvService', '  ✅ Termux 已安装 (bash 可执行)');
+      } else {
+        // 再检查下是否有 Termux 目录（仅日志，不依赖）
+        final lsResult = await Process.run(
+          '/system/bin/sh',
+          ['-c', 'ls $_termuxPrefix/bin/ 2>/dev/null | head -5 || echo "NO_ACCESS"'],
+          runInShell: false,
+        );
+        final lsOut = (lsResult.stdout as String?)?.trim() ?? '';
+        if (lsOut.contains('bash') || lsOut.contains('pkg')) {
+          termuxInstalled = true;
+          hasTermuxUsr = true;
+          hasTermuxHome = true;
+          prefixPath = _termuxPrefix;
+          homePath = _termuxHome;
+          LogService.info('EnvService', '  ✅ Termux 已安装 (目录可访问)');
+        } else {
+          LogService.info('EnvService', '  ❌ Termux 未安装或不可访问');
+        }
       }
     } catch (e) {
       LogService.error('EnvService', '  检查失败: $e');
@@ -82,8 +113,8 @@ class EnvironmentService {
       termuxInstalled: termuxInstalled || hasTermuxHome,
       hasTermuxHome: hasTermuxHome,
       hasTermuxUsr: hasTermuxUsr,
-      prefixPath: hasTermuxUsr ? _termuxPrefix : null,
-      homePath: hasTermuxHome ? _termuxHome : null,
+      prefixPath: prefixPath,
+      homePath: homePath,
     );
   }
 
@@ -121,19 +152,21 @@ class EnvironmentService {
         runInShell = false;
       } else {
         // 自动检测 Termux Bash
-        final termuxBash = File('$_termuxPrefix/bin/bash');
-        if (await termuxBash.exists()) {
+        // 通过执行命令验证，而非 File.exists()（Android 沙箱限制）
+        final bashCheck = await Process.run(
+          '/system/bin/sh',
+          ['-c', 'if [ -x $_termuxPrefix/bin/bash ]; then echo "YES"; else echo "NO"; fi'],
+          runInShell: false,
+        );
+        final bashAvailable = (bashCheck.stdout as String?)?.trim() == 'YES';
+        
+        if (bashAvailable) {
           shell = '$_termuxPrefix/bin/bash';
           runInShell = false;
         } else {
-          // 降级到系统 shell
+          // 降级到系统 shell（绝对路径，确保可用）
           shell = '/system/bin/sh';
           runInShell = false;
-          // 如果 /system/bin/sh 也不存在，用 sh
-          if (!await File(shell).exists()) {
-            shell = 'sh';
-            runInShell = true;
-          }
         }
       }
 

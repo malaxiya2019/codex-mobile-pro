@@ -84,9 +84,9 @@ class TerminalSession {
 
       _process = await Process.start(
         shellInfo.shellPath,
-        ['-i'],  // 交互模式
+        shellInfo.launchArgs,
         workingDirectory: cwd,
-        runInShell: false,  // 直接执行，不通过 sh -c
+        runInShell: shellInfo.useRunInShell,
         environment: env,
       );
 
