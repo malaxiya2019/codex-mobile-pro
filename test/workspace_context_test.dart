@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../lib/core/context/workspace_context.dart';
 import '../lib/core/context/workspace_context_provider.dart';
-import '../lib/features/editor/providers/editor_provider.dart';
 import '../lib/features/editor/models/editor_models.dart';
-import '../lib/features/workspace/workspace_provider.dart';
 
 // ══════════════════════════════════════════════
 // Mock 环境：创建测试用 ProviderContainer

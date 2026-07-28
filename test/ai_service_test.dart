@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/core/ai/ai_client.dart';
-import 'package:codex_mobile_pro/core/ai/ai_message.dart';
 import 'package:codex_mobile_pro/core/ai/ai_service.dart';
 
 void main() {
