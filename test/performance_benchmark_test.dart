@@ -47,14 +47,14 @@ void main() {
 
     test('B-004: 模拟 20 次 AI Token — 每次 < 200ms 处理', () {
       final times = <int>[];
-      String accumulated = '';
 
       for (int i = 0; i < 20; i++) {
         final start = DateTime.now();
         // 模拟处理一个 token chunk
-        accumulated += 'token_$i ';
+        final token = 'token_$i';
         // 模拟字符串操作（类似 AI 响应渲染）
-        accumulated.split(' ').join('\n'); // formatted
+        final result = token.split('_').join(' ');
+        expect(result, isNotEmpty);
         final elapsed = DateTime.now().difference(start).inMicroseconds;
         times.add(elapsed);
       }

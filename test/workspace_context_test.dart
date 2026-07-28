@@ -1,24 +1,27 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import '../lib/core/context/workspace_context.dart';
-import '../lib/core/context/workspace_context_provider.dart';
-import '../lib/features/editor/models/editor_models.dart';
+import 'package:codex_mobile_pro/core/context/workspace_context.dart';
+import 'package:codex_mobile_pro/core/context/workspace_context_provider.dart';
+import 'package:codex_mobile_pro/features/editor/models/editor_models.dart';
+import 'package:codex_mobile_pro/features/editor/providers/editor_provider.dart';
+import 'package:codex_mobile_pro/features/workspace/workspace_provider.dart';
 
-// ══════════════════════════════════════════════
-// Mock 环境：创建测试用 ProviderContainer
-// ══════════════════════════════════════════════
-
-/// 测试用的 Mock Ref
+/// 测试用的 Mock Ref — 使用真实 ProviderContainer
 class _TestRef extends Ref<Object?> {
-  @override
-  ProviderContainer get container => throw UnimplementedError('Not needed in tests');
+  final ProviderContainer _container;
+
+  _TestRef(this._container);
 
   @override
-  T refresh<T>(Refreshable<T> provider) => throw UnimplementedError('Not needed in tests');
+  ProviderContainer get container => _container;
 
   @override
-  void invalidate(ProviderOrFamily provider) {}
+  T refresh<T>(Refreshable<T> provider) => _container.refresh(provider);
+
+  @override
+  void invalidate(ProviderOrFamily provider) => _container.invalidate(provider);
 
   @override
   void notifyListeners() {}
@@ -48,16 +51,18 @@ class _TestRef extends Ref<Object?> {
   void onDispose(void Function() cb) {}
 
   @override
-  bool exists(ProviderBase<Object?> provider) => false;
+  bool exists(ProviderBase<Object?> provider) =>
+      _container.read(provider) != null;
 
   @override
-  T read<T>(ProviderListenable<T> provider) => throw UnimplementedError('Not needed in tests');
+  T read<T>(ProviderListenable<T> provider) => _container.read(provider);
 
   @override
-  T watch<T>(ProviderListenable<T> provider) => throw UnimplementedError('Not needed in tests');
+  T watch<T>(ProviderListenable<T> provider) => _container.read(provider);
 
   @override
-  KeepAliveLink keepAlive() => throw UnimplementedError('Not needed in tests');
+  KeepAliveLink keepAlive() =>
+      throw UnsupportedError('keepAlive() is not supported in test ref');
 
   @override
   ProviderSubscription<T> listen<T>(
@@ -65,14 +70,21 @@ class _TestRef extends Ref<Object?> {
     void Function(T? previous, T next) listener, {
     void Function(Object error, StackTrace stackTrace)? onError,
     bool fireImmediately = false,
-  }) {
-    throw UnimplementedError('Not needed in tests');
-  }
+  }) =>
+      _container.listen(provider, listener,
+          onError: onError, fireImmediately: fireImmediately);
 }
 
 /// 创建一个模拟的 Ref 对象用于测试
-_TestRef createMockRef() {
-  return _TestRef();
+Future<_TestRef> createMockRef() async {
+  SharedPreferences.setMockInitialValues({});
+  final container = ProviderContainer(
+    overrides: [
+      editorProvider.overrideWith((ref) => EditorNotifier()),
+      workspaceProvider.overrideWith((ref) => WorkspaceNotifier()),
+    ],
+  );
+  return _TestRef(container);
 }
 
 void main() {
@@ -147,17 +159,10 @@ void main() {
   });
 
   group('WorkspaceContextProvider — 接口', () {
-    test('IWorkspaceContextProvider 继承 ContextManager', () {
-      // 编译期检查：IWorkspaceContextProvider 必须有 buildContextPrompt()
-      // 通过实例化检查
-      expect(true, isTrue);
-    });
-
-    test('buildContextPrompt 返回格式化字符串', () async {
-      final container = createMockRef();
+    test('IWorkspaceContextProvider 继承 ContextManager', () async {
+      final container = await createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
-      // 无工作区状态时，上下文内容为空
       final prompt = provider.buildContextPrompt();
       expect(prompt, contains('上下文信息'));
     });
@@ -165,7 +170,7 @@ void main() {
 
   group('WorkspaceContextProvider — 上下文 Prompt 构建', () {
     test('buildContextPrompt 包含自定义上下文', () async {
-      final container = createMockRef();
+      final container = await createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       provider.addContext('用户需求', '实现一个计算器');
@@ -176,7 +181,7 @@ void main() {
     });
 
     test('addContext / removeContext / clearContext 正常工作', () async {
-      final container = createMockRef();
+      final container = await createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       provider.addContext('key1', 'value1');
@@ -198,7 +203,7 @@ void main() {
     });
 
     test('getCurrentFileContext 返回 null（无活动编辑器）', () async {
-      final container = createMockRef();
+      final container = await createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       final fileCtx = provider.getCurrentFileContext();
@@ -206,7 +211,7 @@ void main() {
     });
 
     test('getSelectionContext 返回 null（无选中内容）', () async {
-      final container = createMockRef();
+      final container = await createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       final selCtx = provider.getSelectionContext();
@@ -214,7 +219,7 @@ void main() {
     });
 
     test('currentFile / selection / workspaceContext 为 null（无状态）', () async {
-      final container = createMockRef();
+      final container = await createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       expect(provider.currentFile, isNull);
@@ -224,10 +229,7 @@ void main() {
   });
 
   group('FileLanguage 工具方法', () {
-    test('_languageName 能识别所有语言', () {
-      // ignore: unused_local_variable
-      final _ = WorkspaceContextProvider(ref: createMockRef());
-      // 通过反射或直接测试私有方法不可行，测试公开 getter
+    test('FileLanguage.fromFileName 识别所有语言', () {
       expect(FileLanguage.fromFileName('main.dart'), FileLanguage.dart);
       expect(FileLanguage.fromFileName('main.rs'), FileLanguage.rust);
       expect(FileLanguage.fromFileName('main.py'), FileLanguage.python);
@@ -248,15 +250,14 @@ void main() {
 
   group('WorkspaceContextProvider — Token 估算', () {
     test('buildContextPrompt 对空内容不报错', () async {
-      final container = createMockRef();
+      final container = await createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
-      // 不应抛出异常
       expect(() => provider.buildContextPrompt(), returnsNormally);
     });
 
     test('多次调用 buildContextPrompt 不影响自定义上下文', () async {
-      final container = createMockRef();
+      final container = await createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       provider.addContext('test-key', 'test-value');
