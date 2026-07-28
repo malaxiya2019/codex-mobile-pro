@@ -2,6 +2,45 @@
 
 ## [Unreleased]
 
+### 🔬 Sprint 0 — Milestone 0.2：Termux 通信验证 ✅
+
+#### 🏗️ Android Native 层
+- `TermuxBridge.kt` — 三策略降级命令执行桥
+  - 策略1: Termux bash（`/data/data/com.termux/files/usr/bin/bash`）
+  - 策略2: 系统 shell（`/system/bin/sh`）
+  - 自动降级 + 详细诊断信息
+  - 30 秒超时 + `destroyForcibly()` 强制终止
+  - stdout / stderr / exitCode 完整捕获
+  - 可写工作目录自动选择（cacheDir → filesDir → /data/local/tmp）
+- `MainActivity.kt` — MethodChannel 注册（`com.codexmobile.app/termux`）
+
+#### 📐 Flutter Service 层
+- `core/termux/termux_service.dart` — Termux 通信服务
+  - `TermuxResult` — 命令结果模型（`isSuccess`, `isTimeout`）
+  - `TermuxEnvCheck` — 环境诊断模型（`termuxMode`, `fallbackAvailable`, `hasAnyShell`）
+  - `TermuxService.execute()` — 执行命令
+  - `TermuxService.checkEnvironment()` — 完整环境诊断
+
+#### 🧪 测试页面
+- `features/termux/views/termux_test_page.dart` — 通信验证 UI
+  - 🔍 环境检查（Termux + 系统 shell 完整诊断）
+  - 🚀 基础命令测试（10 条命令）
+  - 🔣 特殊字符测试（10 种场景：$、"、'、\、`、|、中文、换行、重定向）
+  - 🔥 批量压力测试（50 次连续调用 + 统计报表）
+  - 🏁 完整验证套件（一键运行所有测试）
+  - 🎨 彩色输出、进度条、快捷命令芯片
+
+#### 🧪 单元测试
+- `test/termux_service_test.dart` — 15 个测试用例
+  - 正常执行、命令失败、超时、大量输出、中文编码、空输出
+  - 环境检查：Termux 可用、降级模式、完全无环境
+  - TermuxResult/EnvCheck 模型验证
+
+#### 📋 文档
+- `docs/sprints/sprint-0/milestone-0.2-验证报告.md` — 完整验证报告
+
+---
+
 ### 🔬 Sprint 0 — Milestone 0.1：环境验证 ✅
 
 #### 🏗️ Flutter 工程初始化
@@ -45,7 +84,3 @@
 
 #### ⚙️ CI/CD
 - `.github/workflows/ci.yml` — Analyze → Test → Build
-
----
-
-*格式规范：[语义化版本](https://semver.org/lang/zh-CN/)*
