@@ -6,7 +6,7 @@ import '../services/editor_buffer.dart';
 import '../extensions/inline_completion.dart';
 import '../../../core/ai/ai_provider.dart';
 import '../../../core/ai/providers/deepseek_provider.dart';
-import 'package:codex_mobile_pro/core/ai/ai_service.dart';
+import '../../../core/ai/ai_service.dart';
 
 /// 编辑器状态
 class EditorState {
@@ -33,7 +33,7 @@ class EditorState {
     this.recentFiles = const [],
     this.pinnedFiles = const {},
     this.favoriteFiles = const {},
-    InlineCompletionProvider? inlineCompletion,
+    InlineCompletionEngine? inlineCompletion,
   }) : settings = settings ?? EditorSettings(),
       findState = findState ?? FindReplaceState(),
       inlineCompletion = inlineCompletion ?? _createDefaultInlineCompletion();

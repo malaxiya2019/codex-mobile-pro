@@ -9,10 +9,47 @@ import '../lib/features/editor/models/editor_models.dart';
 // Mock 环境：创建测试用 ProviderContainer
 // ══════════════════════════════════════════════
 
+/// 测试用的 Mock Ref
+class _TestRef extends Ref<Object?> {
+  @override
+  void invalidate(ProviderOrFamily provider) {}
+
+  @override
+  void invalidateSelf() {}
+
+  @override
+  bool get mounted => true;
+
+  @override
+  void onDispose(void Function() cb) {}
+
+  @override
+  void onMount(void Function() cb) {}
+
+  @override
+  Ref<Object?> get parent => this;
+
+  @override
+  ProviderStateOwner? get owner => null;
+
+  @override
+  Object? read(ProviderOrFamily<Object?> provider) => null;
+
+  @override
+  T listen<T>(ProviderListenable<T> provider, void Function(T? previous, T next) listener, {void Function()? onError, bool fireImmediately = false}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  T watch<T>(ProviderListenable<T> provider) => throw UnimplementedError();
+
+  @override
+  Iterable<ProviderOrFamily> get _dependencies => [];
+}
+
 /// 创建一个模拟的 Ref 对象用于测试
-ProviderContainer createMockRef() {
-  // 使用 ProviderContainer（继承自 Ref<Object?>）作为测试用 Ref
-  return ProviderContainer();
+_TestRef createMockRef() {
+  return _TestRef();
 }
 
 void main() {
