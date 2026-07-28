@@ -68,7 +68,7 @@ class FlutterTemplateGenerator extends TemplateGenerator {
 
   /// 当 flutter create 不可用时创建基础结构
   Future<void> _createFallbackStructure(String projectPath, String name) async {
-    final dir = Directory(projectPath);
+    Directory(projectPath); // dir
 
     // 基础目录
     await Directory('$projectPath/lib').create(recursive: true);

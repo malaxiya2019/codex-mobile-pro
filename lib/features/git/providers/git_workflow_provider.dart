@@ -43,6 +43,7 @@ final gitWorkflowProvider = Provider<GitWorkflowProvider>((ref) {
 class GitWorkflowProvider {
   final GitService _gitService;
   final GitHubService _githubService;
+  // ignore: unused_field
   AiProvider? _aiProvider;
 
   GitWorkflowProvider({

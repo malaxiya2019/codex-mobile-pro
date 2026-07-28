@@ -113,7 +113,7 @@ class _PrListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = theme.brightness == Brightness.dark;
+    theme.brightness == Brightness.dark; // isDark
 
     return ListTile(
       leading: CircleAvatar(

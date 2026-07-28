@@ -146,7 +146,6 @@ class AiCompletionProvider extends CompletionProvider {
     if (_aiProvider == null) return [];
 
     try {
-      final lines = text.split('\n');
       final prefix = text.substring(0, offset);
       final suffix = text.substring(offset);
 
@@ -161,7 +160,7 @@ class AiCompletionProvider extends CompletionProvider {
         cursorColumn: position.column,
       );
 
-      final completions = await _aiProvider!.getInlineCompletions(
+      final completions = await _aiProvider.getInlineCompletions(
         request: request,
         triggerKind: CompletionTriggerKind.invoked,
         cancelToken: _cancelToken,

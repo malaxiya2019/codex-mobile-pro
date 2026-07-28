@@ -476,9 +476,9 @@ void main() {
       });
 
       test('listSessions 返回所有会话（按 updatedAt 降序）', () async {
-        final s1 = engine.createSession(title: '第一');
+        engine.createSession(title: '第一'); // s1
         await Future.delayed(const Duration(milliseconds: 1));
-        final s2 = engine.createSession(title: '第二');
+        engine.createSession(title: '第二'); // s2
 
         final sessions = engine.listSessions();
         expect(sessions.length, 2);

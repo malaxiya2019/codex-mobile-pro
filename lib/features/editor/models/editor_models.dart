@@ -1,4 +1,3 @@
-import 'dart:io';
 
 /// 编辑器 Tab 模型
 class EditorTab {

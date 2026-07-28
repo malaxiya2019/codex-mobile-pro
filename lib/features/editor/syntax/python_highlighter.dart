@@ -77,7 +77,7 @@ class PythonHighlighter extends BaseHighlighter {
       // f-string 前缀
       if ((text[i] == 'f' || text[i] == 'F' || text[i] == 'r' || text[i] == 'b' || text[i] == 'u') &&
           i + 1 < text.length && (text[i + 1] == '"' || text[i + 1] == "'")) {
-        final start = i;
+        // final start = i; // kept for clarity
         i++;
         continue;
       }

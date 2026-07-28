@@ -110,8 +110,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/repos/:owner/:name',
         name: 'repoDetail',
         builder: (context, state) {
-          final owner = state.pathParameters['owner'] ?? '';
-          final name = state.pathParameters['name'] ?? '';
+          // final owner = state.pathParameters['owner'] ?? '';
+          // final name = state.pathParameters['name'] ?? '';
           return RepoListPage(); // 重用仓库列表
         },
       ),
@@ -119,8 +119,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/repos/:owner/:name/prs',
         name: 'repoPrList',
         builder: (context, state) {
-          final owner = state.pathParameters['owner'] ?? '';
-          final name = state.pathParameters['name'] ?? '';
+          // final owner = state.pathParameters['owner'] ?? '';
+          // final name = state.pathParameters['name'] ?? '';
           return PrListPage(repoFullName: '$owner/$name');
         },
       ),
@@ -128,8 +128,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/repos/:owner/:name/issues',
         name: 'repoIssueList',
         builder: (context, state) {
-          final owner = state.pathParameters['owner'] ?? '';
-          final name = state.pathParameters['name'] ?? '';
+          // final owner = state.pathParameters['owner'] ?? '';
+          // final name = state.pathParameters['name'] ?? '';
           return IssueListPage(repoFullName: '$owner/$name');
         },
       ),

@@ -174,7 +174,8 @@ void main() {
     });
 
     test('展开后标记已展开', () {
-      final node = FileTreeNode(
+      // ignore: unused_local_variable
+      final _ = FileTreeNode(
         name: 'emptydir',
         path: tempDir.path,
         isDirectory: true,

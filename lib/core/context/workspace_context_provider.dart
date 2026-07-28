@@ -6,7 +6,6 @@ import '../../features/editor/models/editor_models.dart';
 import '../../features/editor/providers/editor_provider.dart';
 import '../../features/git/models/git_repository.dart';
 import '../../features/git/providers/git_provider.dart';
-import '../../features/git/services/git_service.dart';
 import '../../features/workspace/workspace_provider.dart';
 import '../ai/chat_engine.dart';
 import 'workspace_context.dart';
@@ -262,8 +261,6 @@ class WorkspaceContextProvider implements IWorkspaceContextProvider {
     final ws = _ref.read(workspaceProvider).currentWorkspace;
     if (ws?.projects.isEmpty ?? true) return null;
 
-    final gitService = _ref.read(gitServiceProvider);
-    final path = ws!.projects.first.path;
 
     try {
       // 同步获取 git 状态（非阻塞读取已缓存状态）

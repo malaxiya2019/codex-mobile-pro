@@ -36,7 +36,7 @@ void main() {
       for (int i = 0; i < 10; i++) {
         final start = DateTime.now();
         // 模拟页面加载（实际应用中的页面构建）
-        final simulatedWork = List.generate(100, (i) => i * 2);
+        List.generate(100, (i) => i * 2); // simulatedWork
         final elapsed = DateTime.now().difference(start).inMilliseconds;
         durations.add(elapsed);
         tracker.recordPageLoad('page_$i', elapsed);

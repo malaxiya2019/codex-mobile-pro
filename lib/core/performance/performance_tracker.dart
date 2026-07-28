@@ -10,7 +10,6 @@
 /// ```
 library;
 
-import 'dart:io';
 
 /// 性能事件记录
 class PerformanceEvent {

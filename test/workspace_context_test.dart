@@ -6,7 +6,6 @@ import '../lib/core/context/workspace_context_provider.dart';
 import '../lib/features/editor/providers/editor_provider.dart';
 import '../lib/features/editor/models/editor_models.dart';
 import '../lib/features/workspace/workspace_provider.dart';
-import '../lib/features/workspace/workspace_model.dart';
 
 // ══════════════════════════════════════════════
 // Mock 环境：创建测试用 ProviderContainer
@@ -189,7 +188,8 @@ void main() {
 
   group('FileLanguage 工具方法', () {
     test('_languageName 能识别所有语言', () {
-      final provider = WorkspaceContextProvider(ref: createTestContainer());
+      // ignore: unused_local_variable
+      final _ = WorkspaceContextProvider(ref: createTestContainer());
       // 通过反射或直接测试私有方法不可行，测试公开 getter
       expect(FileLanguage.fromFileName('main.dart'), FileLanguage.dart);
       expect(FileLanguage.fromFileName('main.rs'), FileLanguage.rust);

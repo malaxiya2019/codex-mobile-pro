@@ -14,7 +14,7 @@ import '../../../core/logger/log_service.dart';
 /// - 仓库列表/详情查询
 /// - 用户信息获取
 class GitHubService {
-  static const String _clientId = 'Ov23li123456789abcdef'; // 占位，实际需注册
+  // static const String _clientId = .Ov23li123456789abcdef.; // 占位，实际需注册
   static const String _tokenKey = 'github_token';
   static const String _userKey = 'github_user';
 

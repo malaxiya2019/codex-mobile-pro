@@ -48,7 +48,7 @@ class MockAiProvider extends AiProvider {
     CancelToken? cancelToken,
   }) async {
     if (_chatHandler != null) {
-      return _chatHandler!(messages, temperature, maxTokens, cancelToken);
+      return _chatHandler(messages, temperature, maxTokens, cancelToken);
     }
     return '';
   }

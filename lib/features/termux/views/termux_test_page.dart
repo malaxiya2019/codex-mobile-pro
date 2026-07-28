@@ -57,9 +57,9 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
   // 统计
   int _passed = 0;
   int _failed = 0;
-  int _totalTests = 0;
+  // int _totalTests = 0; // unused
   final _failedList = <String>[];
-  bool _showOnlyFailed = false;
+  // bool _showOnlyFailed = false; // unused
 
   @override
   void initState() {

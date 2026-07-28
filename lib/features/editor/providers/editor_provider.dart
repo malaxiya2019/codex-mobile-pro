@@ -143,7 +143,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
     final tab = EditorTab(id: tabId, filePath: filePath);
 
     final buffer = EditorBuffer(filePath: filePath, settings: state.settings);
-    final loaded = await buffer.load();
+    await buffer.load();
 
     final newBuffers = Map<String, EditorBuffer>.from(state.buffers);
     newBuffers[tabId] = buffer;
