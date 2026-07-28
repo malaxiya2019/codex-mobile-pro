@@ -90,6 +90,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Timer? _autoSaveTimer;
   AiProvider? _aiProvider;
 
+  AiProvider? get aiProvider => _aiProvider;
   EditorNotifier() : super(EditorState());
 
   // ── AI Provider 管理 ──

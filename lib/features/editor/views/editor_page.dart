@@ -9,6 +9,8 @@ import '../widgets/editor_content.dart';
 import '../widgets/editor_find_panel.dart';
 import '../extensions/inline_completion.dart';
 import '../extensions/code_explain.dart';
+import '../extensions/code_review.dart';
+import '../widgets/code_review_sheet.dart';
 
 /// 编辑器页面 — 多标签代码编辑器（带 AI 内联补全 + 代码解释）
 class EditorPage extends ConsumerStatefulWidget {
@@ -96,6 +98,59 @@ class _EditorPageState extends ConsumerState<EditorPage> {
     } else if (result.hasError) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('解释失败: ${result.errorMessage}')),
+      );
+    }
+  }
+
+  /// 审查选中的代码
+  Future<void> _reviewCode() async {
+    final editorState = ref.read(editorProvider);
+    final buffer = editorState.activeBuffer;
+    if (buffer == null) return;
+
+    final aiProvider = ref.read(editorProvider.notifier).aiProvider;
+    if (aiProvider == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('AI 服务未初始化')),
+      );
+      return;
+    }
+
+    String code;
+    if (buffer.hasSelection) {
+      code = buffer.selectedText;
+    } else {
+      code = buffer.text;
+    }
+
+    if (code.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请选择要审查的代码')),
+      );
+      return;
+    }
+
+    final engine = CodeReviewEngine(aiProvider);
+    final result = await engine.reviewSelection(
+      code: code,
+      language: buffer.language.name,
+    );
+
+    if (!mounted) return;
+
+    if (result.isValid || result.hasError) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => CodeReviewSheet(
+          result: result,
+          onClose: () => Navigator.of(context).pop(),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('审查未返回结果')),
       );
     }
   }
@@ -202,6 +257,13 @@ class _EditorPageState extends ConsumerState<EditorPage> {
           tooltip: '撤销 (Ctrl+Z)',
           onPressed: () => ref.read(editorProvider.notifier).undo(),
         ),
+        // Code Review
+        if (editorState.activeBuffer != null)
+          IconButton(
+            icon: const Icon(Icons.rate_review_outlined, size: 20),
+            tooltip: '审查代码',
+            onPressed: _reviewCode,
+          ),
         // 重做
         IconButton(
           icon: const Icon(Icons.redo, size: 20),
