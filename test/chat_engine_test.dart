@@ -672,19 +672,24 @@ void main() {
         mockProvider.blockStream();
 
         // 开始第一个流
-        final stream = engine.streamMessage(
+        engine.streamMessage(
           sessionId: session.sessionId,
           content: '第一轮',
-        );
-        stream.listen((_) {});
+        ).listen((_) {});
 
         // 等待生成器设置 streaming 状态
-        await Future.delayed(Duration.zero);
+        await Future(() {});
+        await Future(() {});
+        await Future(() {});
         expect(engine.isGenerating(session.sessionId), true);
 
         // 尝试第二个流应抛出 sessionBusy
-        await expect(
-          engine.streamMessage(sessionId: session.sessionId, content: '第二轮'),
+        final secondStream = engine.streamMessage(
+          sessionId: session.sessionId,
+          content: '第二轮',
+        );
+        await expectLater(
+          secondStream,
           emitsError(isA<ChatEngineException>().having(
             (e) => e.type,
             'type',

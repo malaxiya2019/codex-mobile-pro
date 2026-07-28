@@ -122,12 +122,12 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      // 可靠等待 _load() 完成（drain microtasks）
+      // 先触发 Notifier 创建，然后可靠等待 _load() 完成
+      final notifier = container.read(workspaceProvider.notifier);
       await Future(() {});
       await Future(() {});
       await Future(() {});
 
-      final notifier = container.read(workspaceProvider.notifier);
       final ws = await notifier.create(name: 'A', template: WorkspaceTemplate.flutter);
       await notifier.switchWorkspace(ws.id);
       await notifier.delete(ws.id);
