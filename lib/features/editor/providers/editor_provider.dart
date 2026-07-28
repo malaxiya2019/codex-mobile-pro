@@ -88,6 +88,7 @@ final editorProvider = StateNotifierProvider<EditorNotifier, EditorState>((ref) 
 
 class EditorNotifier extends StateNotifier<EditorState> {
   Timer? _autoSaveTimer;
+  AiProvider? _aiProvider;
 
   EditorNotifier() : super(EditorState());
 
@@ -97,11 +98,13 @@ class EditorNotifier extends StateNotifier<EditorState> {
   Future<void> initAiProvider({AiConfig? config}) async {
     final provider = DeepSeekProvider(config: config);
     await provider.initialize();
+    _aiProvider = provider;
     state.inlineCompletion.setProvider(provider);
   }
 
   /// 设置自定义 AI Provider
   void setAiProvider(AiProvider provider) {
+    _aiProvider = provider;
     state.inlineCompletion.setProvider(provider);
   }
 
@@ -658,6 +661,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   @override
   void dispose() {
     _autoSaveTimer?.cancel();
+    _aiProvider?.dispose();
     state.inlineCompletion.dispose();
     super.dispose();
   }
