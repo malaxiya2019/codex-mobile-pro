@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+### 🔬 Sprint 0 — Milestone 0.3：依赖检测验证 ✅
+
+#### 🏗️ 检测器体系
+- `core/detector/detector.dart` — Detector 抽象基类
+- `core/detector/detection_result.dart` — DetectionResult 模型 + DetectionStatus 枚举
+- `core/detector/detector_service.dart` — 检测编排服务（并行/单条/统计）
+- `core/detector/detectors/` — 10 个独立检测器
+  - Flutter、Termux、Node.js、Git、Python 3、cURL
+  - Codex CLI（三路径）、mimo2codex（含端口检测）、DeepSeek API Key、存储权限
+
+#### 🚀 部署中心 UI
+- `features/deploy/providers/deploy_provider.dart` — DeployStatus + DeployNotifier
+- `features/deploy/views/deploy_page.dart` — 状态仪表盘（摘要卡片 + 结果列表 + 实时进度）
+
+#### 🧪 单元测试
+- `test/detector_service_test.dart` — Mock 检测器 + DetectorService + 统计
+
+#### 📋 文档
+- `docs/sprints/sprint-0/milestone-0.3-验证报告.md`
+
+---
+
+
 ### 🔬 Sprint 0 — Milestone 0.2：Termux 通信验证 ✅
 
 #### 🏗️ Android Native 层

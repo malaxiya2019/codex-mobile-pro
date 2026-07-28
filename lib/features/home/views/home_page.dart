@@ -20,6 +20,11 @@ class HomePage extends ConsumerWidget {
         backgroundColor: colorScheme.surfaceContainer,
         actions: [
           IconButton(
+            icon: const Icon(Icons.deployed_code),
+            tooltip: '部署中心',
+            onPressed: () => context.push(RouteNames.deploy),
+          ),
+          IconButton(
             icon: const Icon(Icons.terminal),
             tooltip: 'Termux 通信验证',
             onPressed: () => context.push(RouteNames.termuxTest),
@@ -38,6 +43,7 @@ class HomePage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // ── 系统状态卡片 ──
           Card(
             elevation: 0,
             color: colorScheme.primaryContainer,
@@ -51,12 +57,55 @@ class HomePage extends ConsumerWidget {
                   _StatusRow(label: 'Material 3', value: '✅ v3.0', color: Colors.green),
                   SizedBox(height: 8),
                   _StatusRow(label: 'Riverpod', value: '✅ 已集成', color: Colors.green),
+                  SizedBox(height: 8),
+                  _StatusRow(label: 'Termux 通信', value: '✅ 已验证', color: Colors.green),
                 ],
               ),
             ),
           ),
+          const SizedBox(height: 16),
+
+          // ── 快捷操作仪表盘 ──
+          Row(
+            children: [
+              Expanded(
+                child: _QuickActionCard(
+                  icon: Icons.deployed_code,
+                  label: '部署中心',
+                  subtitle: '环境检测',
+                  color: Colors.blue,
+                  onTap: () => context.push(RouteNames.deploy),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _QuickActionCard(
+                  icon: Icons.terminal,
+                  label: 'Termux',
+                  subtitle: '通信验证',
+                  color: Colors.green,
+                  onTap: () => context.push(RouteNames.termuxTest),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _QuickActionCard(
+                  icon: Icons.chat_outlined,
+                  label: 'AI 编程',
+                  subtitle: 'Sprint 4',
+                  color: Colors.purple,
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('AI 对话 — Sprint 4 实现')),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
 
+          // ── Riverpod 状态管理验证 ──
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -104,6 +153,7 @@ class HomePage extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
+          // ── 环境信息 ──
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -116,6 +166,7 @@ class HomePage extends ConsumerWidget {
                   const _InfoRow(label: 'Dart', value: '3.5+'),
                   const _InfoRow(label: 'Android', value: '10–15 (API 29–35)'),
                   const _InfoRow(label: '架构', value: 'Material 3 + Riverpod'),
+                  const _InfoRow(label: 'Termux 通信', value: '多策略降級'),
                 ],
               ),
             ),
@@ -124,20 +175,66 @@ class HomePage extends ConsumerWidget {
       ),
       bottomNavigationBar: NavigationBar(
         onDestinationSelected: (index) {
-          if (index == 1) {
-            context.push(RouteNames.termuxTest);
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('页面 ${index + 1} — 后续 Sprint 实现')),
-            );
+          switch (index) {
+            case 1:
+              context.push(RouteNames.deploy);
+              break;
+            case 2:
+              context.push(RouteNames.termuxTest);
+              break;
+            default:
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('页面 ${index + 1} — 后续 Sprint 实现')),
+              );
           }
         },
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: '首页'),
+          NavigationDestination(icon: Icon(Icons.deployed_code_outlined), selectedIcon: Icon(Icons.deployed_code), label: '部署'),
           NavigationDestination(icon: Icon(Icons.terminal_outlined), selectedIcon: Icon(Icons.terminal), label: 'Termux'),
           NavigationDestination(icon: Icon(Icons.chat_outlined), selectedIcon: Icon(Icons.chat), label: 'AI'),
-          NavigationDestination(icon: Icon(Icons.folder_outlined), selectedIcon: Icon(Icons.folder), label: '文件'),
         ],
+      ),
+    );
+  }
+}
+
+/// 快捷操作卡片
+class _QuickActionCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickActionCard({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      color: color.withValues(alpha: 0.08),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 28),
+              const SizedBox(height: 8),
+              Text(label, style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600)),
+              Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(fontSize: 10, color: color)),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/home/views/home_page.dart';
 import '../../features/termux/views/termux_test_page.dart';
+import '../../features/deploy/views/deploy_page.dart';
 import 'route_names.dart';
 
 /// GoRouter 路由配置
@@ -18,6 +19,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.termuxTest,
         name: 'termuxTest',
         builder: (context, state) => const TermuxTestPage(),
+      ),
+      GoRoute(
+        path: RouteNames.deploy,
+        name: 'deploy',
+        builder: (context, state) => const DeployPage(),
       ),
     ],
   );
