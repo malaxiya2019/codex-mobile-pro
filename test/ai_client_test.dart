@@ -163,9 +163,6 @@ void main() {
         'data: {"choices":[{"delta":{"content":"lo"},"index":0}]}\n\n'
         'data: [DONE]\n\n';
 
-      final mockStream = http.ByteStream.fromBytes(utf8.encode(sseData));
-      final mockResponse = http.StreamedResponse(mockStream, 200);
-
       when(() => mockClient.send(any<http.BaseRequest>())).thenAnswer((_) async {
         // 确保 stream 可以被多次监听
         final bytes = utf8.encode(sseData);
