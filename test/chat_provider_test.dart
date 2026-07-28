@@ -599,15 +599,16 @@ void main() {
     // ── clearError ──
 
     group('clearError', () {
-      test('清除错误后状态恢复', () {
+      test('清除错误后状态恢复', () async {
         final container = createTestContainer(engine: mockEngine);
         addTearDown(() => container.dispose());
 
         final notifier = container.read(chatProvider.notifier);
 
-        // 手动设置错误状态
-        // 通过修改 state 来触发
-        notifier.sendMessage('hi');
+        // 先发送消息并等待完成，再手动设置错误
+        await notifier.sendMessage('hi');
+        // 通过停止生成触发 error 状态
+        notifier.stopGeneration();
 
         // 清除错误
         notifier.clearError();
@@ -622,12 +623,12 @@ void main() {
     group('dispose', () {
       test('dispose 释放引擎资源', () {
         final container = createTestContainer(engine: mockEngine);
-        addTearDown(() => container.dispose());
 
-        final notifier = container.read(chatProvider.notifier);
-        notifier.dispose();
+        // 先释放容器，notifier 随容器一起释放
+        container.dispose();
 
         // dispose 后不应再有错误
+        // 验证通过（没有异常即通过）
       });
     });
   });

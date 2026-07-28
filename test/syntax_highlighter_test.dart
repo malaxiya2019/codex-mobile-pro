@@ -80,7 +80,7 @@ void main() {
       final highlighter = SyntaxRegistry.getHighlighter(FileLanguage.dart)!;
       expect(highlighter.keywords.contains('class'), isTrue);
       expect(highlighter.keywords.contains('void'), isTrue);
-      expect(highlighter.keywords.contains('Future'), isTrue);
+      expect(highlighter.typeKeywords.contains('Future'), isTrue);
     });
   });
 

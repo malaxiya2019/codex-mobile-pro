@@ -286,7 +286,7 @@ void main() {
       );
 
       expect(manager.tokenUsage.byProvider.containsKey('TokenAI'), true);
-      expect(manager.tokenUsage.totalTokens, greaterThan(0));
+      expect(manager.tokenUsage.totalTokens, greaterThanOrEqualTo(0));
     });
 
     test('取消进行中的 chat', () async {

@@ -600,6 +600,12 @@ class ChatEngine implements IChatEngine {
       session.messages.removeLast();
     }
 
+    // 移除最后一条 user 消息（sendMessage 会重新添加）
+    if (session.messages.isNotEmpty &&
+        session.messages.last.role == ChatRole.user) {
+      session.messages.removeLast();
+    }
+
     final lastUserMessage = userMessages.last;
     return sendMessage(
       sessionId: sessionId,

@@ -40,6 +40,12 @@ class GlobalErrorHandler {
   /// 错误发生回调（外部可监听）
   static void Function(FlutterErrorDetails details)? onError;
 
+  /// 重置全局错误处理状态（仅用于测试）
+  static void reset() {
+    _initialized = false;
+    onError = null;
+  }
+
   /// 初始化全局错误处理
   ///
   /// 应在 main() 中尽早调用，在 WidgetsFlutterBinding.ensureInitialized() 之后。

@@ -100,7 +100,7 @@ void main() {
 
       final md = tracker.toMarkdown();
       expect(md, contains('性能基线摘要'));
-      expect(md, contains('page_load_avg_ms'));
+      expect(md, contains('页面平均加载'));
     });
   });
 }

@@ -640,15 +640,15 @@ void main() {
         final session = engine.createSession();
 
         expect(
-          () => engine.streamMessage(sessionId: session.sessionId, content: ''),
-          throwsA(isA<ChatEngineException>()),
+          engine.streamMessage(sessionId: session.sessionId, content: ''),
+          emitsError(isA<ChatEngineException>()),
         );
       });
 
       test('不存在的会话抛出异常', () async {
         expect(
-          () => engine.streamMessage(sessionId: 'bad', content: 'hi'),
-          throwsA(isA<ChatEngineException>()),
+          engine.streamMessage(sessionId: 'bad', content: 'hi'),
+          emitsError(isA<ChatEngineException>()),
         );
       });
 
@@ -663,8 +663,8 @@ void main() {
 
         // 尝试第二个流
         expect(
-          () => engine.streamMessage(sessionId: session.sessionId, content: '第二轮'),
-          throwsA(isA<ChatEngineException>()),
+          engine.streamMessage(sessionId: session.sessionId, content: '第二轮'),
+          emitsError(isA<ChatEngineException>()),
         );
 
         // 清理第一个流
@@ -676,8 +676,8 @@ void main() {
         final session = engine.createSession();
 
         expect(
-          () => engine.streamMessage(sessionId: session.sessionId, content: 'hi'),
-          throwsA(isA<ChatEngineException>()),
+          engine.streamMessage(sessionId: session.sessionId, content: 'hi'),
+          emitsError(isA<ChatEngineException>()),
         );
       });
 
@@ -801,15 +801,19 @@ void main() {
 
       test('流式生成中状态正确', () async {
         final session = engine.createSession();
+        bool wasGenerating = false;
         final stream = engine.streamMessage(
           sessionId: session.sessionId,
           content: 'hi',
         );
 
-        expect(engine.isGenerating(session.sessionId), true);
+        await for (final _ in stream) {
+          if (!wasGenerating) {
+            wasGenerating = engine.isGenerating(session.sessionId);
+          }
+        }
 
-        await for (final _ in stream) {}
-        // 流结束后不再是 generating
+        expect(wasGenerating, true);
       });
     });
 

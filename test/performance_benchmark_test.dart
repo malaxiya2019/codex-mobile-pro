@@ -205,7 +205,7 @@ void main() {
       final summary = tracker.getSummary();
 
       // 验证关键字段
-      expect(summary['total_events'], 1); // app_ready, markAppStart already called
+      expect(summary['total_events'], 2); // app_ready + markAppStart from setUp
       expect(summary['total_page_loads'], 3);
       expect(summary['total_ai_requests'], 4);
       expect(summary['cold_start_ms'], isNotNull);

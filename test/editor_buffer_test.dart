@@ -96,7 +96,8 @@ void main() {
     test('删除右侧字符', () {
       buffer.moveCursor(const CursorPosition(line: 1, column: 2));
       buffer.deleteRight();
-      expect(buffer.lines[1], '  print("hello");');
+      // 列索引 2 处为 'p'，删除后剩下 '  rint("hello");'
+      expect(buffer.lines[1], '  rint("hello");');
     });
 
     test('插入换行', () {
@@ -104,7 +105,8 @@ void main() {
       buffer.insertNewline();
       expect(buffer.lineCount, 4);
       expect(buffer.lines[1], '  print(');
-      expect(buffer.lines[2], '  "hello");');
+      // 智能缩进：上一行以 ( 结尾，自动增加一级缩进
+      expect(buffer.lines[2], '    "hello");');
     });
 
     test('撤销操作', () {

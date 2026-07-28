@@ -7,6 +7,7 @@ void main() {
   group('GlobalErrorHandler', () {
     setUp(() {
       LogService.dispose();
+      GlobalErrorHandler.reset();
     });
 
     test('init 不抛异常', () {

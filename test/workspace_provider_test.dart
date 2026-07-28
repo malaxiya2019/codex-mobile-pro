@@ -7,7 +7,7 @@ import 'package:codex_mobile_pro/features/workspace/workspace_provider.dart';
 void main() {
   group('WorkspaceProvider', () {
     setUp(() {
-      // 初始化 SharedPreferences 测试环境
+      // 重置 SharedPreferences 测试环境（确保跨测试隔离）
       SharedPreferences.setMockInitialValues({});
     });
 
@@ -121,6 +121,9 @@ void main() {
     test('删除当前工作区清空选择', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
+
+      // 等待 _load() 完成（避免异步初始化覆盖后续操作）
+      await Future.delayed(Duration.zero);
 
       final notifier = container.read(workspaceProvider.notifier);
       final ws = await notifier.create(name: 'A', template: WorkspaceTemplate.flutter);

@@ -327,6 +327,8 @@ class AIProviderManager implements IAIProviderManager {
     CancelToken? cancelToken,
     Duration? timeout,
   }) async {
+    if (cancelToken?.isCancelled == true) return '';
+
     final effectiveTimeout = timeout ?? config.defaultTimeout;
     int attempt = 0;
 

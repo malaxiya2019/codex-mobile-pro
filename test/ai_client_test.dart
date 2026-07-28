@@ -10,12 +10,17 @@ class MockHttpClient extends Mock implements http.Client {}
 
 class FakeUri extends Fake implements Uri {}
 
+class FakeBaseRequest extends Fake implements http.BaseRequest {}
+
+class FakeStreamedResponse extends Fake implements http.StreamedResponse {}
+
 void main() {
   late MockHttpClient mockClient;
   late AiClient aiClient;
 
   setUp(() {
     registerFallbackValue(FakeUri());
+    registerFallbackValue(FakeBaseRequest());
     mockClient = MockHttpClient();
     aiClient = AiClient(
       config: const AiClientConfig(
@@ -52,9 +57,9 @@ void main() {
       };
 
       when(() => mockClient.post(
-            any(),
-            headers: any(named: 'headers'),
-            body: any(named: 'body'),
+            any<Uri>(),
+            headers: any<Map<String, String>>(named: 'headers'),
+            body: any<String>(named: 'body'),
           )).thenAnswer((_) async => http.Response(jsonEncode(responseJson), 200));
 
       final messages = [
@@ -68,9 +73,9 @@ void main() {
 
     test('401 返回 api 错误', () async {
       when(() => mockClient.post(
-            any(),
-            headers: any(named: 'headers'),
-            body: any(named: 'body'),
+            any<Uri>(),
+            headers: any<Map<String, String>>(named: 'headers'),
+            body: any<String>(named: 'body'),
           )).thenAnswer((_) async => http.Response('{"error":"unauthorized"}', 401));
 
       final messages = [
@@ -89,9 +94,9 @@ void main() {
 
     test('429 返回 rateLimit 错误', () async {
       when(() => mockClient.post(
-            any(),
-            headers: any(named: 'headers'),
-            body: any(named: 'body'),
+            any<Uri>(),
+            headers: any<Map<String, String>>(named: 'headers'),
+            body: any<String>(named: 'body'),
           )).thenAnswer((_) async => http.Response('{"error":"rate limited"}', 429));
 
       final messages = [
@@ -110,9 +115,9 @@ void main() {
 
     test('502/503 返回 proxyDown 错误', () async {
       when(() => mockClient.post(
-            any(),
-            headers: any(named: 'headers'),
-            body: any(named: 'body'),
+            any<Uri>(),
+            headers: any<Map<String, String>>(named: 'headers'),
+            body: any<String>(named: 'body'),
           )).thenAnswer((_) async => http.Response('Bad Gateway', 502));
 
       final messages = [
@@ -131,9 +136,9 @@ void main() {
 
     test('5xx 返回 server 错误', () async {
       when(() => mockClient.post(
-            any(),
-            headers: any(named: 'headers'),
-            body: any(named: 'body'),
+            any<Uri>(),
+            headers: any<Map<String, String>>(named: 'headers'),
+            body: any<String>(named: 'body'),
           )).thenAnswer((_) async => http.Response('Server Error', 500));
 
       final messages = [
@@ -161,7 +166,7 @@ void main() {
       final mockStream = http.ByteStream.fromBytes(utf8.encode(sseData));
       final mockResponse = http.StreamedResponse(mockStream, 200);
 
-      when(() => mockClient.send(any())).thenAnswer((_) async => mockResponse);
+      when(() => mockClient.send(any<http.BaseRequest>())).thenAnswer((_) async => mockResponse);
 
       final messages = [
         ChatMessage(id: '1', role: ChatRole.user, content: '你好', timestamp: DateTime(2026)),
@@ -182,7 +187,7 @@ void main() {
       final mockStream = http.ByteStream.fromBytes(utf8.encode('Unauthorized'));
       final mockResponse = http.StreamedResponse(mockStream, 401);
 
-      when(() => mockClient.send(any())).thenAnswer((_) async => mockResponse);
+      when(() => mockClient.send(any<http.BaseRequest>())).thenAnswer((_) async => mockResponse);
 
       final messages = [
         ChatMessage(id: '1', role: ChatRole.user, content: 'test', timestamp: DateTime(2026)),
@@ -201,7 +206,7 @@ void main() {
 
   group('AiClient.healthCheck', () {
     test('200 返回 true', () async {
-      when(() => mockClient.get(any())).thenAnswer(
+      when(() => mockClient.get(any<Uri>())).thenAnswer(
         (_) async => http.Response('OK', 200),
       );
 
@@ -210,7 +215,7 @@ void main() {
     });
 
     test('非 200 返回 false', () async {
-      when(() => mockClient.get(any())).thenAnswer(
+      when(() => mockClient.get(any<Uri>())).thenAnswer(
         (_) async => http.Response('Not Found', 404),
       );
 
@@ -219,7 +224,7 @@ void main() {
     });
 
     test('网络异常返回 false', () async {
-      when(() => mockClient.get(any())).thenThrow(Exception('Connection refused'));
+      when(() => mockClient.get(any<Uri>())).thenThrow(Exception('Connection refused'));
 
       final result = await aiClient.healthCheck();
       expect(result, false);

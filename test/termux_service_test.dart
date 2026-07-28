@@ -5,6 +5,10 @@ import 'package:codex_mobile_pro/core/termux/termux_service.dart';
 void main() {
   const channel = MethodChannel('com.codexmobile.app/termux');
 
+  setUpAll(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
+  });
+
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
       channel,
