@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/ai/chat_engine.dart';
 import '../../../core/ai/ai_message.dart';
 import '../providers/chat_provider.dart';
 
@@ -14,13 +15,6 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   final _textController = TextEditingController();
   final _scrollController = ScrollController();
   final _focusNode = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    // 进入页面时自动检查服务状态
-    Future.microtask(() => ref.read(chatProvider.notifier).checkService());
-  }
 
   @override
   void dispose() {
@@ -51,11 +45,21 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     _scrollToBottom();
   }
 
+  void _stopGeneration() {
+    ref.read(chatProvider.notifier).stopGeneration();
+  }
+
+  Future<void> _retryLastMessage() async {
+    await ref.read(chatProvider.notifier).retryLastMessage();
+    _scrollToBottom();
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(chatProvider);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isStreaming = state.loadingState == ChatLoadingState.streaming;
 
     return Scaffold(
       appBar: AppBar(
@@ -63,45 +67,31 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           children: [
             const Text('AI 对话'),
             const SizedBox(width: 8),
-            _buildServiceIndicator(state.serviceStatus),
+            _buildGenerationIndicator(state.generationStatus),
           ],
         ),
         centerTitle: false,
         backgroundColor: colorScheme.surfaceContainer,
         actions: [
-          if (state.messages.isNotEmpty)
+          // 停止生成
+          if (isStreaming)
             IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: '清空对话',
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('清空对话'),
-                    content: const Text('确定要清空当前对话吗？'),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-                      FilledButton(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          ref.read(chatProvider.notifier).clearChat();
-                        },
-                        child: const Text('确认清空'),
-                      ),
-                    ],
-                  ),
-                );
-              },
+              icon: const Icon(Icons.stop_circle_outlined),
+              tooltip: '停止生成',
+              onPressed: _stopGeneration,
             ),
+          // 新建会话
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline),
+            tooltip: '新建会话',
+            onPressed: () {
+              ref.read(chatProvider.notifier).createSession();
+            },
+          ),
         ],
       ),
       body: Column(
         children: [
-          // ── 服务状态提示 ──
-          if (state.serviceStatus != AiServiceStatus.ready &&
-              state.messages.isEmpty)
-            _buildServicePrompt(state.serviceStatus, theme),
-
           // ── 消息列表 ──
           Expanded(
             child: state.messages.isEmpty
@@ -112,7 +102,6 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                     itemCount: state.messages.length,
                     itemBuilder: (context, index) {
                       final msg = state.messages[index];
-                      if (msg.role == ChatRole.system) return const SizedBox.shrink();
                       return _buildMessageBubble(msg, theme, colorScheme);
                     },
                   ),
@@ -120,22 +109,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
 
           // ── 错误提示 ──
           if (state.errorMessage != null && state.messages.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Colors.red.shade50,
-              child: Row(
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      state.errorMessage!,
-                      style: theme.textTheme.bodySmall?.copyWith(color: Colors.red.shade700),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildErrorBar(state.errorMessage!, colorScheme),
 
           // ── 输入区域 ──
           _buildInputArea(theme, colorScheme, state),
@@ -144,31 +118,27 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     );
   }
 
-  // ── 服务状态指示器 ──
+  // ── 生成状态指示器 ──
 
-  Widget _buildServiceIndicator(AiServiceStatus status) {
+  Widget _buildGenerationIndicator(GenerationStatus status) {
     Color color;
     String tooltip;
     switch (status) {
-      case AiServiceStatus.ready:
+      case GenerationStatus.streaming:
         color = Colors.green;
-        tooltip = 'AI 服务就绪';
+        tooltip = '正在生成...';
         break;
-      case AiServiceStatus.connecting:
-        color = Colors.orange;
-        tooltip = '正在连接...';
+      case GenerationStatus.completed:
+        color = Colors.green;
+        tooltip = '生成完成';
         break;
-      case AiServiceStatus.proxyDown:
+      case GenerationStatus.error:
         color = Colors.red;
-        tooltip = '代理未运行';
+        tooltip = '生成出错';
         break;
-      case AiServiceStatus.invalidKey:
-        color = Colors.red;
-        tooltip = 'API Key 无效';
-        break;
-      case AiServiceStatus.error:
-        color = Colors.orange;
-        tooltip = '服务异常';
+      case GenerationStatus.idle:
+        color = Colors.grey;
+        tooltip = '空闲';
         break;
     }
     return Tooltip(
@@ -181,33 +151,38 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     );
   }
 
-  // ── 服务状态提示栏 ──
+  // ── 错误提示栏 ──
 
-  Widget _buildServicePrompt(AiServiceStatus status, ThemeData theme) {
-    String message;
-    switch (status) {
-      case AiServiceStatus.proxyDown:
-        message = '⚠️ mimo2codex 代理未运行，请先启动代理后再对话';
-        break;
-      case AiServiceStatus.invalidKey:
-        message = '⚠️ DeepSeek API Key 无效，请检查 ~/.mimo2codex/.env 配置';
-        break;
-      case AiServiceStatus.error:
-        message = '⚠️ AI 服务异常，请检查网络连接';
-        break;
-      default:
-        message = '⏳ 正在检查 AI 服务状态...';
-    }
+  Widget _buildErrorBar(String errorMessage, ColorScheme colorScheme) {
     return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.shade200),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Colors.red.shade50,
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.red, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              errorMessage,
+              style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          // 重试按钮
+          TextButton.icon(
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('重试'),
+            onPressed: _retryLastMessage,
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red.shade700,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+        ],
       ),
-      child: Text(message, style: theme.textTheme.bodySmall),
     );
   }
 
@@ -218,14 +193,16 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.chat_outlined, size: 64, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
+          Icon(Icons.chat_outlined, size: 64,
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
           Text('AI 编程助手', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(
             '输入问题开始对话\n支持代码生成、解释、调试',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 24),
           Wrap(
@@ -290,48 +267,79 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               ),
             ),
 
-          // 消息内容
+          // 消息列（包含重试按钮）
           Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: isUser ? colorScheme.primary : colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(16).copyWith(
-                  bottomRight: isUser ? const Radius.circular(4) : const Radius.circular(16),
-                  bottomLeft: !isUser ? const Radius.circular(4) : const Radius.circular(16),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 消息文本（简易 Markdown 渲染）
-                  _buildMessageContent(msg, theme),
-
-                  // 流式动画指示
-                  if (isStreaming)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 4),
-                      child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 消息内容
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isUser
+                        ? colorScheme.primary
+                        : colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(16).copyWith(
+                      bottomRight: isUser
+                          ? const Radius.circular(4)
+                          : const Radius.circular(16),
+                      bottomLeft: !isUser
+                          ? const Radius.circular(4)
+                          : const Radius.circular(16),
                     ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildMessageContent(msg, theme),
 
-                  // 时间戳
-                  if (!isStreaming && msg.content.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        '${msg.timestamp.hour.toString().padLeft(2, '0')}:${msg.timestamp.minute.toString().padLeft(2, '0')}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontSize: 10,
-                          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                      // 流式动画指示
+                      if (isStreaming)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
                         ),
-                      ),
-                    ),
-                ],
-              ),
+
+                      // 时间戳 + 重试按钮
+                      if (!isStreaming && msg.content.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${msg.timestamp.hour.toString().padLeft(2, '0')}:${msg.timestamp.minute.toString().padLeft(2, '0')}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  fontSize: 10,
+                                  color: colorScheme.onSurfaceVariant
+                                      .withValues(alpha: 0.5),
+                                ),
+                              ),
+                              if (!isUser)
+                                TextButton(
+                                  onPressed: _retryLastMessage,
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  child: Icon(Icons.refresh, size: 12,
+                                      color: colorScheme.onSurfaceVariant
+                                          .withValues(alpha: 0.4)),
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
 
@@ -471,29 +479,35 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                     borderRadius: BorderRadius.circular(20),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   constraints: const BoxConstraints(maxHeight: 120),
                 ),
                 onSubmitted: (_) => _sendMessage(),
               ),
             ),
             const SizedBox(width: 8),
+            // 停止 / 发送 按钮
             SizedBox(
               height: 44,
-              child: FilledButton(
-                onPressed: isLoading ? null : _sendMessage,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.all(12),
-                  shape: const CircleBorder(),
-                ),
-                child: isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Icons.send),
-              ),
+              child: isLoading
+                  ? FilledButton(
+                      onPressed: _stopGeneration,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.all(12),
+                        shape: const CircleBorder(),
+                        backgroundColor: Colors.red,
+                      ),
+                      child: const Icon(Icons.stop, color: Colors.white),
+                    )
+                  : FilledButton(
+                      onPressed: _sendMessage,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.all(12),
+                        shape: const CircleBorder(),
+                      ),
+                      child: const Icon(Icons.send),
+                    ),
             ),
           ],
         ),

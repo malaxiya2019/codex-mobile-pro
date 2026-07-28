@@ -1,6 +1,27 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ai/ai_message.dart';
-import '../../../core/ai/ai_service.dart';
+import '../../../core/ai/ai_provider_manager.dart';
+import '../../../core/ai/chat_engine.dart';
+import '../../../core/ai/chat_session.dart';
+
+// ══════════════════════════════════════════════
+// Provider 注入（Sprint 9 可移至独立文件）
+// ══════════════════════════════════════════════
+
+/// IAIProviderManager Riverpod Provider
+final aiProviderManagerProvider = Provider<IAIProviderManager>((ref) {
+  return AIProviderManager();
+});
+
+/// IChatEngine Riverpod Provider
+final chatEngineProvider = Provider<IChatEngine>((ref) {
+  final manager = ref.watch(aiProviderManagerProvider);
+  return ChatEngine(providerManager: manager);
+});
+
+// ══════════════════════════════════════════════
+// 状态定义
+// ══════════════════════════════════════════════
 
 /// 对话加载状态
 enum ChatLoadingState {
@@ -12,230 +33,211 @@ enum ChatLoadingState {
 
 /// 对话状态
 class ChatState {
+  /// 当前会话 ID
+  final String? currentSessionId;
+
+  /// 所有会话列表
+  final List<ChatSession> sessions;
+
+  /// 当前会话的消息列表
   final List<ChatMessage> messages;
+
+  /// 加载状态
   final ChatLoadingState loadingState;
+
+  /// 错误信息
   final String? errorMessage;
-  final int totalTokens;
-  final AiServiceStatus serviceStatus;
+
+  /// 引擎生成状态
+  final GenerationStatus generationStatus;
 
   const ChatState({
+    this.currentSessionId,
+    this.sessions = const [],
     this.messages = const [],
     this.loadingState = ChatLoadingState.idle,
     this.errorMessage,
-    this.totalTokens = 0,
-    this.serviceStatus = AiServiceStatus.proxyDown,
+    this.generationStatus = GenerationStatus.idle,
   });
 
   ChatState copyWith({
+    String? currentSessionId,
+    List<ChatSession>? sessions,
     List<ChatMessage>? messages,
     ChatLoadingState? loadingState,
     String? errorMessage,
-    int? totalTokens,
-    AiServiceStatus? serviceStatus,
+    GenerationStatus? generationStatus,
   }) {
     return ChatState(
+      currentSessionId: currentSessionId ?? this.currentSessionId,
+      sessions: sessions ?? this.sessions,
       messages: messages ?? this.messages,
       loadingState: loadingState ?? this.loadingState,
       errorMessage: errorMessage ?? this.errorMessage,
-      totalTokens: totalTokens ?? this.totalTokens,
-      serviceStatus: serviceStatus ?? this.serviceStatus,
-    );
-  }
-
-  /// 清空对话
-  ChatState cleared() {
-    return ChatState(
-      serviceStatus: serviceStatus,
+      generationStatus: generationStatus ?? this.generationStatus,
     );
   }
 }
 
-/// 系统提示词
-const kSystemPrompt = ChatMessage(
-  id: 'system-0',
-  role: ChatRole.system,
-  content: '你是一个 AI 编程助手，精通 Flutter、Dart、Rust、Python 等技术栈。'
-      '请用简体中文回答用户的问题。回答时优先给出可直接运行的代码示例。',
-  timestamp: DateTime(2026),
-);
+// ══════════════════════════════════════════════
+// ChatNotifier
+// ══════════════════════════════════════════════
 
 /// 对话 Provider
 final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
-  return ChatNotifier();
+  final engine = ref.watch(chatEngineProvider);
+  return ChatNotifier(engine: engine);
 });
 
 class ChatNotifier extends StateNotifier<ChatState> {
-  AiService? _service;
+  final IChatEngine _engine;
 
-  ChatNotifier() : super(const ChatState());
-
-  /// 设置 AI 服务（测试用）
-  void setService(AiService service) {
-    _service = service;
+  ChatNotifier({required IChatEngine engine})
+      : _engine = engine,
+        super(const ChatState()) {
+    _initDefaultSession();
   }
 
-  /// 获取 AI 服务
-  AiService _getService() {
-    _service ??= AiService();
-    return _service!;
+  /// 初始化默认会话
+  void _initDefaultSession() {
+    final session = _engine.createSession();
+    _syncFromEngine(session.sessionId);
   }
 
-  /// 检查代理状态
-  Future<AiServiceStatus> checkService() async {
-    final status = await _getService().checkStatus();
-    state = state.copyWith(serviceStatus: status);
-    return status;
+  /// 从引擎同步最新状态
+  void _syncFromEngine(String sessionId) {
+    final session = _engine.getSession(sessionId);
+    final sessions = _engine.listSessions();
+    state = ChatState(
+      currentSessionId: sessionId,
+      sessions: sessions,
+      messages: session?.messages ?? [],
+      loadingState: _deriveLoadingState(sessionId),
+      generationStatus: _engine.getGenerationStatus(sessionId),
+    );
   }
+
+  /// 从引擎 GenerationStatus 推导 UI 加载状态
+  ChatLoadingState _deriveLoadingState(String sessionId) {
+    final status = _engine.getGenerationStatus(sessionId);
+    switch (status) {
+      case GenerationStatus.streaming:
+        return ChatLoadingState.streaming;
+      case GenerationStatus.error:
+        return ChatLoadingState.error;
+      case GenerationStatus.completed:
+      case GenerationStatus.idle:
+        return ChatLoadingState.idle;
+    }
+  }
+
+  // ── Session 管理 ──
+
+  /// 创建新会话
+  void createSession({String? title}) {
+    final session = _engine.createSession(title: title);
+    _syncFromEngine(session.sessionId);
+  }
+
+  /// 切换会话
+  void switchSession(String sessionId) {
+    if (state.currentSessionId == sessionId) return;
+    // 先停止当前会话的生成
+    if (state.currentSessionId != null) {
+      _engine.stopGeneration(state.currentSessionId!);
+    }
+    _syncFromEngine(sessionId);
+  }
+
+  /// 删除会话
+  void deleteSession(String sessionId) {
+    _engine.deleteSession(sessionId);
+    final sessions = _engine.listSessions();
+    if (sessions.isNotEmpty) {
+      _syncFromEngine(sessions.first.sessionId);
+    } else {
+      _initDefaultSession();
+    }
+  }
+
+  // ── 消息操作 ──
 
   /// 发送消息（流式）
   Future<void> sendMessage(String content) async {
     if (content.trim().isEmpty) return;
 
-    final userMessage = ChatMessage(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      role: ChatRole.user,
-      content: content.trim(),
-      timestamp: DateTime.now(),
-    );
-
-    // 添加用户消息 + 占位 AI 消息
-    final newMessages = [
-      kSystemPrompt,
-      ...state.messages.where((m) => m.id != 'system-0'),
-      userMessage,
-    ];
-
-    // AI 占位（不包含 system 消息在显示中）
-    final displayMessages = [...state.messages, userMessage];
-    final aiPlaceholder = ChatMessage(
-      id: 'streaming-${DateTime.now().microsecondsSinceEpoch}',
-      role: ChatRole.assistant,
-      content: '',
-      timestamp: DateTime.now(),
-      isStreaming: true,
-    );
+    final sessionId = state.currentSessionId;
+    if (sessionId == null) return;
 
     state = state.copyWith(
-      messages: [...displayMessages, aiPlaceholder],
-      loadingState: ChatLoadingState.streaming,
       errorMessage: null,
+      loadingState: ChatLoadingState.streaming,
     );
 
     try {
-      // 检查服务状态
-      final status = await checkService();
-      if (status != AiServiceStatus.ready) {
-        String errMsg;
-        switch (status) {
-          case AiServiceStatus.proxyDown:
-            errMsg = 'mimo2codex 代理未运行，请先启动代理';
-            break;
-          case AiServiceStatus.invalidKey:
-            errMsg = 'DeepSeek API Key 无效，请检查配置';
-            break;
-          default:
-            errMsg = 'AI 服务不可用 (${status.name})';
-        }
-        state = state.copyWith(
-          messages: state.messages.map((m) {
-            if (m.id == aiPlaceholder.id) {
-              return m.copyWith(
-                content: '⚠️ $errMsg',
-                isStreaming: false,
-              );
-            }
-            return m;
-          }).toList(),
-          loadingState: ChatLoadingState.error,
-          errorMessage: errMsg,
-        );
-        return;
+      await for (final _ in _engine.streamMessage(
+        sessionId: sessionId,
+        content: content.trim(),
+      )) {
+        // 每收到一个 chunk 就同步状态（引擎会实时更新占位消息内容）
+        _syncFromEngine(sessionId);
       }
 
-      // 准备发送的消息列表（不含占位符）
-      final sendMessages = [
-        kSystemPrompt,
-        ...state.messages
-            .where((m) => m.id != 'system-0' && !m.id.startsWith('streaming-'))
-            .map((m) => m),
-        userMessage,
-      ];
-
-      String fullContent = '';
-
-      await _getService().chatStream(
-        messages: sendMessages,
-        onChunk: (chunk) {
-          fullContent += chunk;
-          // 实时更新 AI 消息内容
-          state = state.copyWith(
-            messages: state.messages.map((m) {
-              if (m.id == aiPlaceholder.id) {
-                return m.copyWith(content: fullContent);
-              }
-              return m;
-            }).toList(),
-          );
-        },
-        onDone: (content) {
-          // 流结束，标记为非流式
-          state = state.copyWith(
-            messages: state.messages.map((m) {
-              if (m.id == aiPlaceholder.id) {
-                return ChatMessage(
-                  id: DateTime.now().microsecondsSinceEpoch.toString(),
-                  role: ChatRole.assistant,
-                  content: content,
-                  timestamp: DateTime.now(),
-                );
-              }
-              return m;
-            }).toList(),
-            loadingState: ChatLoadingState.idle,
-          );
-        },
-        onError: (error) {
-          state = state.copyWith(
-            messages: state.messages.map((m) {
-              if (m.id == aiPlaceholder.id) {
-                return m.copyWith(
-                  content: '❌ ${error.message}\n\n请检查网络连接和 API 配置。',
-                  isStreaming: false,
-                );
-              }
-              return m;
-            }).toList(),
-            loadingState: ChatLoadingState.error,
-            errorMessage: error.message,
-          );
-        },
-      );
+      // 流结束，同步最终状态
+      _syncFromEngine(sessionId);
     } catch (e) {
-      final errMsg = e.toString();
+      // 发生错误时同步状态（引擎已将占位消息替换为错误消息）
+      _syncFromEngine(sessionId);
       state = state.copyWith(
-        messages: state.messages.map((m) {
-          if (m.id == aiPlaceholder.id) {
-            return m.copyWith(
-              content: '❌ 发送失败: $errMsg',
-              isStreaming: false,
-            );
-          }
-          return m;
-        }).toList(),
+        errorMessage: e.toString(),
         loadingState: ChatLoadingState.error,
-        errorMessage: errMsg,
       );
     }
   }
 
-  /// 清空对话
-  void clearChat() {
-    state = state.cleared();
+  /// 停止生成
+  void stopGeneration() {
+    final sessionId = state.currentSessionId;
+    if (sessionId == null) return;
+    _engine.stopGeneration(sessionId);
+    _syncFromEngine(sessionId);
   }
 
-  /// 释放资源
+  /// 重试最后一条消息
+  Future<void> retryLastMessage() async {
+    final sessionId = state.currentSessionId;
+    if (sessionId == null) return;
+
+    state = state.copyWith(
+      errorMessage: null,
+      loadingState: ChatLoadingState.streaming,
+    );
+
+    try {
+      await _engine.retryLastMessage(sessionId);
+      _syncFromEngine(sessionId);
+    } catch (e) {
+      _syncFromEngine(sessionId);
+      state = state.copyWith(
+        errorMessage: e.toString(),
+        loadingState: ChatLoadingState.error,
+      );
+    }
+  }
+
+  /// 清除错误
+  void clearError() {
+    state = state.copyWith(
+      errorMessage: null,
+      loadingState: ChatLoadingState.idle,
+    );
+  }
+
+  // ── 生命周期 ──
+
+  @override
   void dispose() {
-    _service?.dispose();
+    _engine.dispose();
     super.dispose();
   }
 }
