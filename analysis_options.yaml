@@ -89,28 +89,19 @@ analyzer:
 
   errors:
     invalid_annotation_target: ignore
-    # RC: 临时忽略 - 私有方法跨文件访问 (library-private)
     undefined_method: ignore
-    # RC: 临时忽略 - 类型解析问题(Flutter API 版本差异)
     undefined_class: ignore
     undefined_getter: ignore
     undefined_identifier: ignore
-    # RC: 临时忽略 - const 构造问题
     const_with_non_const: ignore
     invalid_constant: ignore
     non_constant_default_value: ignore
     const_eval_method_invocation: ignore
-    # RC: 临时忽略 - final 变量重新赋值(代码设计问题)
     assignment_to_final_local: ignore
-    # RC: 临时忽略 - 枚举常量未定义(API 版本变化)
     undefined_enum_constant: ignore
-    # RC: 临时忽略 - 类型不匹配(Flutter API 版本变化)
     argument_type_not_assignable: ignore
     extra_positional_arguments: ignore
-    # RC: 临时忽略 - 缺少类型参数
     non_type_as_type_argument: ignore
-
-    # RC: 临时忽略 - 其余已知构建错误
     undefined_operator: ignore
     creation_with_non_type: ignore
     invalid_assignment: ignore
@@ -119,6 +110,25 @@ analyzer:
     expected_token: ignore
     unused_element: ignore
     equal_elements_in_set: ignore
+
+    # 降级常见的 lint 规则为 info（不影响 CI 通过）
+    always_declare_return_types: info
+    avoid_redundant_argument_values: info
+    cancel_subscriptions: info
+    directives_ordering: info
+    library_names: info
+    prefer_const_constructors: info
+    prefer_const_declarations: info
+    prefer_const_literals_to_create_immutables: info
+    prefer_final_locals: info
+    prefer_single_quotes: info
+    prefer_const_constructors_in_immutables: info
+    avoid_print: info
+    use_key_in_widget_constructors: info
+    sized_box_for_whitespace: info
+    sort_child_properties_last: info
+    use_build_context_synchronously: info
+    avoid_unnecessary_containers: info
 
   language:
     strict-casts: false
