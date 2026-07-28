@@ -10,6 +10,10 @@ import '../../features/workspace/views/workspace_list_page.dart';
 import '../../features/terminal/views/terminal_page.dart';
 import '../../features/git/views/repo_list_page.dart';
 import '../../features/git/views/github_login_page.dart';
+import '../../features/git/views/pr_list_page.dart';
+import '../../features/git/views/issue_list_page.dart';
+import '../../features/editor/views/editor_page.dart';
+import '../../features/file/views/file_browser_page.dart';
 import 'route_guard.dart';
 import 'route_names.dart';
 
@@ -71,15 +75,63 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'terminal',
         builder: (context, state) => const TerminalPage(),
       ),
+      // ── 编辑器 ──
+      GoRoute(
+        path: RouteNames.editor,
+        name: 'editor',
+        builder: (context, state) => const EditorPage(),
+      ),
+      GoRoute(
+        path: '/editor/:path',
+        name: 'editorFile',
+        builder: (context, state) {
+          final path = state.pathParameters['path'] ?? '';
+          return EditorPage(initialPath: Uri.decodeComponent(path));
+        },
+      ),
+      // ── 文件浏览器 ──
+      GoRoute(
+        path: RouteNames.fileBrowser,
+        name: 'fileBrowser',
+        builder: (context, state) => const FileBrowserPage(),
+      ),
+      // ── GitHub ──
+      GoRoute(
+        path: RouteNames.gitHubLogin,
+        name: 'gitHubLogin',
+        builder: (context, state) => const GitHubLoginPage(),
+      ),
       GoRoute(
         path: RouteNames.repoList,
         name: 'repoList',
         builder: (context, state) => const RepoListPage(),
       ),
       GoRoute(
-        path: RouteNames.gitHubLogin,
-        name: 'gitHubLogin',
-        builder: (context, state) => const GitHubLoginPage(),
+        path: '/repos/:owner/:name',
+        name: 'repoDetail',
+        builder: (context, state) {
+          final owner = state.pathParameters['owner'] ?? '';
+          final name = state.pathParameters['name'] ?? '';
+          return RepoListPage(); // 重用仓库列表
+        },
+      ),
+      GoRoute(
+        path: '/repos/:owner/:name/prs',
+        name: 'repoPrList',
+        builder: (context, state) {
+          final owner = state.pathParameters['owner'] ?? '';
+          final name = state.pathParameters['name'] ?? '';
+          return PrListPage(repoFullName: '$owner/$name');
+        },
+      ),
+      GoRoute(
+        path: '/repos/:owner/:name/issues',
+        name: 'repoIssueList',
+        builder: (context, state) {
+          final owner = state.pathParameters['owner'] ?? '';
+          final name = state.pathParameters['name'] ?? '';
+          return IssueListPage(repoFullName: '$owner/$name');
+        },
       ),
     ],
   );

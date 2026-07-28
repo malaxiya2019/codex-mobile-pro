@@ -331,6 +331,108 @@ class FileService {
     }).toList();
   }
 
+
+  // ── 文件操作 ──
+
+  /// 重命名文件/目录
+  static Future<bool> rename(String oldPath, String newName) async {
+    try {
+      final parent = oldPath.substring(0, oldPath.lastIndexOf('/'));
+      final newPath = '$parent/$newName';
+      final entity = FileSystemEntity.typeSync(oldPath);
+      if (entity == FileSystemEntityType.directory) {
+        await Directory(oldPath).rename(newPath);
+      } else {
+        await File(oldPath).rename(newPath);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 删除文件/目录
+  static Future<bool> delete(String path) async {
+    try {
+      final entity = FileSystemEntity.typeSync(path);
+      if (entity == FileSystemEntityType.directory) {
+        await Directory(path).delete(recursive: true);
+      } else {
+        await File(path).delete();
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 复制文件/目录
+  static Future<bool> copy(String sourcePath, String destPath) async {
+    try {
+      final entity = FileSystemEntity.typeSync(sourcePath);
+      if (entity == FileSystemEntityType.directory) {
+        await _copyDirectory(Directory(sourcePath), Directory(destPath));
+      } else {
+        await File(sourcePath).copy(destPath);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 移动文件/目录
+  static Future<bool> move(String sourcePath, String destPath) async {
+    try {
+      final entity = FileSystemEntity.typeSync(sourcePath);
+      if (entity == FileSystemEntityType.directory) {
+        await Directory(sourcePath).rename(destPath);
+      } else {
+        await File(sourcePath).rename(destPath);
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 创建文件
+  static Future<bool> createFile(String path) async {
+    try {
+      final file = File(path);
+      if (await file.exists()) return false;
+      await file.create(recursive: true);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 创建目录
+  static Future<bool> createDirectory(String path) async {
+    try {
+      final dir = Directory(path);
+      if (await dir.exists()) return false;
+      await dir.create(recursive: true);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 递归复制目录
+  static Future<void> _copyDirectory(Directory source, Directory dest) async {
+    await dest.create(recursive: true);
+    await for (final entity in source.list(followLinks: false)) {
+      final destPath = '${dest.path}/${entity.path.split('/').last}';
+      if (entity is Directory) {
+        await _copyDirectory(entity, Directory(destPath));
+      } else if (entity is File) {
+        await entity.copy(destPath);
+      }
+    }
+  }
+
   static String _formatSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';

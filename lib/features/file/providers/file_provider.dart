@@ -168,4 +168,73 @@ class FileBrowserNotifier extends StateNotifier<FileBrowserState> {
       await openDirectory(path);
     }
   }
+
+  // ── 文件操作 ──
+
+  /// 重命名文件/目录
+  Future<bool> renameFile(String oldPath, String newName) async {
+    if (oldPath.isEmpty || newName.isEmpty) return false;
+    final result = await FileService.rename(oldPath, newName);
+    if (result) {
+      await refresh();
+    }
+    return result;
+  }
+
+  /// 删除文件/目录
+  Future<bool> deleteFile(String path) async {
+    if (path.isEmpty) return false;
+    final result = await FileService.delete(path);
+    if (result) {
+      await refresh();
+    }
+    return result;
+  }
+
+  /// 复制文件/目录
+  Future<bool> copyFile(String sourcePath, String destPath) async {
+    if (sourcePath.isEmpty || destPath.isEmpty) return false;
+    final result = await FileService.copy(sourcePath, destPath);
+    if (result) {
+      await refresh();
+    }
+    return result;
+  }
+
+  /// 移动文件/目录
+  Future<bool> moveFile(String sourcePath, String destPath) async {
+    if (sourcePath.isEmpty || destPath.isEmpty) return false;
+    final result = await FileService.move(sourcePath, destPath);
+    if (result) {
+      await refresh();
+    }
+    return result;
+  }
+
+  /// 新建文件
+  Future<bool> createFile(String path) async {
+    if (path.isEmpty) return false;
+    final result = await FileService.createFile(path);
+    if (result) {
+      await refresh();
+    }
+    return result;
+  }
+
+  /// 新建目录
+  Future<bool> createDirectory(String path) async {
+    if (path.isEmpty) return false;
+    final result = await FileService.createDirectory(path);
+    if (result) {
+      await refresh();
+    }
+    return result;
+  }
+
+  /// 刷新当前目录
+  Future<void> refresh() async {
+    if (state.currentPath.isNotEmpty) {
+      await openDirectory(state.currentPath);
+    }
+  }
 }

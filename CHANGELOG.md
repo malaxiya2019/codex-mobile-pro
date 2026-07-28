@@ -2,6 +2,45 @@
 
 ## [Unreleased]
 
+### 🏗️ Sprint 6：代码编辑器与 GitHub 深度集成 ✅
+
+#### 📝 代码编辑器
+- `features/editor/providers/editor_provider.dart` — 编辑器状态管理（Tab/光标/编辑/查找替换/自动保存）
+- `features/editor/views/editor_page.dart` — 多标签编辑器页面（Tab栏/工具栏/状态栏）
+- `features/editor/widgets/editor_content.dart` — 语法高亮渲染引擎（RichText + Token 着色）
+- `features/editor/widgets/editor_gutter.dart` — 行号栏组件
+- `features/editor/widgets/editor_find_panel.dart` — 查找/替换面板（大小写/正则/逐个替换/全部替换）
+
+#### ✨ 编辑体验接口
+- `features/editor/extensions/completion_provider.dart` — 自动补全接口（关键字补全 + AI 补全预留）
+- `features/editor/extensions/diagnostics_provider.dart` — 诊断管理器接口
+- `features/editor/extensions/lsp_provider.dart` — LSP 服务器接口 + CodeAction 模型
+- `features/editor/extensions/outline_provider.dart` — Dart Outline 提取器
+
+#### 🔗 GitHub 深度集成
+- `features/git/models/github_pr.dart` — PR/Issue/Comment 数据模型
+- `features/git/services/github_service.dart` — 新增 PR/Issue API 方法
+- `features/git/providers/github_pr_provider.dart` — PR 列表/详情状态管理
+- `features/git/providers/github_issue_provider.dart` — Issue 列表/详情状态管理
+- `features/git/views/pr_list_page.dart` — PR 列表页面（状态过滤/头像/增减行数）
+- `features/git/views/issue_list_page.dart` — Issue 列表页面（标签/评论数/状态过滤）
+
+#### 📁 文件管理增强
+- `features/file/services/file_service.dart` — 新增重命名/删除/复制/移动/创建操作
+- `features/file/providers/file_provider.dart` — 新增文件操作方法 + 自动刷新
+
+#### 🧪 测试
+- `test/editor_buffer_test.dart` — 20 个用例（编辑操作/光标/撤销重做/查找替换/语言检测）
+- `test/syntax_highlighter_test.dart` — 15 个用例（高亮器注册/关键字/字符串/注释/颜色/语言推断）
+- `test/github_pr_test.dart` — 8 个用例（PR/Issue/Comment 模型序列化）
+
+#### 📋 文档
+- `docs/sprints/sprint-6-开发报告.md` — 完整开发报告
+- `docs/sprints/sprint-6-测试报告.md` — 测试报告
+- `CHANGELOG.md` — 更新日志
+
+---
+
 ### 🏗️ Sprint 5：内置终端增强 + GitHub 集成 ✅
 
 #### 💻 终端增强

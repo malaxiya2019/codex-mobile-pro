@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/git_repository.dart';
+import '../models/github_pr.dart';
 import '../../../core/logger/log_service.dart';
 
 /// GitHub API 服务
@@ -227,6 +228,80 @@ class GitHubService {
         commitSha: item['commit']?['sha']?.toString().substring(0, 7),
       );
     }).toList();
+  }
+
+
+  // ── Pull Request 操作 ──
+
+  /// 获取仓库 Pull Request 列表
+  Future<List<PullRequest>> getPullRequests(
+    String owner, String repo, {
+    String state = 'open',
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    final data = await _apiGetList(
+      '/repos///pulls?state=&page=&per_page=',
+    );
+    return data
+        .map((e) => PullRequest.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// 获取 Pull Request 详情
+  Future<PullRequest?> getPullRequest(String owner, String repo, int number) async {
+    final data = await _apiGet('/repos///pulls/');
+    if (data == null) return null;
+    return PullRequest.fromJson(data);
+  }
+
+  /// 获取 Pull Request 评论
+  Future<List<GitHubComment>> getPullRequestComments(
+    String owner, String repo, int number,
+  ) async {
+    final data = await _apiGetList(
+      '/repos///pulls//comments',
+    );
+    return data
+        .map((e) => GitHubComment.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── Issue 操作 ──
+
+  /// 获取仓库 Issue 列表
+  Future<List<GitHubIssue>> getIssues(
+    String owner, String repo, {
+    String state = 'open',
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    final data = await _apiGetList(
+      '/repos///issues?state=&page=&per_page=',
+    );
+    return data
+        .map((e) => GitHubIssue.fromJson(e as Map<String, dynamic>))
+        .where((i) => !i.isPullRequest) // 过滤掉 PR（GitHub API 会将 PR 也返回为 Issue）
+        .toList();
+  }
+
+  /// 获取 Issue 详情
+  Future<GitHubIssue?> getIssue(String owner, String repo, int number) async {
+    final data = await _apiGet('/repos///issues/');
+    if (data == null) return null;
+    return GitHubIssue.fromJson(data);
+  }
+
+  /// 获取 Issue 评论
+  Future<List<GitHubComment>> getIssueComments(
+    String owner, String repo, int number,
+  ) async {
+    final data = await _apiGetList(
+      '/repos///issues//comments',
+    );
+    return data
+        .map((e) => GitHubComment.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// 检查是否有可用 Token
