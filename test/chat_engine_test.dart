@@ -683,7 +683,7 @@ void main() {
         expect(engine.isGenerating(session.sessionId), true);
 
         // 尝试第二个流应抛出 sessionBusy
-        expect(
+        await expect(
           engine.streamMessage(sessionId: session.sessionId, content: '第二轮'),
           emitsError(isA<ChatEngineException>().having(
             (e) => e.type,

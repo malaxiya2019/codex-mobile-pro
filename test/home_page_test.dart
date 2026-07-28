@@ -1,4 +1,5 @@
 import 'package:codex_mobile_pro/app.dart';
+import 'package:codex_mobile_pro/core/i18n/app_locale.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,16 +8,21 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('HomePage — Material 3 验证', () {
     setUp(() {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues({'app_locale': 'en_US'});
     });
     testWidgets('首页正确渲染', (tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: CodexMobileApp(),
+        ProviderScope(
+          overrides: [
+            localeProvider.overrideWith((ref) {
+              final notifier = LocaleNotifier();
+              notifier.state = AppLanguage.enUS;
+              return notifier;
+            }),
+          ],
+          child: const CodexMobileApp(),
         ),
       );
-      // 等待异步 Provider 和 GoRouter 初始化完成
-      // 先处理微任务让 Riverpod async provider 初始化
       await tester.pump();
       await tester.pump(const Duration(seconds: 2));
 
@@ -29,12 +35,17 @@ void main() {
 
     testWidgets('计数器交互正常', (tester) async {
       await tester.pumpWidget(
-        const ProviderScope(
-          child: CodexMobileApp(),
+        ProviderScope(
+          overrides: [
+            localeProvider.overrideWith((ref) {
+              final notifier = LocaleNotifier();
+              notifier.state = AppLanguage.enUS;
+              return notifier;
+            }),
+          ],
+          child: const CodexMobileApp(),
         ),
       );
-      // 等待异步 Provider 和 GoRouter 初始化完成
-      // 先处理微任务让 Riverpod async provider 初始化
       await tester.pump();
       await tester.pump(const Duration(seconds: 2));
 
