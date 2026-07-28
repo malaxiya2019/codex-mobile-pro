@@ -3,6 +3,7 @@ import '../../../core/ai/ai_message.dart';
 import '../../../core/ai/ai_provider_manager.dart';
 import '../../../core/ai/chat_engine.dart';
 import '../../../core/ai/chat_session.dart';
+import '../../../core/context/workspace_context_provider.dart';
 
 // ══════════════════════════════════════════════
 // Provider 注入（Sprint 9 可移至独立文件）
@@ -12,11 +13,14 @@ import '../../../core/ai/chat_session.dart';
 final aiProviderManagerProvider = Provider<IAIProviderManager>((ref) {
   return AIProviderManager();
 });
-
 /// IChatEngine Riverpod Provider
 final chatEngineProvider = Provider<IChatEngine>((ref) {
   final manager = ref.watch(aiProviderManagerProvider);
-  return ChatEngine(providerManager: manager);
+  final contextProvider = ref.watch(workspaceContextProvider);
+  return ChatEngine(
+    providerManager: manager,
+    contextManager: contextProvider,
+  );
 });
 
 // ══════════════════════════════════════════════
