@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/i18n/app_locale.dart';
+import '../../../core/i18n/strings.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/theme_provider.dart';
 import '../providers/counter_provider.dart';
 
 class HomePage extends ConsumerWidget {
@@ -12,36 +15,40 @@ class HomePage extends ConsumerWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final counter = ref.watch(counterProvider);
+    final themeState = ref.watch(themeProvider);
+    final locale = ref.watch(localeProvider);
+    final s = Strings.get(locale);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Codex Mobile Pro'),
-        centerTitle: true,
+        title: Text(s.homeTitle),
+        centerTitle: false,
         backgroundColor: colorScheme.surfaceContainer,
         actions: [
+          IconButton(
+            icon: Text(
+              locale == AppLanguage.zhCN ? '中' : 'EN',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            tooltip: '切换语言',
+            onPressed: () => ref.read(localeProvider.notifier).toggleLocale(),
+          ),
+          IconButton(
+            icon: Icon(themeState.mode == ThemeModeOption.dark
+                ? Icons.light_mode_outlined
+                : Icons.dark_mode_outlined),
+            tooltip: '切换主题',
+            onPressed: () => ref.read(themeProvider.notifier).toggleTheme(),
+          ),
+          IconButton(
+            icon: const Icon(Icons.palette_outlined),
+            tooltip: '主题设置',
+            onPressed: () => context.push(RouteNames.themeSettings),
+          ),
           IconButton(
             icon: const Icon(Icons.deployed_code),
             tooltip: '部署中心',
             onPressed: () => context.push(RouteNames.deploy),
-          ),
-          IconButton(
-            icon: const Icon(Icons.terminal),
-            tooltip: 'Termux 通信验证',
-            onPressed: () => context.push(RouteNames.termuxTest),
-          ),
-          IconButton(
-            icon: const Icon(Icons.chat_outlined),
-            tooltip: 'AI 对话',
-            onPressed: () => context.push(RouteNames.aiChat),
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: '设置',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('设置页面 — Sprint 9 实现')),
-              );
-            },
           ),
         ],
       ),
@@ -52,20 +59,24 @@ class HomePage extends ConsumerWidget {
           Card(
             elevation: 0,
             color: colorScheme.primaryContainer,
-            child: const Padding(
-              padding: EdgeInsets.all(20),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _StatusHeader(),
-                  SizedBox(height: 12),
+                  const SizedBox(height: 12),
                   _StatusRow(label: 'Material 3', value: '✅ v3.0', color: Colors.green),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   _StatusRow(label: 'Riverpod', value: '✅ 已集成', color: Colors.green),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   _StatusRow(label: 'Termux 通信', value: '✅ 已验证', color: Colors.green),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 8),
                   _StatusRow(label: 'AI 通信', value: '✅ 已验证', color: Colors.green),
+                  const SizedBox(height: 8),
+                  _StatusRow(label: '主题系统', value: '✅ 亮/暗切换', color: Colors.green),
+                  const SizedBox(height: 8),
+                  _StatusRow(label: '国际化', value: locale == AppLanguage.zhCN ? '✅ 中文' : '✅ English', color: Colors.green),
                 ],
               ),
             ),
@@ -78,7 +89,7 @@ class HomePage extends ConsumerWidget {
               Expanded(
                 child: _QuickActionCard(
                   icon: Icons.deployed_code,
-                  label: '部署中心',
+                  label: s.navDeploy,
                   subtitle: '环境检测',
                   color: Colors.blue,
                   onTap: () => context.push(RouteNames.deploy),
@@ -88,7 +99,7 @@ class HomePage extends ConsumerWidget {
               Expanded(
                 child: _QuickActionCard(
                   icon: Icons.terminal,
-                  label: 'Termux',
+                  label: s.navTermux,
                   subtitle: '通信验证',
                   color: Colors.green,
                   onTap: () => context.push(RouteNames.termuxTest),
@@ -98,7 +109,7 @@ class HomePage extends ConsumerWidget {
               Expanded(
                 child: _QuickActionCard(
                   icon: Icons.chat_outlined,
-                  label: 'AI 对话',
+                  label: s.navAi,
                   subtitle: '通信验证',
                   color: Colors.purple,
                   onTap: () => context.push(RouteNames.aiChat),
@@ -107,6 +118,30 @@ class HomePage extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 24),
+
+          // ── 设置入口 ──
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.palette_outlined),
+                  title: Text('主题设置'),
+                  subtitle: Text('亮/暗/跟随系统 · 字体配置'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push(RouteNames.themeSettings),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  leading: const Icon(Icons.language),
+                  title: Text('语言设置'),
+                  subtitle: Text('中文 / English'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push(RouteNames.localeSettings),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
 
           // ── Riverpod 状态管理验证 ──
           Card(
@@ -193,11 +228,11 @@ class HomePage extends ConsumerWidget {
               break;
           }
         },
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: '首页'),
-          NavigationDestination(icon: Icon(Icons.deployed_code_outlined), selectedIcon: Icon(Icons.deployed_code), label: '部署'),
-          NavigationDestination(icon: Icon(Icons.terminal_outlined), selectedIcon: Icon(Icons.terminal), label: 'Termux'),
-          NavigationDestination(icon: Icon(Icons.chat_outlined), selectedIcon: Icon(Icons.chat), label: 'AI'),
+        destinations: [
+          NavigationDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home), label: s.navHome),
+          NavigationDestination(icon: const Icon(Icons.deployed_code_outlined), selectedIcon: const Icon(Icons.deployed_code), label: s.navDeploy),
+          NavigationDestination(icon: const Icon(Icons.terminal_outlined), selectedIcon: const Icon(Icons.terminal), label: s.navTermux),
+          NavigationDestination(icon: const Icon(Icons.chat_outlined), selectedIcon: const Icon(Icons.chat), label: s.navAi),
         ],
       ),
     );
@@ -246,8 +281,6 @@ class _QuickActionCard extends StatelessWidget {
 }
 
 class _StatusHeader extends StatelessWidget {
-  const _StatusHeader();
-
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;

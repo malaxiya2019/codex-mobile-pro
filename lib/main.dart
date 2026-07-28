@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'core/error/error_handler.dart';
 import 'core/logger/log_service.dart';
 import 'core/performance/performance_tracker.dart';
 
@@ -12,10 +14,19 @@ void main() {
 
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 初始化日志系统
-  LogService.init();
+  // 初始化全局异常处理（必须在 runApp 之前）
+  GlobalErrorHandler.init(
+    config: const ErrorHandlerConfig(
+      state: ErrorHandlerState.debug,
+    ),
+  );
 
-  // 锁定竖屏（手机使用习惯）
+  // 初始化日志系统（含文件落盘）
+  LogService.init(
+    level: LogLevel.debug,
+  );
+
+  // 锁定竖屏
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -29,9 +40,17 @@ void main() {
     ),
   );
 
-  runApp(
-    const ProviderScope(
-      child: CodexMobileApp(),
-    ),
+  // 使用 Zone 包裹应用，捕获所有异步异常
+  runZonedGuarded(
+    () {
+      runApp(
+        const ProviderScope(
+          child: CodexMobileApp(),
+        ),
+      );
+    },
+    (Object error, StackTrace stack) {
+      GlobalErrorHandler.zoneErrorHandler(error, stack);
+    },
   );
 }
