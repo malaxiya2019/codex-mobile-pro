@@ -92,7 +92,7 @@ if __name__ == "__main__":
     await File('$projectPath/.gitignore').writeAsString('''
 __pycache__/
 *.py[cod]
-*$py.class
+*\$py.class
 *.so
 .Python
 env/

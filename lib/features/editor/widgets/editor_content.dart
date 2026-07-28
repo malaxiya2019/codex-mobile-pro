@@ -313,8 +313,8 @@ class _EditorContentState extends State<EditorContent> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
     final logicalKey = event.logicalKey;
-    final isControl = HardwareKeyboard.instance.keysPressed.contains(LogicalKeyboardKey.controlLeft) ||
-        HardwareKeyboard.instance.keysPressed.contains(LogicalKeyboardKey.controlRight);
+    final isControl = HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.controlLeft) ||
+        HardwareKeyboard.instance.isLogicalKeyPressed(LogicalKeyboardKey.controlRight);
 
     // ── Tab 接受内联补全 ──
     if (logicalKey == LogicalKeyboardKey.tab &&
