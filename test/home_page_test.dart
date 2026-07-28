@@ -10,6 +10,7 @@ void main() {
     setUp(() {
       SharedPreferences.setMockInitialValues({'app_locale': 'en_US'});
     });
+
     testWidgets('首页正确渲染', (tester) async {
       final notifier = LocaleNotifier();
       notifier.state = AppLanguage.enUS;
@@ -46,6 +47,12 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(seconds: 2));
+
+      // 计数器 Card 在 ListView 中位置靠下，先滚动使其可见
+      // 使用 scrollUntilVisible 或直接拖动 ListView
+      await tester.drag(find.byType(ListView), const Offset(0, -400));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.text('0'), findsOneWidget);
 
