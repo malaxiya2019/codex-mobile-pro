@@ -24,9 +24,9 @@ enum OutlineNodeKind {
   key,
   null_,
   enumMember,
-  `struct`,
+  struct_,
   event,
-  `operator`,
+  operator_,
   typeParameter,
 }
 
