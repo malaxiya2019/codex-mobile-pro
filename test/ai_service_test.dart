@@ -67,7 +67,7 @@ void main() {
   group('AiServiceStatus 与 AiClientErrorType 关联', () {
     test('proxyDown 状态对应 proxyDown 错误', () {
       // 验证错误分类逻辑：502/503 → proxyDown
-      const client = AiClient();
+      final client = AiClient();
       // 仅验证类型枚举之间存在逻辑关系
       expect(AiClientErrorType.values, contains(AiClientErrorType.proxyDown));
     });

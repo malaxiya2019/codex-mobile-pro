@@ -112,9 +112,6 @@ analyzer:
 
     # RC: 临时忽略 - 其余已知构建错误
     undefined_operator: ignore
-    undefined_operator_plus: ignore
-    undefined_operator_minus: ignore
-    undefined_operator_bang: ignore
     creation_with_non_type: ignore
     invalid_assignment: ignore
     const_with_non_constant_argument: ignore

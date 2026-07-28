@@ -95,7 +95,7 @@ void main() {
 
   group('CodeReviewResult', () {
     test('创建空结果', () {
-      const result = CodeReviewResult();
+      final result = CodeReviewResult();
 
       expect(result.items, isEmpty);
       expect(result.totalIssues, 0);
@@ -121,7 +121,7 @@ void main() {
         ),
       ];
 
-      const result = CodeReviewResult(
+      final result = CodeReviewResult(
         items: items,
         totalIssues: 2,
         overallScore: 7.5,
@@ -194,7 +194,7 @@ void main() {
     });
 
     test('错误结果', () {
-      const result = CodeReviewResult(
+      final result = CodeReviewResult(
         hasError: true,
         errorMessage: 'API 连接失败',
       );
