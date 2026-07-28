@@ -12,5 +12,12 @@ abstract class RouteNames {
   static const workspaceList = '/workspaces';
   static const workspaceCreate = '/workspaces/create';
   static const workspaceDetail = '/workspaces/:id';
+
+  // ── 终端 ──
   static const terminal = '/terminal';
+
+  // ── Git ──
+  static const gitHubLogin = '/github-login';
+  static const repoList = '/repos';
+  static const repoDetail = '/repos/:owner/:name';
 }

@@ -208,6 +208,34 @@ class Strings {
   String get quickCommandsExecute => _t('执行', 'Execute');
   String get quickCommandsEmpty => _t('暂无命令', 'No commands');
 
+
+  // ══════════════════════════════════════
+  //  Git / GitHub
+  // ══════════════════════════════════════
+
+  String get gitHubLoginTitle => _t('GitHub 登录', 'GitHub Login');
+  String get gitHubTokenHint => _t('Personal Access Token', 'Personal Access Token');
+  String get gitHubLoginBtn => _t('登录', 'Login');
+  String get gitHubLogout => _t('登出', 'Logout');
+  String get gitHubNotLoggedIn => _t('未登录 GitHub', 'Not Logged In');
+  String get gitHubTokenGuide => _t('如何获取 Personal Access Token？', 'How to get a PAT?');
+  String get repoListTitle => _t('GitHub 仓库', 'Repositories');
+  String get repoSearchHint => _t('搜索仓库...', 'Search repos...');
+  String get repoClone => _t('克隆到本地', 'Clone to Local');
+  String get repoCloning => _t('克隆中...', 'Cloning...');
+  String get repoCloned => _t('克隆成功', 'Clone Successful');
+  String get repoRefresh => _t('刷新', 'Refresh');
+  String get repoStatus => _t('查看状态', 'View Status');
+  String get repoBranches => _t('分支管理', 'Branches');
+  String get repoLog => _t('提交历史', 'Commits');
+  String get repoCommit => _t('新建提交', 'New Commit');
+  String get repoCommitMsg => _t('提交信息', 'Commit Message');
+  String get repoCommitBtn => _t('提交', 'Commit');
+  String get repoNoChanges => _t('工作区干净', 'Clean Working Tree');
+  String get repoUncommitted => _t('有未提交的变更', 'Uncommitted Changes');
+  String get repoStars => _t('星标', 'Stars');
+  String get repoForks => _t('复刻', 'Forks');
+
   // ── 内部辅助 ──
 
   String _t(String zh, String en) {

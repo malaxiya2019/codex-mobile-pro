@@ -123,6 +123,8 @@ class RoutePermissions {
       case RouteNames.localeSettings:
       case RouteNames.workspaceList:
       case RouteNames.terminal:
+      case RouteNames.repoList:
+      case RouteNames.gitHubLogin:
         return PermissionLevel.public;
 
       case RouteNames.deploy:
@@ -144,12 +146,10 @@ class RoutePermissions {
     final required = of(path);
     if (auth.canAccess(required)) return null;
 
-    // 未登录访问需登录页面 → 重定向到首页
     if (required == PermissionLevel.authenticated && !auth.isLoggedIn) {
       return RouteNames.home;
     }
 
-    // 权限不足 → 重定向到首页
     return RouteNames.home;
   }
 }

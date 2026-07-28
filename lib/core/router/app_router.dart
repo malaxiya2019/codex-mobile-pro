@@ -8,6 +8,8 @@ import '../../features/settings/views/theme_settings_page.dart';
 import '../../features/settings/views/locale_settings_page.dart';
 import '../../features/workspace/views/workspace_list_page.dart';
 import '../../features/terminal/views/terminal_page.dart';
+import '../../features/git/views/repo_list_page.dart';
+import '../../features/git/views/github_login_page.dart';
 import 'route_guard.dart';
 import 'route_names.dart';
 
@@ -68,6 +70,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.terminal,
         name: 'terminal',
         builder: (context, state) => const TerminalPage(),
+      ),
+      GoRoute(
+        path: RouteNames.repoList,
+        name: 'repoList',
+        builder: (context, state) => const RepoListPage(),
+      ),
+      GoRoute(
+        path: RouteNames.gitHubLogin,
+        name: 'gitHubLogin',
+        builder: (context, state) => const GitHubLoginPage(),
       ),
     ],
   );

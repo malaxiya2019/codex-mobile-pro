@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/i18n/app_locale.dart';
 import '../../../core/i18n/strings.dart';
 import '../providers/terminal_provider.dart';
+import '../widgets/terminal_output.dart';
 
-/// 终端页面（多标签）
+/// 终端页面（多标签 + 命令历史 + ANSI 渲染）
 class TerminalPage extends ConsumerStatefulWidget {
   const TerminalPage({super.key});
 
@@ -21,6 +23,27 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     _commandController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _submitCommand() {
+    final cmd = _commandController.text;
+    if (cmd.trim().isNotEmpty) {
+      ref.read(terminalProvider.notifier).writeCommand(cmd);
+      _commandController.clear();
+      _scrollToBottom();
+    }
+  }
+
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
@@ -90,24 +113,18 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
               ),
             ),
 
-          // ── 终端输出 ──
+          // ── 终端输出（ANSI 渲染） ──
           Expanded(
             child: Container(
               color: Colors.black87,
               child: state.activeSession != null
                   ? GestureDetector(
-                      onTap: () => _focusInput(),
+                      onTap: () {},
                       child: SingleChildScrollView(
                         controller: _scrollController,
                         padding: const EdgeInsets.all(12),
-                        child: SelectableText(
-                          state.activeSession!.outputText,
-                          style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 13,
-                            color: Colors.greenAccent,
-                            height: 1.5,
-                          ),
+                        child: TerminalOutput(
+                          text: state.activeSession!.outputText,
                         ),
                       ),
                     )
@@ -131,8 +148,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
               child: Row(
                 children: [
                   _StatusDot(
-                    color:
-                        state.activeSession!.status ==
+                    color: state.activeSession!.status ==
                             TerminalSessionStatus.running
                         ? Colors.green
                         : Colors.grey,
@@ -158,7 +174,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
               ),
             ),
 
-          // ── 命令输入 ──
+          // ── 命令输入（↑↓键历史导航） ──
           if (state.activeSession != null)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -173,41 +189,68 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
                     visualDensity: VisualDensity.compact,
                   ),
                   Expanded(
-                    child: TextField(
-                      controller: _commandController,
-                      decoration: const InputDecoration(
-                        hintText: '输入命令...',
-                        border: InputBorder.none,
-                        hintStyle: TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 13,
-                        ),
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(vertical: 8),
-                      ),
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 13,
-                      ),
-                      onSubmitted: (cmd) {
-                        if (cmd.trim().isNotEmpty) {
-                          ref.read(terminalProvider.notifier).writeCommand(cmd);
-                          _commandController.clear();
-                          _scrollToBottom();
-                        }
+                    child: CallbackShortcuts(
+                      bindings: {
+                        SingleActivator(LogicalKeyboardKey.arrowUp): () {
+                          final cmd = ref
+                              .read(terminalProvider.notifier)
+                              .historyUp();
+                          if (cmd != null) {
+                            _commandController.text = cmd;
+                            _commandController.selection =
+                                TextSelection.fromPosition(
+                              TextPosition(offset: cmd.length),
+                            );
+                          }
+                        },
+                        SingleActivator(LogicalKeyboardKey.arrowDown): () {
+                          final cmd = ref
+                              .read(terminalProvider.notifier)
+                              .historyDown();
+                          _commandController.text = cmd ?? '';
+                          if (cmd != null) {
+                            _commandController.selection =
+                                TextSelection.fromPosition(
+                              TextPosition(offset: cmd.length),
+                            );
+                          }
+                        },
                       },
+                      child: Focus(
+                        autofocus: true,
+                        child: TextField(
+                          controller: _commandController,
+                          decoration: const InputDecoration(
+                            hintText: '输入命令...',
+                            border: InputBorder.none,
+                            hintStyle: TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 13,
+                            ),
+                            isDense: true,
+                            contentPadding:
+                                EdgeInsets.symmetric(vertical: 8),
+                          ),
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 13,
+                          ),
+                          onSubmitted: (cmd) {
+                            if (cmd.trim().isNotEmpty) {
+                              ref
+                                  .read(terminalProvider.notifier)
+                                  .writeCommand(cmd);
+                              _commandController.clear();
+                              _scrollToBottom();
+                            }
+                          },
+                        ),
+                      ),
                     ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.send, size: 18),
-                    onPressed: () {
-                      final cmd = _commandController.text;
-                      if (cmd.trim().isNotEmpty) {
-                        ref.read(terminalProvider.notifier).writeCommand(cmd);
-                        _commandController.clear();
-                        _scrollToBottom();
-                      }
-                    },
+                    onPressed: _submitCommand,
                     visualDensity: VisualDensity.compact,
                   ),
                 ],
@@ -216,22 +259,6 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
         ],
       ),
     );
-  }
-
-  void _focusInput() {
-    // 点击终端区域时自动聚焦输入框
-  }
-
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    });
   }
 }
 
