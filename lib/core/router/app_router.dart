@@ -120,7 +120,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'repoPrList',
         builder: (context, state) {
           // final owner = state.pathParameters['owner'] ?? '';
-          // final name = state.pathParameters['name'] ?? '';
+          final owner = state.pathParameters["owner"] ?? "";
+          final name = state.pathParameters["name"] ?? "";
           return PrListPage(repoFullName: '$owner/$name');
         },
       ),
@@ -129,7 +130,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'repoIssueList',
         builder: (context, state) {
           // final owner = state.pathParameters['owner'] ?? '';
-          // final name = state.pathParameters['name'] ?? '';
+          final owner = state.pathParameters["owner"] ?? "";
+          final name = state.pathParameters["name"] ?? "";
           return IssueListPage(repoFullName: '$owner/$name');
         },
       ),

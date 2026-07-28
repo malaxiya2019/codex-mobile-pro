@@ -52,7 +52,7 @@ class HomePage extends ConsumerWidget {
             onPressed: () => context.push(RouteNames.themeSettings),
           ),
           IconButton(
-            icon: const Icon(Icons.deployed_code),
+            icon: const Icon(Icons.code),
             tooltip: '部署中心',
             onPressed: () => context.push(RouteNames.deploy),
           ),
@@ -137,7 +137,7 @@ class HomePage extends ConsumerWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: _QuickActionCard(
-                  icon: Icons.deployed_code,
+                  icon: Icons.code,
                   label: s.navDeploy,
                   subtitle: '环境检测',
                   color: Colors.orange,

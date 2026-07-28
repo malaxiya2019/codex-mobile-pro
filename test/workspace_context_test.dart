@@ -11,31 +11,10 @@ import '../lib/features/workspace/workspace_provider.dart';
 // Mock 环境：创建测试用 ProviderContainer
 // ══════════════════════════════════════════════
 
-/// 创建一个测试用的 ProviderContainer
-ProviderContainer createTestContainer({
-  EditorState? editorState,
-  WorkspaceState? workspaceState,
-}) {
-  final container = ProviderContainer(
-    overrides: [
-      if (editorState != null)
-        editorProvider.overrideWith((ref) => EditorNotifier()),
-
-      if (workspaceState != null)
-        workspaceProvider.overrideWith((ref) => WorkspaceNotifier()),
-    ],
-  );
-
-  // 设置编辑器和工作区状态
-  if (editorState != null) {
-    container.read(editorProvider.notifier);
-    // 直接修改内部状态
-  }
-  if (workspaceState != null) {
-    container.read(workspaceProvider.notifier);
-  }
-
-  return container;
+/// 创建一个模拟的 Ref 对象用于测试
+ProviderContainer createMockRef() {
+  // 使用 ProviderContainer（继承自 Ref<Object?>）作为测试用 Ref
+  return ProviderContainer();
 }
 
 void main() {
@@ -117,7 +96,7 @@ void main() {
     });
 
     test('buildContextPrompt 返回格式化字符串', () async {
-      final container = createTestContainer();
+      final container = createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       // 无工作区状态时，上下文内容为空
@@ -128,7 +107,7 @@ void main() {
 
   group('WorkspaceContextProvider — 上下文 Prompt 构建', () {
     test('buildContextPrompt 包含自定义上下文', () async {
-      final container = createTestContainer();
+      final container = createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       provider.addContext('用户需求', '实现一个计算器');
@@ -139,7 +118,7 @@ void main() {
     });
 
     test('addContext / removeContext / clearContext 正常工作', () async {
-      final container = createTestContainer();
+      final container = createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       provider.addContext('key1', 'value1');
@@ -161,7 +140,7 @@ void main() {
     });
 
     test('getCurrentFileContext 返回 null（无活动编辑器）', () async {
-      final container = createTestContainer();
+      final container = createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       final fileCtx = provider.getCurrentFileContext();
@@ -169,7 +148,7 @@ void main() {
     });
 
     test('getSelectionContext 返回 null（无选中内容）', () async {
-      final container = createTestContainer();
+      final container = createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       final selCtx = provider.getSelectionContext();
@@ -177,7 +156,7 @@ void main() {
     });
 
     test('currentFile / selection / workspaceContext 为 null（无状态）', () async {
-      final container = createTestContainer();
+      final container = createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       expect(provider.currentFile, isNull);
@@ -189,7 +168,7 @@ void main() {
   group('FileLanguage 工具方法', () {
     test('_languageName 能识别所有语言', () {
       // ignore: unused_local_variable
-      final _ = WorkspaceContextProvider(ref: createTestContainer());
+      final _ = WorkspaceContextProvider(ref: createMockRef());
       // 通过反射或直接测试私有方法不可行，测试公开 getter
       expect(FileLanguage.fromFileName('main.dart'), FileLanguage.dart);
       expect(FileLanguage.fromFileName('main.rs'), FileLanguage.rust);
@@ -211,7 +190,7 @@ void main() {
 
   group('WorkspaceContextProvider — Token 估算', () {
     test('buildContextPrompt 对空内容不报错', () async {
-      final container = createTestContainer();
+      final container = createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       // 不应抛出异常
@@ -219,7 +198,7 @@ void main() {
     });
 
     test('多次调用 buildContextPrompt 不影响自定义上下文', () async {
-      final container = createTestContainer();
+      final container = createMockRef();
       final provider = WorkspaceContextProvider(ref: container);
 
       provider.addContext('test-key', 'test-value');

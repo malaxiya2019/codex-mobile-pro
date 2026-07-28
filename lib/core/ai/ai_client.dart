@@ -106,7 +106,7 @@ class AiClient {
 
       throw _classifyError(response.statusCode, response.body);
     } on TimeoutException {
-      throw const AiClientException(
+      throw AiClientException(
         type: AiClientErrorType.timeout,
         message: '请求超时（${config.timeout.inSeconds}秒）',
       );
@@ -160,7 +160,7 @@ class AiClient {
           }
 
           response.stream
-              .transform(const SseParser().byteTransformer)
+              .transform(SseParser().byteTransformer)
               .listen(
                 (event) => controller.add(event),
                 onError: (e) => controller.addError(e),

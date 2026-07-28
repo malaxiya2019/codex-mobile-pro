@@ -47,14 +47,14 @@ class TomlHighlighter extends BaseHighlighter {
           tokens.add(SyntaxToken(type: TokenType.string, start: start, end: i));
           continue;
         }
-        if (_isDigit(text[i]) || text[i] == '-') {
+        if (isDigit(text[i]) || text[i] == '-') {
           final start = i; i++;
-          while (i < text.length && (_isDigit(text[i]) || text[i] == '.' || text[i] == 'e' || text[i] == 'E' || text[i] == '+' || text[i] == '-')) i++;
+          while (i < text.length && (isDigit(text[i]) || text[i] == '.' || text[i] == 'e' || text[i] == 'E' || text[i] == '+' || text[i] == '-')) i++;
           tokens.add(SyntaxToken(type: TokenType.number, start: start, end: i));
           continue;
         }
-        if (_isIdentChar(text[i])) {
-          final start = i; while (i < text.length && _isIdentChar(text[i])) i++;
+        if (isIdentChar(text[i])) {
+          final start = i; while (i < text.length && isIdentChar(text[i])) i++;
           final word = text.substring(start, i);
           if (keywords.contains(word)) {
             tokens.add(SyntaxToken(type: TokenType.builtin, start: start, end: i));

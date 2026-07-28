@@ -14,7 +14,7 @@ class RustTemplateGenerator extends TemplateGenerator {
     name: 'Rust 默认模板',
     description: '标准的 Rust 项目结构，使用 cargo 初始化',
     icon: '🦀',
-    version: const TemplateVersion(
+    version: TemplateVersion(
       version: '1.0.0',
       releaseDate: DateTime(2026, 7, 28),
     ),

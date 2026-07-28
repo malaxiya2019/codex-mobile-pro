@@ -1,4 +1,5 @@
 import 'dart:async';
+import "package:flutter/foundation.dart";
 import '../../../core/ai/ai_provider.dart';
 
 /// 代码解释结果
@@ -218,7 +219,7 @@ Return JSON output only.''';
     final clean = json.trim();
 
     int i = 1; // skip opening {
-    final buffer = StringBuffer();
+    var buffer = StringBuffer();
     String currentKey = '';
     bool inKey = false;
     bool inString = false;
@@ -311,7 +312,7 @@ Return JSON output only.''';
     final clean = json.trim();
     int i = 1; // skip [
 
-    final buffer = StringBuffer();
+    var buffer = StringBuffer();
     bool inString = false;
 
     while (i < clean.length - 1) {

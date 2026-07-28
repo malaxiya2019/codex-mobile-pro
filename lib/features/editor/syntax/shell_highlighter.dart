@@ -66,24 +66,24 @@ class ShellHighlighter extends BaseHighlighter {
           while (i < text.length && text[i] != '}') i++;
           if (i < text.length) i++;
         } else {
-          while (i < text.length && (_isIdentChar(text[i]))) i++;
+          while (i < text.length && (isIdentChar(text[i]))) i++;
         }
         tokens.add(SyntaxToken(type: TokenType.variable, start: start, end: i));
         continue;
       }
 
       // 数字
-      if (_isDigit(text[i])) {
+      if (isDigit(text[i])) {
         final start = i; i++;
-        while (i < text.length && _isDigit(text[i])) i++;
+        while (i < text.length && isDigit(text[i])) i++;
         tokens.add(SyntaxToken(type: TokenType.number, start: start, end: i));
         continue;
       }
 
       // 标识符
-      if (_isIdentChar(text[i])) {
+      if (isIdentChar(text[i])) {
         final start = i;
-        while (i < text.length && _isIdentChar(text[i])) i++;
+        while (i < text.length && isIdentChar(text[i])) i++;
         final word = text.substring(start, i);
 
         // 检查是否是命令（行首或管道后）

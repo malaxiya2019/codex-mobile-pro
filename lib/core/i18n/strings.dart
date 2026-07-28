@@ -1,3 +1,4 @@
+import "package:flutter/widgets.dart";
 import 'app_locale.dart';
 
 /// 应用字符串资源

@@ -51,11 +51,11 @@ class IssueListNotifier extends StateNotifier<IssueListState> {
   String get _owner => _repoFullName.split('/')[0];
   String get _repo => _repoFullName.split('/')[1];
 
-  Future<void> loadIssues({String state = 'open'}) async {
-    state = state.copyWith(isLoading: true, error: null, filterState: state);
+  Future<void> loadIssues({String filterBy = "open"}) async {
+    state = state.copyWith(isLoading: true, error: null, filterState: filterBy);
     try {
-      final issues = await _service.getIssues(_owner, _repo, state: state);
-      state = IssueListState(issues: issues, filterState: state);
+      final issues = await _service.getIssues(_owner, _repo, state: filterBy);
+      state = IssueListState(issues: issues, filterState: filterBy);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: '加载 Issue 列表失败: $e');
     }

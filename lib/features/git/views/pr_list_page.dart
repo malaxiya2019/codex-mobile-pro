@@ -25,7 +25,7 @@ class PrListPage extends ConsumerWidget {
           PopupMenuButton<String>(
             icon: const Icon(Icons.filter_list),
             onSelected: (s) =>
-                ref.read(prListProvider(repoFullName).notifier).loadPrs(state: s),
+                ref.read(prListProvider(repoFullName).notifier).loadPrs(filterBy: s),
             itemBuilder: (_) => [
               const PopupMenuItem(value: 'open', child: Text('Open')),
               const PopupMenuItem(value: 'closed', child: Text('Closed')),
@@ -77,7 +77,7 @@ class PrListPage extends ConsumerWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.pull_request, size: 64,
+            Icon(Icons.merge_type, size: 64,
                 color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             Text('暂无 Pull Request',

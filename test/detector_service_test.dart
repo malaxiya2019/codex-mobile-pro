@@ -74,8 +74,6 @@ void main() {
         path: '/usr/bin/test',
       );
       expect(result.statusIcon, '✅');
-      expect(result.isSuccess, true); // 通过 isSuccess getter? 不对，DetectionResult 没有 isSuccess
-      // 实际上 DetectionResult 没有 isSuccess getter，用 status 判断
       expect(result.status, DetectionStatus.installed);
     });
 

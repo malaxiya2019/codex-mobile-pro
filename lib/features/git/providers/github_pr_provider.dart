@@ -51,11 +51,11 @@ class PrListNotifier extends StateNotifier<PrListState> {
   String get _owner => _repoFullName.split('/')[0];
   String get _repo => _repoFullName.split('/')[1];
 
-  Future<void> loadPrs({String state = 'open'}) async {
-    state = state.copyWith(isLoading: true, error: null, filterState: state);
+  Future<void> loadPrs({String filterBy = "open"}) async {
+    state = state.copyWith(isLoading: true, error: null, filterState: filterBy);
     try {
-      final prs = await _service.getPullRequests(_owner, _repo, state: state);
-      state = PrListState(prs: prs, filterState: state);
+      final prs = await _service.getPullRequests(_owner, _repo, state: filterBy);
+      state = PrListState(prs: prs, filterState: filterBy);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: '加载 PR 列表失败: $e');
     }

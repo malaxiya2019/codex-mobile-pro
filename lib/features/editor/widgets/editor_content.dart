@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import "package:codex_mobile_pro/core/ai/ai_provider.dart";
 import 'package:flutter/material.dart';
 import '../models/editor_models.dart';
 import '../services/editor_buffer.dart';
@@ -312,8 +313,8 @@ class _EditorContentState extends State<EditorContent> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
     final logicalKey = event.logicalKey;
-    final isControl = HardwareKeyboard.instance.controlKeysPressed.contains(LogicalKeyboardKey.controlLeft) ||
-        HardwareKeyboard.instance.controlKeysPressed.contains(LogicalKeyboardKey.controlRight);
+    final isControl = HardwareKeyboard.instance.keysPressed.contains(LogicalKeyboardKey.controlLeft) ||
+        HardwareKeyboard.instance.keysPressed.contains(LogicalKeyboardKey.controlRight);
 
     // ── Tab 接受内联补全 ──
     if (logicalKey == LogicalKeyboardKey.tab &&

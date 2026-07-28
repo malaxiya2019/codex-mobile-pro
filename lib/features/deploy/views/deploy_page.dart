@@ -276,7 +276,7 @@ class DeployPage extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(vertical: 60),
       child: Column(
         children: [
-          Icon(Icons.deployed_code_outlined, size: 64, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
+          Icon(Icons.code_outlined, size: 64, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
           Text('系统状态仪表盘', style: theme.textTheme.titleMedium?.copyWith(color: colorScheme.onSurfaceVariant)),
           const SizedBox(height: 8),

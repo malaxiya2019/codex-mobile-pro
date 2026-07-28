@@ -219,19 +219,14 @@ class FileService {
       final lines = <String>[];
       final completer = Completer<String?>();
 
-      file
-          .openRead()
-          .transform(const SystemEncoding().decoder)
-          .transform(const LineSplitter())
-          .listen(
-            (line) {
-              if (lines.length < maxLines) {
-                lines.add(line);
-              }
-            },
-            onDone: () => completer.complete(lines.join('\n')),
-            onError: (_) => completer.complete(null),
-          );
+      final content = await file.readAsString();
+      final allLines = content.split('\n');
+      for (final line in allLines) {
+        if (lines.length < maxLines) {
+          lines.add(line);
+        }
+      }
+      completer.complete(lines.join('\n'));
 
       return await completer.future;
     } catch (_) {

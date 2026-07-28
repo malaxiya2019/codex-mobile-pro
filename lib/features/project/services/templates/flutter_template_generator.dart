@@ -14,7 +14,7 @@ class FlutterTemplateGenerator extends TemplateGenerator {
     name: 'Flutter 默认模板',
     description: '标准的 Flutter 项目结构，包含基础 Material App 配置',
     icon: '📱',
-    version: const TemplateVersion(
+    version: TemplateVersion(
       version: '1.0.0',
       releaseDate: DateTime(2026, 7, 28),
     ),

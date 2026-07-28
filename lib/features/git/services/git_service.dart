@@ -323,7 +323,10 @@ class GitService {
   }) async {
     final args = ['diff'];
     if (staged) args.add('--cached');
-    if (file != null) args.add('--', file);
+    if (file != null) {
+      args.add('--');
+      args.add(file);
+    }
     final result = await _runGit(args, workingDirectory: workingDirectory);
     return result.success ? result.output : null;
   }

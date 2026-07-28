@@ -24,7 +24,7 @@ class IssueListPage extends ConsumerWidget {
           PopupMenuButton<String>(
             icon: const Icon(Icons.filter_list),
             onSelected: (s) =>
-                ref.read(issueListProvider(repoFullName).notifier).loadIssues(state: s),
+                ref.read(issueListProvider(repoFullName).notifier).loadIssues(filterBy: s),
             itemBuilder: (_) => [
               const PopupMenuItem(value: 'open', child: Text('Open')),
               const PopupMenuItem(value: 'closed', child: Text('Closed')),

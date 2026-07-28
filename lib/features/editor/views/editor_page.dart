@@ -166,7 +166,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
     final buffer = editorState.activeBuffer;
 
     return Scaffold(
-      appBar: _buildAppBar(editorState, colorScheme, s, buffer),
+      appBar: _buildAppBar(editorState, colorScheme, s, editorState.activeTab),
       body: Column(
         children: [
           // Tab 栏

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/i18n/app_locale.dart';
 import '../../../core/i18n/strings.dart';
 import '../providers/terminal_provider.dart';
+import "package:codex_mobile_pro/features/terminal/services/terminal_service.dart";
 import '../widgets/terminal_output.dart';
 
 /// 终端页面（多标签 + 命令历史 + ANSI 渲染）

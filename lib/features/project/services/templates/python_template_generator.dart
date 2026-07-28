@@ -14,7 +14,7 @@ class PythonTemplateGenerator extends TemplateGenerator {
     name: 'Python 默认模板',
     description: '标准的 Python 项目结构，包含 venv 和 requirements.txt',
     icon: '🐍',
-    version: const TemplateVersion(
+    version: TemplateVersion(
       version: '1.0.0',
       releaseDate: DateTime(2026, 7, 28),
     ),

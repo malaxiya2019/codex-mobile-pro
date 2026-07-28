@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import "dart:io";
 import '../services/file_service.dart';
 
 /// 文件浏览状态

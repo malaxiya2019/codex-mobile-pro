@@ -38,7 +38,7 @@ class CodeReviewSheet extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             children: [
               // 标题栏
-              _buildHeader(colorScheme, theme),
+              _buildHeader(context, colorScheme, theme),
               const Divider(),
 
               // 错误状态
@@ -69,7 +69,7 @@ class CodeReviewSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(ColorScheme colorScheme, ThemeData theme) {
+  Widget _buildHeader(BuildContext context, ColorScheme colorScheme, ThemeData theme) {
     return Row(
       children: [
         Icon(Icons.rate_review_outlined, color: colorScheme.primary, size: 20),

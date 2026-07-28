@@ -55,7 +55,7 @@ void main() {
       name: 'Flutter 默认模板',
       description: '标准 Flutter 项目',
       icon: '📱',
-      version: const TemplateVersion(
+      version: TemplateVersion(
         version: '1.0.0',
         releaseDate: DateTime(2026, 7, 28),
       ),

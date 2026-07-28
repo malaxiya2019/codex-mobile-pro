@@ -43,7 +43,7 @@ void main() {
           tokens.where((t) => t.type == TokenType.keyword).toList();
       expect(keywordTokens, isNotEmpty);
       expect(keywordTokens.any((t) =>
-          highlighter.lines[0].substring(t.start, t.end) == 'class'),
+          'class Foo {'.substring(t.start, t.end) == 'class'),
           isTrue);
     });
 

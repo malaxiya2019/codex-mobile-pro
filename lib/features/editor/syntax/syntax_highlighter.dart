@@ -90,7 +90,7 @@ abstract class BaseHighlighter extends SyntaxHighlighter {
   }
 
   /// 辅助：解析标识符
-  List<SyntaxToken> _tokenizeIdentifier(
+  List<SyntaxToken> tokenizeIdentifier(
     String text, int start,
     Set<String> keywords,
     Set<String> types,
@@ -98,7 +98,7 @@ abstract class BaseHighlighter extends SyntaxHighlighter {
   ) {
     final tokens = <SyntaxToken>[];
     int i = start;
-    while (i < text.length && (_isIdentChar(text[i]))) {
+    while (i < text.length && (isIdentChar(text[i]))) {
       i++;
     }
 
@@ -130,11 +130,11 @@ abstract class BaseHighlighter extends SyntaxHighlighter {
     return tokens;
   }
 
-  bool _isIdentChar(String ch) {
+  bool isIdentChar(String ch) {
     return RegExp(r'[a-zA-Z0-9_]').hasMatch(ch);
   }
 
-  bool _isDigit(String ch) => ch.codeUnitAt(0) >= 48 && ch.codeUnitAt(0) <= 57;
+  bool isDigit(String ch) => ch.codeUnitAt(0) >= 48 && ch.codeUnitAt(0) <= 57;
 
   @override
   List<SyntaxToken> highlightLine(String text, {bool isFirstLine = false}) {
@@ -193,11 +193,11 @@ abstract class BaseHighlighter extends SyntaxHighlighter {
       }
 
       // 数字
-      if (_isDigit(text[i]) || (text[i] == '.' && i + 1 < text.length && _isDigit(text[i + 1]))) {
+      if (isDigit(text[i]) || (text[i] == '.' && i + 1 < text.length && isDigit(text[i + 1]))) {
         final start = i;
         i++;
-        while (i < text.length && (_isDigit(text[i]) || text[i] == '.' || text[i] == 'x' || text[i] == 'X' ||
-            (text[i] >= 'a' && text[i] <= 'f') || (text[i] >= 'A' && text[i] <= 'F'))) {
+        while (i < text.length && (isDigit(text[i]) || text[i] == '.' || text[i] == 'x' || text[i] == 'X' ||
+            (text[i].compareTo('a') >= 0 && text[i].compareTo('f') <= 0) || (text[i].compareTo('A') >= 0 && text[i].compareTo('F') <= 0))) {
           i++;
         }
         tokens.add(SyntaxToken(type: TokenType.number, start: start, end: i));
@@ -205,8 +205,8 @@ abstract class BaseHighlighter extends SyntaxHighlighter {
       }
 
       // 标识符
-      if (_isIdentChar(text[i])) {
-        tokens.addAll(_tokenizeIdentifier(text, i, keywords, typeKeywords, builtins));
+      if (isIdentChar(text[i])) {
+        tokens.addAll(tokenizeIdentifier(text, i, keywords, typeKeywords, builtins));
         final last = tokens.last;
         i = last.end;
         continue;

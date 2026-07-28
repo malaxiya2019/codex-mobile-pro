@@ -279,7 +279,7 @@ class AnsiParser {
           int j = i + 1;
           while (j < input.length) {
             final c = input[j];
-            if ((c >= '0' && c <= '9') || c == ';' || c == ':') {
+            if ((c.compareTo('0') >= 0 && c.compareTo('9') <= 0) || c == ';' || c == ':') {
               params.write(c);
               j++;
             } else if (c == 'm') {

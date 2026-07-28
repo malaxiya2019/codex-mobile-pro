@@ -71,7 +71,7 @@ class GlobalErrorHandler {
   static void _handleFlutterError(FlutterErrorDetails details) {
     final exception = details.exception;
     final stack = details.stack;
-    final context = details.context?.description ?? '未知上下文';
+    final context = details.context?.toString() ?? '未知上下文';
 
     // 记录日志
     if (_config.enableLogging) {

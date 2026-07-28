@@ -26,7 +26,7 @@ class EditorState {
     this.tabs = const [],
     this.activeTabId,
     this.buffers = const {},
-    this.settings = const EditorSettings(),
+    this.settings = EditorSettings(),
     this.showFindPanel = false,
     this.findState = FindReplaceState(),
     this.recentFiles = const [],

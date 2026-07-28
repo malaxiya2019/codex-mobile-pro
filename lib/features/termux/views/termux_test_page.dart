@@ -281,13 +281,13 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
 
         // 每 10 次打印进度
         if (i % 10 == 0) {
-          _addLog('  📊 进度: $i/$totalCalls (✅ $passed / ❌ $failed)');
+          _addLog('  📊 进度: $i/$totalCalls (✅ $_passed / ❌ $_failed)');
         }
       } catch (e) {
         _failed++;
         _failedList.add('#$i: $e');
         if (i % 10 == 0) {
-          _addLog('  📊 进度: $i/$totalCalls (✅ $passed / ❌ $failed)');
+          _addLog('  📊 进度: $i/$totalCalls (✅ $_passed / ❌ $_failed)');
         }
       }
     }
