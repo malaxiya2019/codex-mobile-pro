@@ -25,7 +25,7 @@ enum CompletionItemKind {
   constructor,
   field,
   variable,
-  `class`,
+  klass,
   interface,
   module,
   property,

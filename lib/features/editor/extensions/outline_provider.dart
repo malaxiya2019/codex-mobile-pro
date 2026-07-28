@@ -5,13 +5,13 @@ enum OutlineNodeKind {
   file,
   module,
   namespace,
-  `package`,
-  `class`,
+  package_,
+  klass,
   method,
   property,
   field,
   constructor,
-  `enum`,
+  enum_,
   interface,
   function,
   variable,
@@ -103,7 +103,7 @@ class DartOutlineProvider extends OutlineProvider {
               ? OutlineNodeKind.enum_
               : kind == 'mixin'
                   ? OutlineNodeKind.module
-                  : OutlineNodeKind.class_,
+                  : OutlineNodeKind.klass,
           line: i,
           column: line.length - trimmed.length,
         ));

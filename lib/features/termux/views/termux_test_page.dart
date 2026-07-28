@@ -45,7 +45,7 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
     // #6: 管道链
     _SpecialTest('pipe', r'echo "hello world" | wc -w', '2', '管道输出'),
     // #7: 混合特殊字符
-    _SpecialTest('mixed', r"""echo "price=\$10 & file='test.txt'"""", null, '混合特殊字符'),
+    _SpecialTest('mixed', "echo \"price=\$10 & file='test.txt'\"", null, '混合特殊字符'),
     // #8: 中文输出
     _SpecialTest('chinese', r'echo "你好，世界！"', null, '中文输出编码'),
     // #9: 换行符
