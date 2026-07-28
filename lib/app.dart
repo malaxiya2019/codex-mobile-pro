@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/i18n/app_locale.dart';
@@ -37,6 +38,7 @@ class _CodexMobileAppState extends ConsumerState<CodexMobileApp> {
       darkTheme: AppTheme.dark(fontFamily: fontFamily),
       themeMode: themeState.materialMode,
       locale: locale.locale,
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       supportedLocales: AppLanguage.values.map((l) => l.locale).toList(),
       routerConfig: router,
     );
