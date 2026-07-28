@@ -33,3 +33,6 @@ Thumbs.db
 # Env
 .env
 .env.local
+*.jsonl
+test_report*.json
+.gh_test_report/

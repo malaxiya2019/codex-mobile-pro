@@ -662,8 +662,10 @@ void main() {
         );
         final sub = stream.listen((_) {});
 
-        // 给生成器一点时间设置 streaming 状态
-        await Future.delayed(Duration.zero);
+        // 等待生成器设置 streaming 状态
+        while (!engine.isGenerating(session.sessionId)) {
+          await Future.delayed(const Duration(milliseconds: 10));
+        }
 
         // 尝试第二个流应抛出 sessionBusy
         expect(

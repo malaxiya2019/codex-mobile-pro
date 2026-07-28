@@ -49,6 +49,7 @@ class LogFileWriter {
     if (await file.exists()) {
       _currentSize = await file.length();
     } else {
+      await file.create();
       _currentSize = 0;
     }
     _currentFile = file;

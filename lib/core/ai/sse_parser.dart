@@ -8,37 +8,6 @@ import 'dart:convert';
 ///   data: {"choices":[{"delta":{"content":"你好"},"index":0}]}
 ///   data: [DONE]
 class SseParser {
-  final StreamTransformer<String, SseEvent> _transformer;
-
-  SseParser()
-      : _transformer = StreamTransformer<String, SseEvent>.fromHandlers(
-          handleData: (data, sink) {
-            for (final line in const LineSplitter().convert(data)) {
-              if (line.isEmpty || line.startsWith(':')) continue;
-
-              if (line.startsWith('data: ')) {
-                final jsonStr = line.substring(6).trim();
-                if (jsonStr == '[DONE]') {
-                  sink.add(SseEvent.done());
-                  return;
-                }
-                try {
-                  final json = jsonDecode(jsonStr) as Map<String, dynamic>;
-                  sink.add(SseEvent.data(json));
-                } catch (e) {
-                  sink.add(SseEvent.error('SSE 解析失败: $e'));
-                }
-              } else if (line.startsWith('event: ')) {
-                // 暂时忽略 event 类型，后面会紧跟 data
-              } else if (line.startsWith('id: ')) {
-                // 暂时忽略 id
-              } else if (line.startsWith('retry: ')) {
-                // 暂时忽略 retry
-              }
-            }
-          },
-        );
-
   /// 转换原始字节流为 SSE 事件流
   StreamTransformer<List<int>, SseEvent> get byteTransformer {
     // 缓冲所有字节块，在流关闭时统一处理
@@ -53,14 +22,23 @@ class SseParser {
           return;
         }
         final text = utf8.decode(chunks, allowMalformed: true);
-        final controller = StreamController<String>();
-        controller.stream.transform(_transformer).listen(
-          (event) => sink.add(event),
-          onError: (e) => sink.addError(e),
-          onDone: () => sink.close(),
-        );
-        controller.add(text);
-        controller.close();
+        for (final line in const LineSplitter().convert(text)) {
+          if (line.isEmpty || line.startsWith(':')) continue;
+          if (line.startsWith('data: ')) {
+            final jsonStr = line.substring(6).trim();
+            if (jsonStr == '[DONE]') {
+              sink.add(SseEvent.done());
+              return;
+            }
+            try {
+              final json = jsonDecode(jsonStr) as Map<String, dynamic>;
+              sink.add(SseEvent.data(json));
+            } catch (e) {
+              sink.add(SseEvent.error('SSE 解析失败: $e'));
+            }
+          }
+        }
+        sink.close();
       },
     );
   }

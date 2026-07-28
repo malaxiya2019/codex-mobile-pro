@@ -16,7 +16,7 @@ void main() {
         ),
       );
       // 等待异步 Provider 和 GoRouter 初始化完成
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 2));
 
       expect(find.text('Codex Mobile Pro'), findsOneWidget);
       expect(find.byType(NavigationBar), findsOneWidget);
@@ -32,7 +32,7 @@ void main() {
         ),
       );
       // 等待异步 Provider 和 GoRouter 初始化完成
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 2));
 
       expect(find.text('0'), findsOneWidget);
 
