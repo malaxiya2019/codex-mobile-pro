@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'ai_client.dart';
 import 'ai_message.dart';
 import 'sse_parser.dart';
@@ -238,7 +237,6 @@ class AiService {
         if (e is AiClientException) {
           switch (e.type) {
             case AiClientErrorType.api:
-            case AiClientErrorType.invalidKey:
               rethrow;
             case AiClientErrorType.rateLimit:
               // 429 需要更长的等待

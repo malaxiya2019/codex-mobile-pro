@@ -39,7 +39,7 @@ class DeepSeekKeyDetector extends Detector {
       }
 
       // 备选: 检查环境变量
-      result = await TermuxService.execute('echo "${'$'}DEEPSEEK_API_KEY" | head -c 10');
+      result = await TermuxService.execute('echo "\${DEEPSEEK_API_KEY}" | head -c 10');
       elapsed = DateTime.now().difference(start).inMilliseconds;
       if (result.isSuccess && result.stdout.trim().isNotEmpty && result.stdout.trim() != '') {
         return DetectionResult(
