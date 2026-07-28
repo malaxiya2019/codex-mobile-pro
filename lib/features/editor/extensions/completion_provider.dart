@@ -1,4 +1,5 @@
 import '../models/editor_models.dart';
+import '../../../core/ai/ai_provider.dart';
 
 /// 自动补全条目
 class CompletionItem {
@@ -113,8 +114,18 @@ class KeywordCompletionProvider extends CompletionProvider {
   }
 }
 
-/// AI 自动补全提供者（预留接口）
+/// AI 自动补全提供者
+///
+/// 使用 [AiProvider] 接口获取 AI 补全建议。
+/// 与新的 InlineCompletion 系统共享底层 AI Provider。
 class AiCompletionProvider extends CompletionProvider {
+  final AiProvider? _aiProvider;
+  final CancelToken? _cancelToken;
+
+  AiCompletionProvider({AiProvider? aiProvider, CancelToken? cancelToken})
+      : _aiProvider = aiProvider,
+        _cancelToken = cancelToken;
+
   @override
   String get name => 'AI';
 
@@ -132,8 +143,39 @@ class AiCompletionProvider extends CompletionProvider {
     required CursorPosition position,
     required FileLanguage language,
   }) async {
-    // TODO: 接入 AI API 实现真实补全
-    return [];
+    if (_aiProvider == null) return [];
+
+    try {
+      final lines = text.split('\n');
+      final prefix = text.substring(0, offset);
+      final suffix = text.substring(offset);
+
+      final request = InlineCompletionRequest(
+        filePath: filePath,
+        language: language.name,
+        prefix: prefix,
+        suffix: suffix,
+        textBeforeCursor: prefix,
+        textAfterCursor: suffix,
+        cursorLine: position.line,
+        cursorColumn: position.column,
+      );
+
+      final completions = await _aiProvider!.getInlineCompletions(
+        request: request,
+        triggerKind: CompletionTriggerKind.invoked,
+        cancelToken: _cancelToken,
+      );
+
+      return completions.map((c) => CompletionItem(
+        label: c.text.split('\n').first,
+        detail: c.label,
+        kind: CompletionItemKind.snippet,
+        insertText: c.text,
+      )).toList();
+    } catch (_) {
+      return [];
+    }
   }
 }
 
@@ -143,7 +185,7 @@ class CompletionManager {
 
   CompletionManager() {
     _providers.add(KeywordCompletionProvider());
-    _providers.add(AiCompletionProvider());
+    // AiCompletionProvider 可通过 register 添加
   }
 
   /// 注册自定义补全提供者

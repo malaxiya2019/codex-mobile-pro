@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/editor_models.dart';
 import '../services/editor_buffer.dart';
+import '../extensions/inline_completion.dart';
+import '../../../core/ai/ai_provider.dart';
+import '../../../core/ai/providers/deepseek_provider.dart';
 
 /// 编辑器状态
 class EditorState {
@@ -16,7 +19,10 @@ class EditorState {
   final Set<String> pinnedFiles;
   final Set<String> favoriteFiles;
 
-  const EditorState({
+  /// 内联补全引擎
+  final InlineCompletionEngine inlineCompletion;
+
+  EditorState({
     this.tabs = const [],
     this.activeTabId,
     this.buffers = const {},
@@ -26,6 +32,7 @@ class EditorState {
     this.recentFiles = const [],
     this.pinnedFiles = const {},
     this.favoriteFiles = const {},
+    this.inlineCompletion = _createDefaultInlineCompletion(),
   });
 
   EditorState copyWith({
@@ -38,6 +45,7 @@ class EditorState {
     List<String>? recentFiles,
     Set<String>? pinnedFiles,
     Set<String>? favoriteFiles,
+    InlineCompletionEngine? inlineCompletion,
     bool clearActiveTab = false,
   }) {
     return EditorState(
@@ -50,6 +58,7 @@ class EditorState {
       recentFiles: recentFiles ?? this.recentFiles,
       pinnedFiles: pinnedFiles ?? this.pinnedFiles,
       favoriteFiles: favoriteFiles ?? this.favoriteFiles,
+      inlineCompletion: inlineCompletion ?? this.inlineCompletion,
     );
   }
 
@@ -68,6 +77,10 @@ class EditorState {
   }
 }
 
+/// 默认内联补全引擎（空实现）
+InlineCompletionEngine _createDefaultInlineCompletion() {
+  return InlineCompletionEngine();
+}
 /// 编辑器 Provider
 final editorProvider = StateNotifierProvider<EditorNotifier, EditorState>((ref) {
   return EditorNotifier();
@@ -76,7 +89,42 @@ final editorProvider = StateNotifierProvider<EditorNotifier, EditorState>((ref) 
 class EditorNotifier extends StateNotifier<EditorState> {
   Timer? _autoSaveTimer;
 
-  EditorNotifier() : super(const EditorState());
+  EditorNotifier() : super(EditorState());
+
+  // ── AI Provider 管理 ──
+
+  /// 初始化 AI Provider（DeepSeek）
+  Future<void> initAiProvider({AiConfig? config}) async {
+    final provider = DeepSeekProvider(config: config);
+    await provider.initialize();
+    state.inlineCompletion.setProvider(provider);
+  }
+
+  /// 设置自定义 AI Provider
+  void setAiProvider(AiProvider provider) {
+    state.inlineCompletion.setProvider(provider);
+  }
+
+  // ── 内联补全 ──
+
+  /// 接受内联补全建议
+  void acceptInlineCompletion() {
+    final text = state.inlineCompletion.acceptSuggestion();
+    if (text != null) {
+      final buffer = state.activeBuffer;
+      if (buffer != null) {
+        buffer.insertText(text);
+        _markDirty();
+        state = state.copyWith();
+      }
+    }
+  }
+
+  /// 取消内联补全
+  void cancelInlineCompletion() {
+    state.inlineCompletion.cancelSuggestion();
+    state = state.copyWith();
+  }
 
   // ── Tab 管理 ──
 
@@ -610,6 +658,7 @@ class EditorNotifier extends StateNotifier<EditorState> {
   @override
   void dispose() {
     _autoSaveTimer?.cancel();
+    state.inlineCompletion.dispose();
     super.dispose();
   }
 }

@@ -3,13 +3,20 @@ import 'package:flutter/material.dart';
 import '../models/editor_models.dart';
 import '../services/editor_buffer.dart';
 import '../syntax/syntax_highlighter.dart';
+import '../extensions/inline_completion.dart';
 
-/// 编辑器内容区域 — 带语法高亮的代码编辑器
+/// 编辑器内容区域 — 带语法高亮和 Ghost Text 补全的代码编辑器
 class EditorContent extends StatefulWidget {
   final EditorBuffer buffer;
   final EditorSettings settings;
   final bool isDark;
   final ValueChanged<CursorPosition>? onCursorChanged;
+
+  /// AI 内联补全引擎（可选）
+  final InlineCompletionEngine? inlineCompletion;
+
+  /// 接受补全回调
+  final VoidCallback? onAcceptCompletion;
 
   const EditorContent({
     super.key,
@@ -17,6 +24,8 @@ class EditorContent extends StatefulWidget {
     required this.settings,
     this.isDark = true,
     this.onCursorChanged,
+    this.inlineCompletion,
+    this.onAcceptCompletion,
   });
 
   @override
@@ -35,6 +44,9 @@ class _EditorContentState extends State<EditorContent> {
     _verticalScrollController = ScrollController();
     _horizontalScrollController = ScrollController();
     _fontSize = widget.settings.fontSize.toDouble();
+
+    // 监听内联补全状态变化
+    widget.inlineCompletion?.addListener(_onCompletionChanged);
   }
 
   @override
@@ -43,6 +55,12 @@ class _EditorContentState extends State<EditorContent> {
     if (oldWidget.settings.fontSize != widget.settings.fontSize) {
       _fontSize = widget.settings.fontSize.toDouble();
     }
+
+    // 更新监听器
+    if (oldWidget.inlineCompletion != widget.inlineCompletion) {
+      oldWidget.inlineCompletion?.removeListener(_onCompletionChanged);
+      widget.inlineCompletion?.addListener(_onCompletionChanged);
+    }
   }
 
   @override
@@ -50,7 +68,12 @@ class _EditorContentState extends State<EditorContent> {
     _verticalScrollController.dispose();
     _horizontalScrollController.dispose();
     _focusNode.dispose();
+    widget.inlineCompletion?.removeListener(_onCompletionChanged);
     super.dispose();
+  }
+
+  void _onCompletionChanged() {
+    if (mounted) setState(() {});
   }
 
   double get _lineHeight => _fontSize * 1.5;
@@ -61,6 +84,7 @@ class _EditorContentState extends State<EditorContent> {
     final lines = widget.buffer.lines;
     final cursor = widget.buffer.cursor;
     final highlighter = widget.buffer.highlighter;
+    final ghostText = widget.inlineCompletion?.currentSuggestion;
 
     return Container(
       color: widget.isDark
@@ -84,7 +108,7 @@ class _EditorContentState extends State<EditorContent> {
                   controller: _horizontalScrollController,
                   scrollDirection: Axis.horizontal,
                   child: SizedBox(
-                    width: _computeContentWidth(lines, highlighter),
+                    width: _computeContentWidth(lines, highlighter, ghostText),
                     child: ListView.builder(
                       controller: _verticalScrollController,
                       padding: EdgeInsets.only(
@@ -102,6 +126,7 @@ class _EditorContentState extends State<EditorContent> {
                           highlighter,
                           cursor,
                           colorScheme,
+                          ghostText: index == cursor.line ? ghostText : null,
                         );
                       },
                     ),
@@ -164,8 +189,9 @@ class _EditorContentState extends State<EditorContent> {
     String text,
     SyntaxHighlighter? highlighter,
     CursorPosition cursor,
-    ColorScheme colorScheme,
-  ) {
+    ColorScheme colorScheme, {
+    GhostTextSuggestion? ghostText,
+  }) {
     final isCurrentLine = index == cursor.line;
 
     // 背景
@@ -246,6 +272,23 @@ class _EditorContentState extends State<EditorContent> {
       ));
     }
 
+    // ── Ghost Text（灰色建议文本） ──
+    if (isCurrentLine && ghostText != null && ghostText.isValid) {
+      // 在文本末尾追加灰色建议文本
+      final ghostDisplay = ghostText.displayText;
+      if (ghostDisplay.isNotEmpty) {
+        spans.add(TextSpan(
+          text: ghostDisplay,
+          style: TextStyle(
+            color: widget.isDark
+                ? const Color(0xFF6A9955).withValues(alpha: 0.6)
+                : const Color(0xFF6A9955).withValues(alpha: 0.5),
+            fontStyle: FontStyle.italic,
+          ),
+        ));
+      }
+    }
+
     return Container(
       height: _lineHeight,
       color: bgColor,
@@ -271,6 +314,27 @@ class _EditorContentState extends State<EditorContent> {
     final logicalKey = event.logicalKey;
     final isControl = HardwareKeyboard.instance.controlKeysPressed.contains(LogicalKeyboardKey.controlLeft) ||
         HardwareKeyboard.instance.controlKeysPressed.contains(LogicalKeyboardKey.controlRight);
+
+    // ── Tab 接受内联补全 ──
+    if (logicalKey == LogicalKeyboardKey.tab &&
+        widget.inlineCompletion?.hasSuggestion == true) {
+      final text = widget.inlineCompletion!.acceptSuggestion();
+      if (text != null) {
+        widget.buffer.insertText(text);
+        widget.onCursorChanged?.call(widget.buffer.cursor);
+        widget.onAcceptCompletion?.call();
+        setState(() {});
+        return KeyEventResult.handled;
+      }
+    }
+
+    // ── Esc 取消内联补全 ──
+    if (logicalKey == LogicalKeyboardKey.escape &&
+        widget.inlineCompletion?.hasSuggestion == true) {
+      widget.inlineCompletion?.cancelSuggestion();
+      setState(() {});
+      return KeyEventResult.handled;
+    }
 
     if (isControl) {
       switch (logicalKey.keyLabel) {
@@ -306,9 +370,6 @@ class _EditorContentState extends State<EditorContent> {
         _notifyCursor();
         return KeyEventResult.handled;
       case 'ArrowLeft':
-        if (HardwareKeyboard.instance.isShiftPressed) {
-          // Selection handled separately
-        }
         widget.buffer.moveCursorLeft();
         _notifyCursor();
         return KeyEventResult.handled;
@@ -325,24 +386,31 @@ class _EditorContentState extends State<EditorContent> {
         _notifyCursor();
         return KeyEventResult.handled;
       case 'Enter':
+        // 换行时取消内联补全
+        widget.inlineCompletion?.cancelSuggestion();
         widget.buffer.insertNewline();
         _notifyCursor();
         return KeyEventResult.handled;
       case 'Tab':
+        // 如果没有 Ghost Text，执行普通 Tab
         widget.buffer.insertTab();
         _notifyCursor();
         return KeyEventResult.handled;
       case 'Backspace':
         widget.buffer.deleteLeft();
+        widget.inlineCompletion?.cancelSuggestion();
         _notifyCursor();
         return KeyEventResult.handled;
       case 'Delete':
         widget.buffer.deleteRight();
+        widget.inlineCompletion?.cancelSuggestion();
         _notifyCursor();
         return KeyEventResult.handled;
       default:
         if (logicalKey.keyLabel.length == 1) {
           widget.buffer.insertChar(logicalKey.keyLabel);
+          // 输入字符时触发内联补全
+          _triggerInlineCompletion();
           _notifyCursor();
           return KeyEventResult.handled;
         }
@@ -350,18 +418,51 @@ class _EditorContentState extends State<EditorContent> {
     }
   }
 
+  void _triggerInlineCompletion() {
+    final engine = widget.inlineCompletion;
+    if (engine == null) return;
+
+    final buffer = widget.buffer;
+    final cursor = buffer.cursor;
+    final text = buffer.text;
+    final cursorOffset = _getOffsetFromPosition(text, cursor);
+
+    engine.onTextChange(
+      textBeforeCursor: text.substring(0, cursorOffset),
+      textAfterCursor: text.substring(cursorOffset),
+      filePath: buffer.filePath,
+      language: buffer.language.name,
+      cursorLine: cursor.line,
+      cursorColumn: cursor.column,
+      triggerKind: CompletionTriggerKind.automatic,
+    );
+  }
+
+  int _getOffsetFromPosition(String text, CursorPosition pos) {
+    final lines = text.split('\n');
+    int offset = 0;
+    for (int i = 0; i < pos.line && i < lines.length; i++) {
+      offset += lines[i].length + 1; // +1 for newline
+    }
+    offset += pos.column;
+    return offset.clamp(0, text.length);
+  }
+
   void _notifyCursor() {
     widget.onCursorChanged?.call(widget.buffer.cursor);
     setState(() {});
   }
 
-  double _computeContentWidth(List<String> lines, SyntaxHighlighter? highlighter) {
+  double _computeContentWidth(List<String> lines, SyntaxHighlighter? highlighter, GhostTextSuggestion? ghostText) {
     int maxLen = 80;
     for (final line in lines) {
       if (line.length > maxLen) maxLen = line.length;
     }
+    // 为 Ghost Text 预留额外宽度
+    if (ghostText != null && ghostText.isValid) {
+      final ghostLen = ghostText.displayText.length;
+      if (maxLen + ghostLen > 120) maxLen = maxLen + ghostLen;
+    }
     return maxLen * _fontSize * 0.6 + 24;
   }
 }
-
-// 需要引入 KeyboardListener 和 LogicalKeyboardKey

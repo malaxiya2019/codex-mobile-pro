@@ -7,8 +7,9 @@ import '../models/editor_models.dart';
 import '../providers/editor_provider.dart';
 import '../widgets/editor_content.dart';
 import '../widgets/editor_find_panel.dart';
+import '../extensions/inline_completion.dart';
 
-/// 编辑器页面 — 多标签代码编辑器
+/// 编辑器页面 — 多标签代码编辑器（带 AI 内联补全）
 class EditorPage extends ConsumerStatefulWidget {
   final String? initialPath;
 
@@ -68,13 +69,18 @@ class _EditorPageState extends ConsumerState<EditorPage> {
                   ref.read(editorProvider.notifier).toggleFindPanel(),
             ),
 
-          // 编辑器内容
+          // 编辑器内容（带 AI 内联补全）
           Expanded(
             child: editorState.activeBuffer != null
                 ? EditorContent(
                     buffer: editorState.activeBuffer!,
                     settings: editorState.settings,
                     isDark: isDark,
+                    inlineCompletion: editorState.inlineCompletion,
+                    onAcceptCompletion: () {
+                      // 接受补全后刷新状态
+                      ref.read(editorProvider.notifier).acceptInlineCompletion();
+                    },
                     onCursorChanged: (_) => setState(() {}),
                   )
                 : _buildEmptyState(theme, colorScheme, s),
@@ -275,6 +281,28 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             ),
           ),
           const Spacer(),
+          // AI 补全状态指示
+          if (editorState.inlineCompletion.state == InlineCompletionState.loading)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: SizedBox(
+                width: 10,
+                height: 10,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ),
+          if (editorState.inlineCompletion.hasSuggestion)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Icon(
+                Icons.auto_awesome,
+                size: 12,
+                color: colorScheme.primary,
+              ),
+            ),
           // 编码
           Text(
             'UTF-8',
