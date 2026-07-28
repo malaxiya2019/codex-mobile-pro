@@ -138,7 +138,7 @@ class WorkspaceNotifier extends StateNotifier<WorkspaceState> {
     final shouldClear = state.currentWorkspaceId == id;
     state = state.copyWith(
       workspaces: ws,
-      currentWorkspaceId: shouldClear ? null : state.currentWorkspaceId,
+      clearCurrent: shouldClear,
     );
     await _save();
   }

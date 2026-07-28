@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('HomePage — Material 3 验证', () {
     setUp(() {
-      SharedPreferences.setMockInitialValues({'app_locale': 'en_US'});
+      SharedPreferences.setMockInitialValues({'app_locale': 'zh_CN'});
     });
     testWidgets('首页正确渲染', (tester) async {
       await tester.pumpWidget(
@@ -16,13 +16,15 @@ void main() {
           overrides: [
             localeProvider.overrideWith((ref) {
               final notifier = LocaleNotifier();
-              notifier.state = AppLanguage.enUS;
+              notifier.state = AppLanguage.zhCN;
               return notifier;
             }),
           ],
           child: const CodexMobileApp(),
         ),
       );
+      // drain microtasks 确保 _loadSavedLocale() 完成
+      await Future(() {});
       await tester.pump();
       await tester.pump(const Duration(seconds: 2));
 
@@ -39,13 +41,15 @@ void main() {
           overrides: [
             localeProvider.overrideWith((ref) {
               final notifier = LocaleNotifier();
-              notifier.state = AppLanguage.enUS;
+              notifier.state = AppLanguage.zhCN;
               return notifier;
             }),
           ],
           child: const CodexMobileApp(),
         ),
       );
+      // drain microtasks
+      await Future(() {});
       await tester.pump();
       await tester.pump(const Duration(seconds: 2));
 
