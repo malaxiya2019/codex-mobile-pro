@@ -48,19 +48,7 @@ class _TestRef extends Ref<Object?> {
   void onDispose(void Function() cb) {}
 
   @override
-  void onMount(void Function() cb) {}
-
-  @override
   bool exists(ProviderBase<Object?> provider) => false;
-
-  @override
-  bool get mounted => true;
-
-  @override
-  Ref<Object?> get parent => this;
-
-  @override
-  ProviderStateOwner? get owner => null;
 
   @override
   T read<T>(ProviderListenable<T> provider) => throw UnimplementedError('Not needed in tests');
