@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../extensions/diagnostics_provider.dart';
 import '../../../core/i18n/app_locale.dart';
 import '../../../core/i18n/strings.dart';
 import '../models/editor_models.dart';

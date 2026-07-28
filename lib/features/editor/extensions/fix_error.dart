@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import '../../../core/ai/ai_provider.dart';
 import 'diagnostics_provider.dart';
 
@@ -258,7 +259,7 @@ Return JSON output only.''';
     final result = <String, dynamic>{};
     final clean = json.trim();
     int i = 1;
-    final buf = StringBuffer();
+    var buf = StringBuffer();
     String key = '';
     bool inStr = false;
     bool inVal = false;
