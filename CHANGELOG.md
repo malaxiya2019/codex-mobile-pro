@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+### 🔬 Sprint 0 — Milestone 0.4：AI 通信验证 ✅
+
+#### 🏗️ AI 核心层
+- `core/ai/ai_message.dart` — 消息模型：ChatRole（4 角色）、ChatMessage、ChatCompletionRequest/Response、ChatChoice、ChatUsage
+- `core/ai/sse_parser.dart` — SSE 流解析器，支持 byteTransformer 管道、parseLine 逐行解析、extractContent 提取增量
+- `core/ai/ai_client.dart` — OpenAI 兼容 HTTP 客户端，支持流式/非流式、健康检查、7 类错误分类（401/403/429/502/503/5xx/网络超时）
+- `core/ai/ai_service.dart` — AI 服务封装，指数退避重试（最多 3 次）、代理健康检查、流式回调
+
+#### 🚀 AI 对话 UI
+- `features/ai/providers/chat_provider.dart` — ChatState + ChatNotifier（流式 sendMessage、服务状态检查、清空对话）
+- `features/ai/views/ai_chat_page.dart` — 完整对话页面：气泡消息、简易 Markdown/代码块渲染、流式状态指示器、服务状态提示栏、快速问题芯片、清空确认对话框
+
+#### 🧭 路由与导航集成
+- `core/router/route_names.dart` — 新增 `aiChat` 路由常量
+- `core/router/app_router.dart` — 注册 `AiChatPage` 路由
+- `features/home/views/home_page.dart` — 导航栏第 4 项 + AppBar 按钮 + 快捷卡片全部指向 AI 对话页
+
+#### 🧪 单元测试
+- `test/sse_parser_test.dart` — 18 用例：SSE 解析、extractContent、byteTransformer、ChatRole/ChatMessage/ChatCompletionResponse
+- `test/ai_client_test.dart` — 11 用例：Mock HTTP 客户端测试（成功/错误分类/流式/健康检查）
+- `test/ai_service_test.dart` — 8 用例：配置验证、状态枚举、服务生命周期、kSystemPrompt
+- `test/chat_provider_test.dart` — 9 用例：ChatState 不可变、ChatNotifier 清空/空消息/setService
+
+#### 📋 文档
+- `docs/sprints/sprint-0/milestone-0.4-验证报告.md`
+
+---
+
 ### 🔬 Sprint 0 — Milestone 0.3：依赖检测验证 ✅
 
 #### 🏗️ 检测器体系

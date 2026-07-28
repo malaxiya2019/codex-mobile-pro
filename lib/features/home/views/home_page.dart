@@ -30,6 +30,11 @@ class HomePage extends ConsumerWidget {
             onPressed: () => context.push(RouteNames.termuxTest),
           ),
           IconButton(
+            icon: const Icon(Icons.chat_outlined),
+            tooltip: 'AI 对话',
+            onPressed: () => context.push(RouteNames.aiChat),
+          ),
+          IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: '设置',
             onPressed: () {
@@ -59,6 +64,8 @@ class HomePage extends ConsumerWidget {
                   _StatusRow(label: 'Riverpod', value: '✅ 已集成', color: Colors.green),
                   SizedBox(height: 8),
                   _StatusRow(label: 'Termux 通信', value: '✅ 已验证', color: Colors.green),
+                  SizedBox(height: 8),
+                  _StatusRow(label: 'AI 通信', value: '✅ 已验证', color: Colors.green),
                 ],
               ),
             ),
@@ -91,14 +98,10 @@ class HomePage extends ConsumerWidget {
               Expanded(
                 child: _QuickActionCard(
                   icon: Icons.chat_outlined,
-                  label: 'AI 编程',
-                  subtitle: 'Sprint 4',
+                  label: 'AI 对话',
+                  subtitle: '通信验证',
                   color: Colors.purple,
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('AI 对话 — Sprint 4 实现')),
-                    );
-                  },
+                  onTap: () => context.push(RouteNames.aiChat),
                 ),
               ),
             ],
@@ -166,7 +169,8 @@ class HomePage extends ConsumerWidget {
                   const _InfoRow(label: 'Dart', value: '3.5+'),
                   const _InfoRow(label: 'Android', value: '10–15 (API 29–35)'),
                   const _InfoRow(label: '架构', value: 'Material 3 + Riverpod'),
-                  const _InfoRow(label: 'Termux 通信', value: '多策略降級'),
+                  const _InfoRow(label: 'Termux 通信', value: '多策略降级'),
+                  const _InfoRow(label: 'AI 通信', value: 'DeepSeek + mimo2codex'),
                 ],
               ),
             ),
@@ -176,16 +180,17 @@ class HomePage extends ConsumerWidget {
       bottomNavigationBar: NavigationBar(
         onDestinationSelected: (index) {
           switch (index) {
+            case 0:
+              break;
             case 1:
               context.push(RouteNames.deploy);
               break;
             case 2:
               context.push(RouteNames.termuxTest);
               break;
-            default:
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('页面 ${index + 1} — 后续 Sprint 实现')),
-              );
+            case 3:
+              context.push(RouteNames.aiChat);
+              break;
           }
         },
         destinations: const [
