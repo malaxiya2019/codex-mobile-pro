@@ -61,8 +61,12 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Run tests
-        run: flutter test --machine > test_report.json
+      - name: Run tests (visible output)
+        run: |
+          flutter test --reporter expanded
+          TEST_EXIT=$?
+          flutter test --machine > test_report.json || true
+          exit $TEST_EXIT
 
       - name: Upload test report
         uses: actions/upload-artifact@v4
