@@ -19,6 +19,16 @@ class MockProviderManager implements IAIProviderManager {
   int streamCallCount = 0;
   final List<List<ChatMessageInput>> _chatHistory = [];
   final List<List<ChatMessageInput>> _streamHistory = [];
+  Completer<void>? _streamBlocker;
+
+  void blockStream() {
+    _streamBlocker = Completer<void>();
+  }
+
+  void unblockStream() {
+    _streamBlocker?.complete();
+    _streamBlocker = null;
+  }
 
   void setChatResult(String result) => _chatResult = result;
   void setShouldFail(bool fail) => _shouldFail = fail;
@@ -75,8 +85,12 @@ class MockProviderManager implements IAIProviderManager {
     streamCallCount++;
     _streamHistory.add(List.from(messages));
     if (_shouldStreamFail) throw Exception('Stream failed');
-
     if (cancelToken?.isCancelled == true) return;
+    // 支持阻塞流（用于并发生成测试）
+    if (_streamBlocker != null) {
+      await _streamBlocker!.future;
+      if (cancelToken?.isCancelled == true) return;
+    }
 
     final chunks = ['mock ', 'chunk ', 'response'];
     for (final chunk in chunks) {
@@ -214,7 +228,6 @@ void main() {
       final session = ChatSession(sessionId: 's1', createdAt: now, updatedAt: now);
 
       await Future.delayed(const Duration(milliseconds: 1));
-
       session.addMessage(ChatMessage(
         id: 'm1',
         role: ChatRole.user,
@@ -655,27 +668,34 @@ void main() {
       test('并发生成抛出异常', () async {
         final session = engine.createSession();
 
-        // 开始第一个流并立即订阅（async* 生成器需要 listen 才开始执行）
+        // 阻塞 Provider → 第一轮流不会完成
+        mockProvider.blockStream();
+
+        // 开始第一个流
         final stream = engine.streamMessage(
           sessionId: session.sessionId,
           content: '第一轮',
         );
-        final sub = stream.listen((_) {});
+        stream.listen((_) {});
 
         // 等待生成器设置 streaming 状态
-        while (!engine.isGenerating(session.sessionId)) {
-          await Future.delayed(const Duration(milliseconds: 10));
-        }
+        await Future.delayed(Duration.zero);
+        expect(engine.isGenerating(session.sessionId), true);
 
         // 尝试第二个流应抛出 sessionBusy
         expect(
           engine.streamMessage(sessionId: session.sessionId, content: '第二轮'),
-          emitsError(isA<ChatEngineException>()),
+          emitsError(isA<ChatEngineException>().having(
+            (e) => e.type,
+            'type',
+            ChatEngineErrorType.sessionBusy,
+          )),
         );
 
         // 清理
-        sub.cancel();
+        mockProvider.unblockStream();
         engine.stopGeneration(session.sessionId);
+        expect(engine.isGenerating(session.sessionId), false);
       });
 
       test('流式提供者失败时抛出异常', () async {

@@ -28,7 +28,7 @@ class SseParser {
             final jsonStr = line.substring(6).trim();
             if (jsonStr == '[DONE]') {
               sink.add(SseEvent.done());
-              return;
+              break;
             }
             try {
               final json = jsonDecode(jsonStr) as Map<String, dynamic>;

@@ -123,9 +123,7 @@ void main() {
       addTearDown(container.dispose);
 
       // 等待 _load() 完成避免异步初始化覆盖后续操作
-      while (container.read(workspaceProvider).isLoading) {
-        await Future.delayed(const Duration(milliseconds: 10));
-      }
+      await Future.delayed(const Duration(milliseconds: 50));
 
       final notifier = container.read(workspaceProvider.notifier);
       final ws = await notifier.create(name: 'A', template: WorkspaceTemplate.flutter);

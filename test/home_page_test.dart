@@ -16,13 +16,15 @@ void main() {
         ),
       );
       // 等待异步 Provider 和 GoRouter 初始化完成
+      // 先处理微任务让 Riverpod async provider 初始化
+      await tester.pump();
       await tester.pump(const Duration(seconds: 2));
 
       expect(find.text('Codex Mobile Pro'), findsOneWidget);
       expect(find.byType(NavigationBar), findsOneWidget);
       expect(find.text('首页'), findsOneWidget);
       expect(find.text('AI'), findsOneWidget);
-      expect(find.text('文件'), findsOneWidget);
+      expect(find.text('GitHub'), findsOneWidget);
     });
 
     testWidgets('计数器交互正常', (tester) async {
@@ -32,6 +34,8 @@ void main() {
         ),
       );
       // 等待异步 Provider 和 GoRouter 初始化完成
+      // 先处理微任务让 Riverpod async provider 初始化
+      await tester.pump();
       await tester.pump(const Duration(seconds: 2));
 
       expect(find.text('0'), findsOneWidget);
