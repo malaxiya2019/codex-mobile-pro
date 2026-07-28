@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/git_repository.dart';
 import '../services/git_service.dart';
 import '../../../core/logger/log_service.dart';
+import '../../../core/ai/ai_provider.dart';
+import '../../editor/providers/editor_provider.dart';
+import '../../editor/extensions/code_review.dart';
 
 /// Git 操作页面
 ///
@@ -302,6 +305,83 @@ class _GitOperationsPageState extends ConsumerState<GitOperationsPage> {
     );
   }
 
+  /// 使用 AI 生成 Commit Message
+  Future<String?> _generateCommitMessage() async {
+    if (_clonePath == null) return null;
+
+    try {
+      // 获取 git diff
+      final diff = await _gitService.diff(_clonePath!);
+      if (!diff.success || diff.output == null || diff.output!.isEmpty) {
+        if (mounted) {
+          _showSnackBar('没有检测到变更内容');
+        }
+        return null;
+      }
+
+      // 使用默认 AI Provider
+      final editorNotifier = ref.read(editorProvider.notifier);
+      final aiProvider = editorNotifier.aiProvider;
+      if (aiProvider == null) {
+        if (mounted) {
+          _showSnackBar('AI 服务未初始化');
+        }
+        return null;
+      }
+
+      final systemPrompt = '''你是一个 Git Commit Message 专家。
+根据 git diff 输出，生成规范的 Commit Message。
+
+格式：<type>(<scope>): <简短描述>
+
+类型：feat/fix/refactor/docs/style/test/chore/ci
+scope：影响范围
+
+返回 JSON：
+{
+  "message": "完整的 commit message"
+}
+
+要求：第一行不超过 72 字符，用中文写描述。''';
+
+      final response = await aiProvider.chat(
+        messages: [
+          ChatMessageInput(role: 'system', content: systemPrompt),
+          ChatMessageInput(role: 'user', content: '''根据以下 git diff 生成 commit message：
+
+\`\`\`diff
+${diff.output!.length > 8000 ? diff.output!.substring(0, 8000) + '\n... (截断)' : diff.output!}
+\`\`\`
+
+Return JSON output only.'''),
+        ],
+        temperature: 0.3,
+        maxTokens: 512,
+      );
+
+      // 解析 JSON
+      try {
+        final jsonStart = response.indexOf('{');
+        final jsonEnd = response.lastIndexOf('}');
+        if (jsonStart != -1 && jsonEnd != -1) {
+          final jsonStr = response.substring(jsonStart, jsonEnd + 1);
+          final msgMatch = RegExp(r'"message"\s*:\s*"(.+?)"\s*[,}]', dotAll: true).firstMatch(jsonStr);
+          if (msgMatch != null) {
+            return msgMatch.group(1)!.replaceAll('\n', '
+');
+          }
+        }
+      } catch (_) {}
+
+      return response.trim();
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar('生成 Commit Message 失败: $e');
+      }
+      return null;
+    }
+  }
+
   Future<void> _showCommitDialog() async {
     if (_clonePath == null) {
       _showSnackBar('请先克隆仓库');
@@ -326,6 +406,19 @@ class _GitOperationsPageState extends ConsumerState<GitOperationsPage> {
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('取消'),
+          ),
+          TextButton.icon(
+            icon: const Icon(Icons.auto_awesome, size: 16),
+            label: const Text('AI 生成'),
+            onPressed: () async {
+              final msg = await _generateCommitMessage();
+              if (msg != null && msg.isNotEmpty) {
+                controller.text = msg;
+                controller.selection = TextSelection.fromPosition(
+                  TextPosition(offset: msg.length),
+                );
+              }
+            },
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(controller.text),

@@ -10,6 +10,9 @@ import '../widgets/editor_find_panel.dart';
 import '../extensions/inline_completion.dart';
 import '../extensions/code_explain.dart';
 import '../extensions/code_review.dart';
+import '../extensions/refactor_code.dart';
+import '../extensions/generate_test.dart';
+import '../extensions/fix_error.dart';
 import '../widgets/code_review_sheet.dart';
 
 /// 编辑器页面 — 多标签代码编辑器（带 AI 内联补全 + 代码解释）
@@ -155,6 +158,205 @@ class _EditorPageState extends ConsumerState<EditorPage> {
     }
   }
 
+  /// 重构选中的代码
+  Future<void> _refactorCode() async {
+    final editorState = ref.read(editorProvider);
+    final buffer = editorState.activeBuffer;
+    if (buffer == null) return;
+
+    final aiProvider = ref.read(editorProvider.notifier).aiProvider;
+    if (aiProvider == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('AI 服务未初始化')),
+      );
+      return;
+    }
+
+    String code;
+    if (buffer.hasSelection) {
+      code = buffer.selectedText;
+    } else {
+      code = buffer.text;
+    }
+
+    if (code.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请选择要重构的代码')),
+      );
+      return;
+    }
+
+    final engine = RefactorEngine(aiProvider);
+    final result = await engine.refactor(
+      code: code,
+      language: buffer.language.name,
+    );
+
+    if (!mounted) return;
+
+    if (result.isValid) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _RefactorCodeSheet(
+          result: result,
+          onClose: () => Navigator.of(context).pop(),
+        ),
+      );
+    } else if (result.hasError) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('重构失败: ${result.errorMessage}')),
+      );
+    }
+  }
+
+  /// 生成测试
+  Future<void> _generateTest() async {
+    final editorState = ref.read(editorProvider);
+    final buffer = editorState.activeBuffer;
+    if (buffer == null) return;
+
+    final aiProvider = ref.read(editorProvider.notifier).aiProvider;
+    if (aiProvider == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('AI 服务未初始化')),
+      );
+      return;
+    }
+
+    final code = buffer.text;
+    final fileName = buffer.filePath?.split('/').last ?? 'unknown.dart';
+    final className = fileName.replaceAll('.dart', '');
+
+    if (code.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('文件内容为空')),
+      );
+      return;
+    }
+
+    final generator = TestGenerator(aiProvider);
+    final result = await generator.generateTest(
+      sourceCode: code,
+      className: className,
+      language: buffer.language.name,
+    );
+
+    if (!mounted) return;
+
+    if (result.isValid) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _TestGenSheet(
+          result: result,
+          onClose: () => Navigator.of(context).pop(),
+        ),
+      );
+    } else if (result.hasError) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('生成测试失败: ${result.errorMessage}')),
+      );
+    }
+  }
+
+  /// AI 修 Bug
+  Future<void> _fixBug() async {
+    final editorState = ref.read(editorProvider);
+    final buffer = editorState.activeBuffer;
+    if (buffer == null) return;
+
+    // 如果有选中文本，优先使用选中内容
+    String code;
+    if (buffer.hasSelection) {
+      code = buffer.selectedText;
+    } else {
+      code = buffer.text;
+    }
+
+    if (code.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请选择要修复的代码')),
+      );
+      return;
+    }
+
+    // 显示输入对话框，让用户粘贴错误日志
+    final errorLog = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _BugErrorDialog(),
+    );
+    if (errorLog == null || errorLog.trim().isEmpty) return;
+
+    final aiProvider = ref.read(editorProvider.notifier).aiProvider;
+    if (aiProvider == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('AI 服务未初始化')),
+      );
+      return;
+    }
+
+    // 使用 FixEngine 分析
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final engine = FixEngine(aiProvider);
+      final fakeDiagnostic = Diagnostic(
+        message: errorLog,
+        line: 0,
+        column: 0,
+        length: code.length,
+        severity: DiagnosticSeverity.error,
+        source: code,
+      );
+
+      final result = await engine.fixDiagnostic(
+        diagnostic: fakeDiagnostic,
+        filePath: buffer.filePath ?? 'unknown.dart',
+        code: code,
+        language: buffer.language.name,
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // 关闭 loading
+
+      if (result.hasSuggestions) {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => _FixBugSheet(
+            result: result,
+            language: buffer.language.name,
+            onClose: () => Navigator.of(context).pop(),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('未生成修复建议')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // 关闭 loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('修复分析失败: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -220,8 +422,8 @@ class _EditorPageState extends ConsumerState<EditorPage> {
       floatingActionButton: buffer != null
           ? FloatingActionButton.small(
               onPressed: _explainSelectedCode,
-              tooltip: '解释选中代码',
-              child: const Icon(Icons.smart_toy_outlined),
+              tooltip: 'AI 辅助',
+              child: const Icon(Icons.auto_awesome),
             )
           : null,
     );
@@ -251,6 +453,13 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             tooltip: '解释选中代码',
             onPressed: _explainSelectedCode,
           ),
+        // AI Refactor
+        if (editorState.activeBuffer != null)
+          IconButton(
+            icon: const Icon(Icons.refresh, size: 20),
+            tooltip: 'AI 重构代码',
+            onPressed: _refactorCode,
+          ),
         // 撤销
         IconButton(
           icon: const Icon(Icons.undo, size: 20),
@@ -263,6 +472,20 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             icon: const Icon(Icons.rate_review_outlined, size: 20),
             tooltip: '审查代码',
             onPressed: _reviewCode,
+          ),
+        // Generate Test
+        if (editorState.activeBuffer != null)
+          IconButton(
+            icon: const Icon(Icons.science_outlined, size: 20),
+            tooltip: 'AI 生成测试',
+            onPressed: _generateTest,
+          ),
+        // Fix Bug
+        if (editorState.activeBuffer != null)
+          IconButton(
+            icon: const Icon(Icons.bug_report_outlined, size: 20),
+            tooltip: 'AI 修 Bug',
+            onPressed: _fixBug,
           ),
         // 重做
         IconButton(
@@ -625,6 +848,396 @@ class ExplainCodeSheet extends StatelessWidget {
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: colorScheme.primary,
+      ),
+    );
+  }
+}
+
+/// AI 修正 Bug — 错误日志输入对话框
+class _BugErrorDialog extends StatefulWidget {
+  @override
+  State<_BugErrorDialog> createState() => _BugErrorDialogState();
+}
+
+class _BugErrorDialogState extends State<_BugErrorDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('粘贴错误日志'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: TextField(
+          controller: _controller,
+          maxLines: 8,
+          decoration: InputDecoration(
+            hintText: '请粘贴编译错误、运行时异常或报错日志...',
+            filled: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('分析修复'),
+        ),
+      ],
+    );
+  }
+}
+
+/// 重构代码结果 BottomSheet
+class _RefactorCodeSheet extends StatelessWidget {
+  final RefactorResult result;
+  final VoidCallback? onClose;
+
+  const _RefactorCodeSheet({
+    required this.result,
+    this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.55,
+      minChildSize: 0.3,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.all(16),
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.refresh, color: colorScheme.primary, size: 20),
+                  const SizedBox(width: 8),
+                  Text('AI 重构建议', style: theme.textTheme.titleMedium),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: onClose ?? () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const Divider(),
+
+              // 重构说明
+              if (result.explanation.isNotEmpty) ...[
+                Text('重构说明',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: colorScheme.primary)),
+                const SizedBox(height: 4),
+                Text(result.explanation, style: theme.textTheme.bodyMedium),
+                const SizedBox(height: 16),
+              ],
+
+              // 变更列表
+              if (result.changes.isNotEmpty) ...[
+                Text('变更清单',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: colorScheme.primary)),
+                const SizedBox(height: 4),
+                ...result.changes.asMap().entries.map((e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${e.key + 1}. ', style: theme.textTheme.bodySmall),
+                      Expanded(
+                        child: Text(e.value, style: theme.textTheme.bodySmall),
+                      ),
+                    ],
+                  ),
+                )),
+                const SizedBox(height: 16),
+              ],
+
+              // 重构后的代码
+              if (result.refactoredCode.isNotEmpty) ...[
+                Text('重构后代码',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: colorScheme.primary)),
+                const SizedBox(height: 4),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade900,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SelectableText(
+                    result.refactoredCode,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      color: Colors.white,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+
+              if (result.hasError && result.errorMessage != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(result.errorMessage!,
+                    style: TextStyle(color: colorScheme.error)),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 测试生成结果 BottomSheet
+class _TestGenSheet extends StatelessWidget {
+  final TestGenResult result;
+  final VoidCallback? onClose;
+
+  const _TestGenSheet({
+    required this.result,
+    this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.55,
+      minChildSize: 0.3,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.all(16),
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.science_outlined, color: colorScheme.primary, size: 20),
+                  const SizedBox(width: 8),
+                  Text('AI 生成测试', style: theme.textTheme.titleMedium),
+                  const Spacer(),
+                  if (result.testFileName.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(result.testFileName,
+                        style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+                    ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: onClose ?? () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const Divider(),
+
+              if (result.isValid) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade900,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SelectableText(
+                    result.testCode,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      color: Colors.white,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+
+              if (result.hasError && result.errorMessage != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(result.errorMessage!,
+                    style: TextStyle(color: colorScheme.error)),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// AI 修 Bug 结果 BottomSheet
+class _FixBugSheet extends StatelessWidget {
+  final FixResult result;
+  final String language;
+  final VoidCallback? onClose;
+
+  const _FixBugSheet({
+    required this.result,
+    required this.language,
+    this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.5,
+      minChildSize: 0.3,
+      maxChildSize: 0.85,
+      expand: false,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.all(16),
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.bug_report_outlined, color: colorScheme.primary, size: 20),
+                  const SizedBox(width: 8),
+                  Text('AI 修复建议', style: theme.textTheme.titleMedium),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: onClose ?? () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const Divider(),
+
+              if (result.hasError && result.error != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(result.error!,
+                    style: TextStyle(color: colorScheme.error)),
+                ),
+              ],
+
+              if (result.hasSuggestions)
+                ...result.suggestions.map((s) => _buildSuggestionCard(s, colorScheme, theme)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSuggestionCard(FixSuggestion s, ColorScheme colorScheme, ThemeData theme) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.error_outline, size: 16, color: colorScheme.error),
+                const SizedBox(width: 6),
+                Text('错误原因', style: TextStyle(fontWeight: FontWeight.w600)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(s.reason, style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 8),
+
+            Row(
+              children: [
+                Icon(Icons.build_outlined, size: 16, color: colorScheme.primary),
+                const SizedBox(width: 6),
+                Text('修复方案', style: TextStyle(fontWeight: FontWeight.w600)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(s.description, style: theme.textTheme.bodySmall),
+            const SizedBox(height: 8),
+
+            if (s.hasValidPatch) ...[
+              Row(
+                children: [
+                  Icon(Icons.code, size: 16, color: colorScheme.tertiary),
+                  const SizedBox(width: 6),
+                  Text('修复代码', style: TextStyle(fontWeight: FontWeight.w600)),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade900,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: SelectableText(
+                  s.patch,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    color: Colors.white,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
