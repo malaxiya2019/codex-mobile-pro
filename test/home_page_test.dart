@@ -11,20 +11,17 @@ void main() {
       SharedPreferences.setMockInitialValues({'app_locale': 'zh_CN'});
     });
     testWidgets('首页正确渲染', (tester) async {
+      final notifier = LocaleNotifier();
+      notifier.state = AppLanguage.zhCN;
+
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            localeProvider.overrideWith((ref) {
-              final notifier = LocaleNotifier();
-              notifier.state = AppLanguage.zhCN;
-              return notifier;
-            }),
+            localeProvider.overrideWith((ref) => notifier),
           ],
           child: const CodexMobileApp(),
         ),
       );
-      // drain microtasks 确保 _loadSavedLocale() 完成
-      await Future(() {});
       await tester.pump();
       await tester.pump(const Duration(seconds: 2));
 
@@ -36,20 +33,17 @@ void main() {
     });
 
     testWidgets('计数器交互正常', (tester) async {
+      final notifier = LocaleNotifier();
+      notifier.state = AppLanguage.zhCN;
+
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            localeProvider.overrideWith((ref) {
-              final notifier = LocaleNotifier();
-              notifier.state = AppLanguage.zhCN;
-              return notifier;
-            }),
+            localeProvider.overrideWith((ref) => notifier),
           ],
           child: const CodexMobileApp(),
         ),
       );
-      // drain microtasks
-      await Future(() {});
       await tester.pump();
       await tester.pump(const Duration(seconds: 2));
 
