@@ -8,11 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('HomePage — Material 3 验证', () {
     setUp(() {
-      SharedPreferences.setMockInitialValues({'app_locale': 'zh_CN'});
+      SharedPreferences.setMockInitialValues({'app_locale': 'en_US'});
     });
     testWidgets('首页正确渲染', (tester) async {
       final notifier = LocaleNotifier();
-      notifier.state = AppLanguage.zhCN;
+      notifier.state = AppLanguage.enUS;
 
       await tester.pumpWidget(
         ProviderScope(
@@ -27,14 +27,14 @@ void main() {
 
       expect(find.text('Codex Mobile Pro'), findsOneWidget);
       expect(find.byType(NavigationBar), findsOneWidget);
-      expect(find.text('首页'), findsOneWidget);
+      expect(find.text('Home'), findsOneWidget);
       expect(find.text('AI'), findsOneWidget);
       expect(find.text('GitHub'), findsOneWidget);
     });
 
     testWidgets('计数器交互正常', (tester) async {
       final notifier = LocaleNotifier();
-      notifier.state = AppLanguage.zhCN;
+      notifier.state = AppLanguage.enUS;
 
       await tester.pumpWidget(
         ProviderScope(
