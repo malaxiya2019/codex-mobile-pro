@@ -1,6 +1,6 @@
-import '../../termux/termux_service.dart';
 import '../detection_result.dart';
 import '../detector.dart';
+import '../environment_service.dart';
 
 class Mimo2codexDetector extends Detector {
   @override
@@ -9,13 +9,16 @@ class Mimo2codexDetector extends Detector {
   String get name => 'mimo2codex';
   @override
   String get icon => '🔌';
+  @override
+  DetectorCategory get category => DetectorCategory.runtime;
 
   @override
   Future<DetectionResult> detect() async {
     final start = DateTime.now();
     try {
-      // 检查二进制
-      var result = await TermuxService.execute('which mimo2codex 2>/dev/null && mimo2codex --version 2>/dev/null');
+      var result = await EnvironmentService.detectTool(
+        'which mimo2codex 2>/dev/null && mimo2codex --version 2>/dev/null',
+      );
       var elapsed = DateTime.now().difference(start).inMilliseconds;
       if (result.isSuccess && result.stdout.isNotEmpty) {
         final lines = result.stdout.trim().split('\n');
@@ -25,11 +28,13 @@ class Mimo2codexDetector extends Detector {
           version: lines.length > 1 ? lines[1].trim() : null,
           path: lines.first.trim(),
           durationMs: elapsed,
+          category: category,
         );
       }
 
-      // 备选: npm global
-      result = await TermuxService.execute('npm list -g mimo2codex 2>/dev/null | grep mimo2codex');
+      result = await EnvironmentService.detectTool(
+        'npm list -g mimo2codex 2>/dev/null | grep mimo2codex',
+      );
       elapsed = DateTime.now().difference(start).inMilliseconds;
       if (result.isSuccess && result.stdout.isNotEmpty) {
         return DetectionResult(
@@ -37,11 +42,13 @@ class Mimo2codexDetector extends Detector {
           status: DetectionStatus.installed,
           version: 'npm global',
           durationMs: elapsed,
+          category: category,
         );
       }
 
-      // 检查端口 8788 是否在监听（表示正在运行）
-      result = await TermuxService.execute('lsof -i :8788 2>/dev/null | grep LISTEN || ss -tlnp 2>/dev/null | grep 8788 || netstat -tlnp 2>/dev/null | grep 8788');
+      result = await EnvironmentService.detectTool(
+        'lsof -i :8788 2>/dev/null | grep LISTEN || ss -tlnp 2>/dev/null | grep 8788 || netstat -tlnp 2>/dev/null | grep 8788',
+      );
       elapsed = DateTime.now().difference(start).inMilliseconds;
       if (result.isSuccess && result.stdout.isNotEmpty) {
         return DetectionResult(
@@ -49,6 +56,7 @@ class Mimo2codexDetector extends Detector {
           status: DetectionStatus.installed,
           version: '运行中 (端口 8788)',
           durationMs: elapsed,
+          category: category,
         );
       }
 
@@ -56,7 +64,7 @@ class Mimo2codexDetector extends Detector {
         id: id, name: name, icon: icon,
         status: DetectionStatus.missing,
         durationMs: elapsed,
-        errorMessage: '未安装 mimo2codex',
+        category: category,
       );
     } catch (e) {
       return DetectionResult(
@@ -64,6 +72,7 @@ class Mimo2codexDetector extends Detector {
         status: DetectionStatus.error,
         durationMs: DateTime.now().difference(start).inMilliseconds,
         errorMessage: e.toString(),
+        category: category,
       );
     }
   }

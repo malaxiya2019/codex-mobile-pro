@@ -1,6 +1,6 @@
-import '../../termux/termux_service.dart';
 import '../detection_result.dart';
 import '../detector.dart';
+import '../environment_service.dart';
 
 class NodeDetector extends Detector {
   @override
@@ -9,12 +9,16 @@ class NodeDetector extends Detector {
   String get name => 'Node.js';
   @override
   String get icon => '🟢';
+  @override
+  DetectorCategory get category => DetectorCategory.runtime;
 
   @override
   Future<DetectionResult> detect() async {
     final start = DateTime.now();
     try {
-      final result = await TermuxService.execute('which node 2>/dev/null && node --version 2>/dev/null');
+      final result = await EnvironmentService.detectTool(
+        'which node 2>/dev/null && node --version 2>/dev/null',
+      );
       final elapsed = DateTime.now().difference(start).inMilliseconds;
       if (result.isSuccess && result.stdout.isNotEmpty) {
         final lines = result.stdout.trim().split('\n');
@@ -24,13 +28,14 @@ class NodeDetector extends Detector {
           version: lines.length > 1 ? lines[1].trim() : null,
           path: lines.first.trim(),
           durationMs: elapsed,
+          category: category,
         );
       }
       return DetectionResult(
         id: id, name: name, icon: icon,
         status: DetectionStatus.missing,
         durationMs: elapsed,
-        errorMessage: '未安装 Node.js',
+        category: category,
       );
     } catch (e) {
       return DetectionResult(
@@ -38,6 +43,7 @@ class NodeDetector extends Detector {
         status: DetectionStatus.error,
         durationMs: DateTime.now().difference(start).inMilliseconds,
         errorMessage: e.toString(),
+        category: category,
       );
     }
   }

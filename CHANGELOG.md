@@ -2,7 +2,54 @@
 
 ## [Unreleased]
 
+## [Unreleased]
+
+### 🔧 Sprint 0：基础环境修复
+
+#### 🐛 终端启动问题修复（P1+P4+P5+P6）
+- `lib/core/termux/shell_detector.dart` — **新建** `ShellDetector` 类，自动检测可用 Shell
+  - 优先级：Termux Bash → bash → sh → /system/bin/sh
+  - 提供 `ShellInfo`、`ShellType` 枚举、友好的中文描述
+  - 提供 `getTermuxEnvironment()` 确保环境变量正确加载
+- `lib/features/terminal/services/terminal_service.dart` — **重写** 不再硬编码 `/system/bin/sh -c bash`
+  - 全部通过 `ShellDetector.detect()` 获取 Shell 路径
+  - 增加完整诊断日志：Shell 类型/路径/PATH/HOME/PREFIX/PID/ExitCode/StackTrace
+- `lib/features/terminal/providers/terminal_provider.dart` — **重写** 适配异步创建
+  - 新增 `ShellInfo`/`shellDowngradeMessage` 状态
+  - 友好中文降级提示
+
+#### 🐛 环境检测误判修复（P2）
+- `lib/core/detector/environment_service.dart` — **新建** `EnvironmentService`
+  - 所有检测通过 Termux Shell 环境执行，而非 Android App 自身 PATH
+  - 自动检测 Termux 环境，设置完整环境变量
+  - 自动降级机制
+- 所有 10 个 `detectors/*.dart` — **重写** 改用 `EnvironmentService.detectTool()`
+  - 全部添加 `category` getter，区分 Runtime/Development
+
+#### 💄 部署中心分类修复（P3）
+- `lib/core/detector/detector.dart` — **更新** 新增 `DetectorCategory` 枚举、`missingHint` 字段（默认 null）
+- `lib/core/detector/detection_result.dart` — **更新** 新增 `category`、`missingHint` 字段
+- `lib/core/detector/detector_service.dart` — **更新** 新增 `groupByCategory()` 静态方法
+- `lib/features/deploy/providers/deploy_provider.dart` — **更新** 新增 Runtime/Development 分类统计
+- `lib/features/deploy/views/deploy_page.dart` — **重写** 分类展示：
+  - Runtime 缺失 → 红色，Development 缺失 → 黄色
+  - 显示 "Flutter SDK（可选，用于 Flutter 开发）" 友好提示
+  - 状态摘要区分 Runtime/Dev 统计
+
+#### 🧪 新增测试（P7）
+- `test/shell_detector_test.dart` — **新建** Shell 检测模型测试
+- `test/environment_service_test.dart` — **新建** 环境服务测试
+- `test/terminal_service_test.dart` — **更新** 适配新 TerminalSession API
+- `test/detector_service_test.dart` — **更新** 添加 category/missingHint 测试
+
+#### 📝 文档
+- 更新 CHANGELOG.md
+- 更新 Sprint 0 开发报告
+
+---
+
 ### 🏗️ Sprint 6：代码编辑器与 GitHub 深度集成 ✅
+：代码编辑器与 GitHub 深度集成 ✅
 
 #### 📝 代码编辑器
 - `features/editor/providers/editor_provider.dart` — 编辑器状态管理（Tab/光标/编辑/查找替换/自动保存）

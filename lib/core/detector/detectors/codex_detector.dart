@@ -1,6 +1,6 @@
-import '../../termux/termux_service.dart';
 import '../detection_result.dart';
 import '../detector.dart';
+import '../environment_service.dart';
 
 class CodexDetector extends Detector {
   @override
@@ -9,13 +9,16 @@ class CodexDetector extends Detector {
   String get name => 'Codex CLI';
   @override
   String get icon => '🤖';
+  @override
+  DetectorCategory get category => DetectorCategory.runtime;
 
   @override
   Future<DetectionResult> detect() async {
     final start = DateTime.now();
     try {
-      // 直接 which codex
-      var result = await TermuxService.execute('which codex 2>/dev/null && codex --version 2>/dev/null');
+      var result = await EnvironmentService.detectTool(
+        'which codex 2>/dev/null && codex --version 2>/dev/null',
+      );
       var elapsed = DateTime.now().difference(start).inMilliseconds;
       if (result.isSuccess && result.stdout.isNotEmpty) {
         final lines = result.stdout.trim().split('\n');
@@ -25,11 +28,13 @@ class CodexDetector extends Detector {
           version: lines.length > 1 ? lines[1].trim() : null,
           path: lines.first.trim(),
           durationMs: elapsed,
+          category: category,
         );
       }
 
-      // 备选: npm global
-      result = await TermuxService.execute('npm list -g @openai/codex 2>/dev/null | grep codex');
+      result = await EnvironmentService.detectTool(
+        'npm list -g @openai/codex 2>/dev/null | grep codex',
+      );
       elapsed = DateTime.now().difference(start).inMilliseconds;
       if (result.isSuccess && result.stdout.isNotEmpty) {
         return DetectionResult(
@@ -37,18 +42,21 @@ class CodexDetector extends Detector {
           status: DetectionStatus.installed,
           version: 'npm global',
           durationMs: elapsed,
+          category: category,
         );
       }
 
-      // 备选: .local/lib/codex
-      result = await TermuxService.execute('ls ~/.local/lib/codex/bin/codex 2>/dev/null');
+      result = await EnvironmentService.detectTool(
+        'ls ~/.local/share/codex/bin/codex 2>/dev/null || ls ~/.local/lib/codex/bin/codex 2>/dev/null',
+      );
       elapsed = DateTime.now().difference(start).inMilliseconds;
       if (result.isSuccess && result.stdout.isNotEmpty) {
         return DetectionResult(
           id: id, name: name, icon: icon,
           status: DetectionStatus.installed,
-          path: '~/.local/lib/codex/bin/codex',
+          path: result.stdout.trim(),
           durationMs: elapsed,
+          category: category,
         );
       }
 
@@ -56,7 +64,7 @@ class CodexDetector extends Detector {
         id: id, name: name, icon: icon,
         status: DetectionStatus.missing,
         durationMs: elapsed,
-        errorMessage: '未安装 Codex CLI',
+        category: category,
       );
     } catch (e) {
       return DetectionResult(
@@ -64,6 +72,7 @@ class CodexDetector extends Detector {
         status: DetectionStatus.error,
         durationMs: DateTime.now().difference(start).inMilliseconds,
         errorMessage: e.toString(),
+        category: category,
       );
     }
   }

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/detector/detection_result.dart';
 import '../../../core/detector/detector_service.dart';
+import '../../../core/detector/detector.dart';
 
 /// 检测状态
 enum DeployState {
@@ -48,11 +49,37 @@ class DeployStatus {
   /// 缺失数量
   int get missingCount => results.where((r) => r.status == DetectionStatus.missing).length;
 
+  /// Runtime 类结果
+  List<DetectionResult> get runtimeResults =>
+      results.where((r) => r.category == DetectorCategory.runtime).toList();
+
+  /// Development 类结果
+  List<DetectionResult> get developmentResults =>
+      results.where((r) => r.category == DetectorCategory.development).toList();
+
+  /// Runtime 已安装数量
+  int get runtimeInstalled =>
+      runtimeResults.where((r) => r.status == DetectionStatus.installed).length;
+
+  /// Runtime 缺失数量
+  int get runtimeMissing =>
+      runtimeResults.where((r) => r.status == DetectionStatus.missing).length;
+
+  /// Development 已安装数量
+  int get developmentInstalled =>
+      developmentResults.where((r) => r.status == DetectionStatus.installed).length;
+
+  /// Development 缺失数量
+  int get developmentMissing =>
+      developmentResults.where((r) => r.status == DetectionStatus.missing).length;
+
   /// 总进度百分比
   double get progressPercent => results.isEmpty ? 0 : installedCount / totalDetectors;
 
   /// 是否所有工具都已安装
-  bool get allInstalled => results.length == totalDetectors && results.every((r) => r.status == DetectionStatus.installed);
+  bool get allInstalled =>
+      results.length == totalDetectors &&
+      results.every((r) => r.status == DetectionStatus.installed);
 
   /// 摘要文字
   String get summary {
@@ -61,12 +88,20 @@ class DeployStatus {
     if (state == DeployState.error) return '检测出错: $errorMessage';
     final pct = (progressPercent * 100).toInt();
     if (allInstalled) return '🎉 全部就绪！';
-    return '✅ $installedCount/$totalDetectors 已安装 ($pct%)，❌ $missingCount 缺失';
+    final parts = <String>[];
+    if (runtimeResults.isNotEmpty) {
+      parts.add('Runtime: ✅ $runtimeInstalled ❌ $runtimeMissing');
+    }
+    if (developmentResults.isNotEmpty) {
+      parts.add('Dev: ✅ $developmentInstalled ❌ $developmentMissing');
+    }
+    return '✅ $installedCount/$totalDetectors 已安装 ($pct%)\n${parts.join(" | ")}';
   }
 }
 
 /// 部署中心 Provider
-final deployStatusProvider = StateNotifierProvider<DeployNotifier, DeployStatus>((ref) {
+final deployStatusProvider =
+    StateNotifierProvider<DeployNotifier, DeployStatus>((ref) {
   return DeployNotifier();
 });
 
@@ -88,14 +123,15 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
 
   /// 开始检测所有工具
   Future<void> checkAll() async {
-    state = state.copyWith(state: DeployState.checking, results: [], errorMessage: null);
+    state = state.copyWith(
+        state: DeployState.checking, results: [], errorMessage: null);
 
     final service = _getService();
     final results = <DetectionResult>[];
 
-    // 逐个检测（而不是并行），让 UI 实时显示进度
+    // 逐个检测，让 UI 实时显示进度
     for (final id in service.detectorIds) {
-      // 先添加一个"检测中"占位
+      // 先添加"检测中"占位
       final detector = service.getDetector(id);
       if (detector != null) {
         results.add(DetectionResult(
@@ -103,6 +139,8 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
           name: detector.name,
           icon: detector.icon,
           status: DetectionStatus.checking,
+          category: detector.category,
+          missingHint: detector.missingHint,
         ));
         state = state.copyWith(results: List.from(results));
       }

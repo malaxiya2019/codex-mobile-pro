@@ -1,3 +1,5 @@
+import 'detector.dart';
+
 /// 工具检测状态
 enum DetectionStatus {
   installed,    // ✅ 已安装
@@ -17,6 +19,8 @@ class DetectionResult {
   final String? path;
   final String? errorMessage;
   final int durationMs;
+  final DetectorCategory category;
+  final String? missingHint;
 
   const DetectionResult({
     required this.id,
@@ -27,6 +31,8 @@ class DetectionResult {
     this.path,
     this.errorMessage,
     this.durationMs = 0,
+    this.category = DetectorCategory.runtime,
+    this.missingHint,
   });
 
   DetectionResult copyWith({
@@ -35,6 +41,8 @@ class DetectionResult {
     String? path,
     String? errorMessage,
     int? durationMs,
+    DetectorCategory? category,
+    String? missingHint,
   }) {
     return DetectionResult(
       id: id,
@@ -45,6 +53,8 @@ class DetectionResult {
       path: path ?? this.path,
       errorMessage: errorMessage ?? this.errorMessage,
       durationMs: durationMs ?? this.durationMs,
+      category: category ?? this.category,
+      missingHint: missingHint ?? this.missingHint,
     );
   }
 
@@ -68,15 +78,15 @@ class DetectionResult {
   int get statusColor {
     switch (status) {
       case DetectionStatus.installed:
-        return 0xFF4CAF50; // green
+        return 0xFF4CAF50;
       case DetectionStatus.missing:
-        return 0xFFF44336; // red
+        return 0xFFF44336;
       case DetectionStatus.checking:
-        return 0xFFFF9800; // orange
+        return 0xFFFF9800;
       case DetectionStatus.error:
-        return 0xFFFF9800; // orange
+        return 0xFFFF9800;
       case DetectionStatus.unknown:
-        return 0xFF9E9E9E; // grey
+        return 0xFF9E9E9E;
     }
   }
 

@@ -93,4 +93,17 @@ class DetectorService {
       'errors': errors,
     };
   }
+
+  /// 按类别分组
+  static Map<DetectorCategory, List<DetectionResult>> groupByCategory(
+      List<DetectionResult> results) {
+    final grouped = <DetectorCategory, List<DetectionResult>>{
+      DetectorCategory.runtime: [],
+      DetectorCategory.development: [],
+    };
+    for (final r in results) {
+      grouped[r.category]?.add(r);
+    }
+    return grouped;
+  }
 }

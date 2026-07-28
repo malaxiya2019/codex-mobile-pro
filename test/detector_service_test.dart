@@ -3,14 +3,16 @@ import 'package:codex_mobile_pro/core/detector/detection_result.dart';
 import 'package:codex_mobile_pro/core/detector/detector.dart';
 import 'package:codex_mobile_pro/core/detector/detector_service.dart';
 
-/// 模拟检测器 — 已安装
-class MockInstalledDetector extends Detector {
+/// 模拟检测器 — 已安装（Runtime）
+class MockInstalledRuntimeDetector extends Detector {
   @override
-  String get id => 'mock_installed';
+  String get id => 'mock_runtime_installed';
   @override
-  String get name => 'Mock Installed';
+  String get name => 'Mock Runtime';
   @override
   String get icon => '🧪';
+  @override
+  DetectorCategory get category => DetectorCategory.runtime;
 
   @override
   Future<DetectionResult> detect() async {
@@ -20,6 +22,34 @@ class MockInstalledDetector extends Detector {
       version: '1.0.0',
       path: '/usr/bin/mock',
       durationMs: 10,
+      category: category,
+    );
+  }
+}
+
+/// 模拟检测器 — 已安装（Development）
+class MockInstalledDevDetector extends Detector {
+  @override
+  String get id => 'mock_dev_installed';
+  @override
+  String get name => 'Mock Dev';
+  @override
+  String get icon => '🛠';
+  @override
+  DetectorCategory get category => DetectorCategory.development;
+  @override
+  String? get missingHint => 'Mock Dev（可选，用于开发）';
+
+  @override
+  Future<DetectionResult> detect() async {
+    return DetectionResult(
+      id: id, name: name, icon: icon,
+      status: DetectionStatus.installed,
+      version: '2.0.0',
+      path: '/opt/mock',
+      durationMs: 10,
+      category: category,
+      missingHint: missingHint,
     );
   }
 }
@@ -32,6 +62,8 @@ class MockMissingDetector extends Detector {
   String get name => 'Mock Missing';
   @override
   String get icon => '🧪';
+  @override
+  DetectorCategory get category => DetectorCategory.runtime;
 
   @override
   Future<DetectionResult> detect() async {
@@ -40,6 +72,7 @@ class MockMissingDetector extends Detector {
       status: DetectionStatus.missing,
       errorMessage: '未安装',
       durationMs: 5,
+      category: category,
     );
   }
 }
@@ -52,14 +85,17 @@ class MockErrorDetector extends Detector {
   String get name => 'Mock Error';
   @override
   String get icon => '🧪';
+  @override
+  DetectorCategory get category => DetectorCategory.development;
 
   @override
   Future<DetectionResult> detect() async {
     return DetectionResult(
       id: id, name: name, icon: icon,
       status: DetectionStatus.error,
-      errorMessage: '检测过程中抛出异常',
+      errorMessage: '检测异常',
       durationMs: 0,
+      category: category,
     );
   }
 }
@@ -72,15 +108,18 @@ void main() {
         status: DetectionStatus.installed,
         version: '1.0.0',
         path: '/usr/bin/test',
+        category: DetectorCategory.runtime,
       );
       expect(result.statusIcon, '✅');
       expect(result.status, DetectionStatus.installed);
+      expect(result.category, DetectorCategory.runtime);
     });
 
     test('missing 状态正确', () {
       final result = DetectionResult(
         id: 'test', name: 'Test', icon: '🧪',
         status: DetectionStatus.missing,
+        category: DetectorCategory.runtime,
       );
       expect(result.statusIcon, '❌');
     });
@@ -89,10 +128,16 @@ void main() {
       final result = DetectionResult(
         id: 'test', name: 'Test', icon: '🧪',
         status: DetectionStatus.missing,
+        category: DetectorCategory.development,
       );
-      final updated = result.copyWith(status: DetectionStatus.installed, version: '2.0');
+      final updated = result.copyWith(
+        status: DetectionStatus.installed,
+        version: '2.0',
+        category: DetectorCategory.runtime,
+      );
       expect(updated.status, DetectionStatus.installed);
       expect(updated.version, '2.0');
+      expect(updated.category, DetectorCategory.runtime);
       // 原始对象不变
       expect(result.status, DetectionStatus.missing);
     });
@@ -103,6 +148,7 @@ void main() {
         status: DetectionStatus.installed,
         version: '2.47.1',
         path: '/usr/bin/git',
+        category: DetectorCategory.runtime,
       );
       final str = result.toString();
       expect(str, contains('✅'));
@@ -112,58 +158,124 @@ void main() {
     });
 
     test('statusColor 返回正确颜色值', () {
-      final installed = DetectionResult(id: 't', name: 'T', icon: '🧪', status: DetectionStatus.installed);
-      final missing = DetectionResult(id: 't', name: 'T', icon: '🧪', status: DetectionStatus.missing);
+      final installed = DetectionResult(
+        id: 't', name: 'T', icon: '🧪',
+        status: DetectionStatus.installed,
+        category: DetectorCategory.runtime,
+      );
+      final missing = DetectionResult(
+        id: 't', name: 'T', icon: '🧪',
+        status: DetectionStatus.missing,
+        category: DetectorCategory.runtime,
+      );
       expect(installed.statusColor, 0xFF4CAF50);
       expect(missing.statusColor, 0xFFF44336);
+    });
+
+    test('category 传递正确', () {
+      final runtime = DetectionResult(
+        id: 't', name: 'T', icon: '🧪',
+        status: DetectionStatus.installed,
+        category: DetectorCategory.runtime,
+      );
+      final dev = DetectionResult(
+        id: 't', name: 'T', icon: '🧪',
+        status: DetectionStatus.installed,
+        category: DetectorCategory.development,
+      );
+      expect(runtime.category, DetectorCategory.runtime);
+      expect(dev.category, DetectorCategory.development);
+    });
+
+    test('missingHint 传递正确', () {
+      final result = DetectionResult(
+        id: 'flutter', name: 'Flutter SDK', icon: '🦋',
+        status: DetectionStatus.missing,
+        category: DetectorCategory.development,
+        missingHint: 'Flutter SDK（可选，用于 Flutter 开发）',
+      );
+      expect(result.missingHint, 'Flutter SDK（可选，用于 Flutter 开发）');
+    });
+  });
+
+  group('Detector', () {
+    test('Runtime 检测器 category 正确', () {
+      final detector = MockInstalledRuntimeDetector();
+      expect(detector.category, DetectorCategory.runtime);
+    });
+
+    test('Development 检测器 category 正确', () {
+      final detector = MockInstalledDevDetector();
+      expect(detector.category, DetectorCategory.development);
+      expect(detector.missingHint, 'Mock Dev（可选，用于开发）');
     });
   });
 
   group('DetectorService', () {
     test('custom 检测器列表工作正常', () async {
       final service = DetectorService.custom([
-        MockInstalledDetector(),
+        MockInstalledRuntimeDetector(),
         MockMissingDetector(),
       ]);
       final results = await service.detectAll();
       expect(results.length, 2);
       expect(results[0].status, DetectionStatus.installed);
+      expect(results[0].category, DetectorCategory.runtime);
       expect(results[1].status, DetectionStatus.missing);
     });
 
     test('detectOne 返回正确检测器结果', () async {
-      final service = DetectorService.custom([MockInstalledDetector()]);
-      final result = await service.detectOne('mock_installed');
+      final service = DetectorService.custom([MockInstalledRuntimeDetector()]);
+      final result = await service.detectOne('mock_runtime_installed');
       expect(result, isNotNull);
       expect(result!.status, DetectionStatus.installed);
     });
 
     test('detectOne 返回 null 对于不存在的 id', () async {
-      final service = DetectorService.custom([MockInstalledDetector()]);
+      final service = DetectorService.custom([MockInstalledRuntimeDetector()]);
       final result = await service.detectOne('nonexistent');
       expect(result, isNull);
     });
 
     test('detectorIds 返回正确列表', () {
-      final service = DetectorService.custom([MockInstalledDetector(), MockMissingDetector()]);
-      expect(service.detectorIds, ['mock_installed', 'mock_missing']);
+      final service = DetectorService.custom([
+        MockInstalledRuntimeDetector(),
+        MockMissingDetector(),
+      ]);
+      expect(service.detectorIds, ['mock_runtime_installed', 'mock_missing']);
     });
 
     test('getDetector 返回正确检测器', () {
-      final service = DetectorService.custom([MockInstalledDetector()]);
-      final detector = service.getDetector('mock_installed');
+      final service = DetectorService.custom([MockInstalledRuntimeDetector()]);
+      final detector = service.getDetector('mock_runtime_installed');
       expect(detector, isNotNull);
-      expect(detector!.name, 'Mock Installed');
+      expect(detector!.name, 'Mock Runtime');
     });
   });
 
   group('DetectorService.summarize', () {
     test('正确统计 installed / missing / error', () {
       final results = [
-        DetectionResult(id: 'a', name: 'A', icon: '🧪', status: DetectionStatus.installed),
-        DetectionResult(id: 'b', name: 'B', icon: '🧪', status: DetectionStatus.installed),
-        DetectionResult(id: 'c', name: 'C', icon: '🧪', status: DetectionStatus.missing),
-        DetectionResult(id: 'd', name: 'D', icon: '🧪', status: DetectionStatus.error),
+        DetectionResult(
+          id: 'a', name: 'A', icon: '🧪',
+          status: DetectionStatus.installed,
+          category: DetectorCategory.runtime,
+        ),
+        DetectionResult(
+          id: 'b', name: 'B', icon: '🧪',
+          status: DetectionStatus.installed,
+          category: DetectorCategory.runtime,
+        ),
+        DetectionResult(
+          id: 'c', name: 'C', icon: '🧪',
+          status: DetectionStatus.missing,
+          category: DetectorCategory.runtime,
+        ),
+        DetectionResult(
+          id: 'd', name: 'D', icon: '🧪',
+          status: DetectionStatus.error,
+          category: DetectorCategory.development,
+        ),
       ];
       final summary = DetectorService.summarize(results);
       expect(summary['total'], 4);
@@ -180,12 +292,34 @@ void main() {
     });
   });
 
-  group('DeployStatus', () {
-    // 测试 DeployStatus 逻辑
-    test('默认状态', () {
-      // 这个需要引入 deploy_provider.dart，暂时跳过
-      // 实际测试在集成测试中验证
-      expect(true, isTrue);
+  group('DetectorService.groupByCategory', () {
+    test('按类别正确分组', () {
+      final results = [
+        DetectionResult(
+          id: 'node', name: 'Node.js', icon: '🟢',
+          status: DetectionStatus.installed,
+          category: DetectorCategory.runtime,
+        ),
+        DetectionResult(
+          id: 'flutter', name: 'Flutter SDK', icon: '🦋',
+          status: DetectionStatus.missing,
+          category: DetectorCategory.development,
+        ),
+        DetectionResult(
+          id: 'git', name: 'Git', icon: '🔀',
+          status: DetectionStatus.installed,
+          category: DetectorCategory.runtime,
+        ),
+      ];
+      final grouped = DetectorService.groupByCategory(results);
+      expect(grouped[DetectorCategory.runtime]!.length, 2);
+      expect(grouped[DetectorCategory.development]!.length, 1);
+    });
+
+    test('空列表分组', () {
+      final grouped = DetectorService.groupByCategory([]);
+      expect(grouped[DetectorCategory.runtime], isEmpty);
+      expect(grouped[DetectorCategory.development], isEmpty);
     });
   });
 }

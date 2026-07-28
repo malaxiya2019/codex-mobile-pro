@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/terminal_service.dart';
+import '../../../core/termux/shell_detector.dart';
 
 /// 终端状态
 class TerminalState {
@@ -12,11 +13,19 @@ class TerminalState {
   /// 当前导航索引（-1 表示新输入）
   final Map<String, int> historyIndex;
 
+  /// 当前使用的 Shell 信息
+  final ShellInfo? shellInfo;
+
+  /// Shell 降级消息（仅在非 Termux Bash 时显示）
+  final String? shellDowngradeMessage;
+
   const TerminalState({
     this.sessions = const [],
     this.activeSessionId,
     this.commandHistory = const {},
     this.historyIndex = const {},
+    this.shellInfo,
+    this.shellDowngradeMessage,
   });
 
   TerminalSession? get activeSession {
@@ -47,6 +56,9 @@ class TerminalState {
     bool clearActive = false,
     Map<String, List<String>>? commandHistory,
     Map<String, int>? historyIndex,
+    ShellInfo? shellInfo,
+    bool clearShellInfo = false,
+    String? shellDowngradeMessage,
   }) {
     return TerminalState(
       sessions: sessions ?? this.sessions,
@@ -55,11 +67,15 @@ class TerminalState {
           : (activeSessionId ?? this.activeSessionId),
       commandHistory: commandHistory ?? this.commandHistory,
       historyIndex: historyIndex ?? this.historyIndex,
+      shellInfo: clearShellInfo ? null : (shellInfo ?? this.shellInfo),
+      shellDowngradeMessage:
+          shellDowngradeMessage ?? this.shellDowngradeMessage,
     );
   }
 }
 
-final terminalProvider = StateNotifierProvider<TerminalNotifier, TerminalState>(
+final terminalProvider =
+    StateNotifierProvider<TerminalNotifier, TerminalState>(
   (ref) => TerminalNotifier(),
 );
 
@@ -67,11 +83,33 @@ class TerminalNotifier extends StateNotifier<TerminalState> {
   final TerminalService _service;
 
   TerminalNotifier()
-    : _service = TerminalService(),
-      super(const TerminalState());
+      : _service = TerminalService(),
+        super(const TerminalState()) {
+    // 初始化时检测 Shell
+    _initShell();
+  }
 
-  String createSession({String? name, String? cwd}) {
-    final session = _service.createSession(name: name, cwd: cwd);
+  Future<void> _initShell() async {
+    final shell = await _service.getShell();
+    final msg = _buildDowngradeMessage(shell);
+    state = state.copyWith(
+      shellInfo: shell,
+      shellDowngradeMessage: msg,
+    );
+  }
+
+  /// 构建友好的 Shell 降级提示
+  String? _buildDowngradeMessage(ShellInfo shell) {
+    if (shell.isTermuxBash) return null;
+    if (!shell.isAvailable) return '未检测到可用的 Shell 环境。';
+
+    return '当前未检测到 Termux Bash，已自动切换到 ${shell.friendlyDescription}。\n'
+        '部分功能（PTY、tmux、Codex CLI）可能不可用。';
+  }
+
+  /// 创建新终端会话（异步）
+  Future<String> createSession({String? name, String? cwd}) async {
+    final session = await _service.createSession(name: name, cwd: cwd);
     final history = Map<String, List<String>>.from(state.commandHistory);
     final histIdx = Map<String, int>.from(state.historyIndex);
     history[session.id] = [];
