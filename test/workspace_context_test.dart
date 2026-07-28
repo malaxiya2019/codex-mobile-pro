@@ -12,13 +12,37 @@ import '../lib/features/editor/models/editor_models.dart';
 /// 测试用的 Mock Ref
 class _TestRef extends Ref<Object?> {
   @override
+  ProviderContainer get container => throw UnimplementedError('Not needed in tests');
+
+  @override
+  T refresh<T>(Refreshable<T> provider) => throw UnimplementedError('Not needed in tests');
+
+  @override
   void invalidate(ProviderOrFamily provider) {}
+
+  @override
+  void notifyListeners() {}
+
+  @override
+  void listenSelf(
+    void Function(Object? previous, Object? next) listener, {
+    void Function(Object error, StackTrace stackTrace)? onError,
+  }) {}
 
   @override
   void invalidateSelf() {}
 
   @override
-  bool get mounted => true;
+  void onAddListener(void Function() cb) {}
+
+  @override
+  void onRemoveListener(void Function() cb) {}
+
+  @override
+  void onResume(void Function() cb) {}
+
+  @override
+  void onCancel(void Function() cb) {}
 
   @override
   void onDispose(void Function() cb) {}
@@ -27,24 +51,35 @@ class _TestRef extends Ref<Object?> {
   void onMount(void Function() cb) {}
 
   @override
+  bool exists(ProviderBase<Object?> provider) => false;
+
+  @override
+  bool get mounted => true;
+
+  @override
   Ref<Object?> get parent => this;
 
   @override
   ProviderStateOwner? get owner => null;
 
   @override
-  Object? read(ProviderOrFamily<Object?> provider) => null;
+  T read<T>(ProviderListenable<T> provider) => throw UnimplementedError('Not needed in tests');
 
   @override
-  T listen<T>(ProviderListenable<T> provider, void Function(T? previous, T next) listener, {void Function()? onError, bool fireImmediately = false}) {
-    throw UnimplementedError();
+  T watch<T>(ProviderListenable<T> provider) => throw UnimplementedError('Not needed in tests');
+
+  @override
+  KeepAliveLink keepAlive() => throw UnimplementedError('Not needed in tests');
+
+  @override
+  ProviderSubscription<T> listen<T>(
+    ProviderListenable<T> provider,
+    void Function(T? previous, T next) listener, {
+    void Function(Object error, StackTrace stackTrace)? onError,
+    bool fireImmediately = false,
+  }) {
+    throw UnimplementedError('Not needed in tests');
   }
-
-  @override
-  T watch<T>(ProviderListenable<T> provider) => throw UnimplementedError();
-
-  @override
-  Iterable<ProviderOrFamily> get _dependencies => [];
 }
 
 /// 创建一个模拟的 Ref 对象用于测试
