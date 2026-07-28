@@ -12,6 +12,10 @@ void main() {
     });
 
     testWidgets('首页正确渲染', (tester) async {
+      // 增大测试屏幕高度，确保所有 ListView 子元素均可渲染
+      tester.binding.setSurfaceSize(const Size(800, 2000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
       final notifier = LocaleNotifier();
       notifier.state = AppLanguage.enUS;
 
@@ -34,6 +38,10 @@ void main() {
     });
 
     testWidgets('计数器交互正常', (tester) async {
+      // 增大测试屏幕高度，确保计数器 Card 可见
+      tester.binding.setSurfaceSize(const Size(800, 2000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
       final notifier = LocaleNotifier();
       notifier.state = AppLanguage.enUS;
 
@@ -47,12 +55,6 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(seconds: 2));
-
-      // 计数器 Card 在 ListView 中位置靠下，先滚动使其可见
-      // 使用 scrollUntilVisible 或直接拖动 ListView
-      await tester.drag(find.byType(ListView), const Offset(0, -400));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
 
       expect(find.text('0'), findsOneWidget);
 
