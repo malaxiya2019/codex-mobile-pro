@@ -193,6 +193,7 @@ class EnvironmentService {
       'LANG': 'zh_CN.UTF-8',
       'TERM': 'xterm-256color',
       'TMPDIR': '$_termuxPrefix/tmp',
+      'SHELL': '$_termuxPrefix/bin/bash',
     };
   }
 
