@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import '../../../core/ai/ai_provider.dart';
 
 /// 测试生成结果

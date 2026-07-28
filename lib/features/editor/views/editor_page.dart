@@ -229,7 +229,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
     }
 
     final code = buffer.text;
-    final fileName = buffer.filePath?.split('/').last ?? 'unknown.dart';
+    final fileName = buffer.filePath.split('/').last;
     final className = fileName.replaceAll('.dart', '');
 
     if (code.trim().isEmpty) {
@@ -324,7 +324,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
 
       final result = await engine.fixDiagnostic(
         diagnostic: fakeDiagnostic,
-        filePath: buffer.filePath ?? 'unknown.dart',
+        filePath: buffer.filePath,
         code: code,
         language: buffer.language.name,
       );
@@ -870,7 +870,7 @@ class _BugErrorDialogState extends State<_BugErrorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    // final theme = Theme.of(context);
     return AlertDialog(
       title: const Text('粘贴错误日志'),
       content: SizedBox(
