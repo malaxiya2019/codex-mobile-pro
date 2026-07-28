@@ -12,4 +12,5 @@ abstract class RouteNames {
   static const workspaceList = '/workspaces';
   static const workspaceCreate = '/workspaces/create';
   static const workspaceDetail = '/workspaces/:id';
+  static const terminal = '/terminal';
 }

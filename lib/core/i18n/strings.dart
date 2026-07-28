@@ -185,6 +185,29 @@ class Strings {
   String get projectTemplateRust => _t('Rust', 'Rust');
   String get projectTemplatePython => _t('Python', 'Python');
 
+  // ══════════════════════════════════════
+  //  终端
+  // ══════════════════════════════════════
+
+  String get terminalTitle => _t('终端', 'Terminal');
+  String get terminalNew => _t('新建终端', 'New Terminal');
+  String get terminalClose => _t('关闭终端', 'Close Terminal');
+  String get terminalClear => _t('清除所有', 'Clear All');
+  String get terminalInputHint => _t('输入命令...', 'Type a command...');
+  String get terminalNoSession => _t('点击 + 新建终端', 'Tap + to create a terminal');
+  String get terminalExit => _t('进程退出', 'Process exited');
+  String get terminalCwd => _t('当前目录', 'Current directory');
+
+  // ══════════════════════════════════════
+  //  快捷命令
+  // ══════════════════════════════════════
+
+  String get quickCommands => _t('快捷命令', 'Quick Commands');
+  String get quickCommandsFavorites => _t('收藏', 'Favorites');
+  String get quickCommandsAll => _t('全部', 'All');
+  String get quickCommandsExecute => _t('执行', 'Execute');
+  String get quickCommandsEmpty => _t('暂无命令', 'No commands');
+
   // ── 内部辅助 ──
 
   String _t(String zh, String en) {

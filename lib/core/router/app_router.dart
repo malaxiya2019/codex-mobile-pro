@@ -7,6 +7,7 @@ import '../../features/ai/views/ai_chat_page.dart';
 import '../../features/settings/views/theme_settings_page.dart';
 import '../../features/settings/views/locale_settings_page.dart';
 import '../../features/workspace/views/workspace_list_page.dart';
+import '../../features/terminal/views/terminal_page.dart';
 import 'route_guard.dart';
 import 'route_names.dart';
 
@@ -18,14 +19,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: RouteNames.home,
 
     // ── 路由守卫 ──
-    // 每次导航前检查权限
     redirect: (context, state) {
       final path = state.uri.path;
       final redirectPath = RoutePermissions.getRedirectPath(path, auth);
       if (redirectPath != null) {
         return redirectPath;
       }
-      return null; // 允许访问
+      return null;
     },
 
     routes: [
@@ -63,6 +63,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.workspaceList,
         name: 'workspaceList',
         builder: (context, state) => const WorkspaceListPage(),
+      ),
+      GoRoute(
+        path: RouteNames.terminal,
+        name: 'terminal',
+        builder: (context, state) => const TerminalPage(),
       ),
     ],
   );

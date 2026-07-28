@@ -122,6 +122,7 @@ class RoutePermissions {
       case RouteNames.themeSettings:
       case RouteNames.localeSettings:
       case RouteNames.workspaceList:
+      case RouteNames.terminal:
         return PermissionLevel.public;
 
       case RouteNames.deploy:
