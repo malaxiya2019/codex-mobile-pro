@@ -154,6 +154,37 @@ class Strings {
   String get workspaceQuickAi => _t('AI 编程', 'AI Code');
   String get workspaceQuickTerminal => _t('终端', 'Terminal');
 
+  // ══════════════════════════════════════
+  //  文件浏览
+  // ══════════════════════════════════════
+
+  String get fileBrowserTitle => _t('文件浏览器', 'File Browser');
+  String get fileBrowserEmpty => _t('此目录为空', 'This directory is empty');
+  String get fileBrowserError => _t('无法读取目录', 'Cannot read directory');
+  String get fileSearchNoResults => _t('未找到匹配的文件', 'No matching files');
+  String get fileSizeBytes => _t('B', ' B');
+  String get fileSizeKB => _t('KB', ' KB');
+  String get fileSizeMB => _t('MB', ' MB');
+  String get fileLoading => _t('加载中...', 'Loading...');
+  String get fileTooLarge =>
+      _t('文件过大，仅显示预览', 'File too large, showing preview');
+
+  // ══════════════════════════════════════
+  //  项目创建
+  // ══════════════════════════════════════
+
+  String get projectCreateTitle => _t('创建项目', 'Create Project');
+  String get projectNameHint => _t('项目名称', 'Project Name');
+  String get projectTemplateLabel => _t('选择模板', 'Select Template');
+  String get projectCreating => _t('正在创建...', 'Creating...');
+  String get projectCreated => _t('项目创建成功', 'Project Created');
+  String get projectFailed => _t('项目创建失败', 'Project Creation Failed');
+  String get projectSelectPath => _t('选择路径', 'Select Path');
+  String get projectPathHint => _t('项目存放路径', 'Project Path');
+  String get projectTemplateFlutter => _t('Flutter', 'Flutter');
+  String get projectTemplateRust => _t('Rust', 'Rust');
+  String get projectTemplatePython => _t('Python', 'Python');
+
   // ── 内部辅助 ──
 
   String _t(String zh, String en) {
