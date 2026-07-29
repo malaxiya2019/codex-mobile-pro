@@ -2,82 +2,37 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/features/terminal/services/terminal_service.dart';
 import 'package:codex_mobile_pro/core/termux/shell_detector.dart';
 
-/// 创建一个 Mock ShellInfo 用于测试
-ShellInfo _mockShellInfo({
-  ShellType type = ShellType.systemSh,
-  String path = '/system/bin/sh',
-  String version = 'sh (Android)',
-  bool termuxAccessible = false,
-}) {
-  return ShellInfo(
-    type: type,
-    shellPath: path,
-    version: version,
-    isTermuxAccessible: termuxAccessible,
-  );
-}
-
 void main() {
   group('ShellInfo', () {
-    test('Termux Bash 描述正确', () {
-      final info = _mockShellInfo(
-        type: ShellType.termuxBash,
-        path: '/data/data/com.termux/files/usr/bin/bash',
-        version: 'GNU bash, version 5.2.26',
-        termuxAccessible: true,
-      );
-      expect(info.friendlyDescription, 'Termux Bash');
-      expect(info.isAvailable, true);
-      expect(info.isTermuxBash, true);
-      expect(info.isTermuxAccessible, true);
-    });
-
-    test('系统 sh 描述正确', () {
-      final info = _mockShellInfo(
-        type: ShellType.systemSh,
-        path: '/system/bin/sh',
-      );
+    test('Android 系统 Shell 描述正确', () {
+      const info = ShellInfo();
       expect(info.friendlyDescription, 'Android 系统 Shell');
       expect(info.isAvailable, true);
       expect(info.isTermuxBash, false);
     });
 
-    test('unknown Shell 描述正确', () {
-      const info = ShellInfo(
-        type: ShellType.unknown,
-        shellPath: '',
-      );
-      expect(info.friendlyDescription, '无可用 Shell');
-      expect(info.isAvailable, false);
-    });
-
     test('toString 包含关键信息', () {
-      final info = _mockShellInfo(
-        type: ShellType.termuxBash,
-        path: '/data/data/com.termux/files/usr/bin/bash',
-        version: 'GNU bash, version 5.2.26',
-      );
+      const info = ShellInfo();
       final str = info.toString();
-      expect(str, contains('termuxBash'));
-      expect(str, contains('bash'));
-      expect(str, contains('5.2.26'));
+      expect(str, contains('systemSh'));
+      expect(str, contains('/system/bin/sh'));
     });
   });
 
   group('TerminalSession', () {
     test('创建会话', () {
-      final shellInfo = _mockShellInfo();
+      const shellInfo = ShellInfo();
       final session = TerminalSession(
         id: 'test-1',
         name: 'Test Terminal',
         shellInfo: shellInfo,
-        cwd: '/home',
+        cwd: '/data/data/com.example.app/files',
       );
 
       expect(session.id, 'test-1');
       expect(session.name, 'Test Terminal');
       expect(session.shellPath, '/system/bin/sh');
-      expect(session.cwd, '/home');
+      expect(session.cwd, '/data/data/com.example.app/files');
       expect(session.status, TerminalSessionStatus.running);
       expect(session.isDisposed, false);
       expect(session.outputBuffer, isEmpty);
@@ -85,10 +40,11 @@ void main() {
     });
 
     test('添加输出行', () {
+      const shellInfo = ShellInfo();
       final session = TerminalSession(
         id: 'test-1',
         name: 'Test',
-        shellInfo: _mockShellInfo(),
+        shellInfo: shellInfo,
         cwd: '/home',
       );
 
@@ -103,10 +59,11 @@ void main() {
     });
 
     test('输出文本拼接', () {
+      const shellInfo = ShellInfo();
       final session = TerminalSession(
         id: 'test-1',
         name: 'Test',
-        shellInfo: _mockShellInfo(),
+        shellInfo: shellInfo,
         cwd: '/home',
       );
 
@@ -118,10 +75,11 @@ void main() {
     });
 
     test('缓冲区限制', () {
+      const shellInfo = ShellInfo();
       final session = TerminalSession(
         id: 'test-1',
         name: 'Test',
-        shellInfo: _mockShellInfo(),
+        shellInfo: shellInfo,
         cwd: '/home',
       );
 
@@ -136,10 +94,11 @@ void main() {
     });
 
     test('已销毁的会话不添加输出', () {
+      const shellInfo = ShellInfo();
       final session = TerminalSession(
         id: 'test-1',
         name: 'Test',
-        shellInfo: _mockShellInfo(),
+        shellInfo: shellInfo,
         cwd: '/home',
       );
 
@@ -149,10 +108,11 @@ void main() {
     });
 
     test('写入命令不崩溃（无进程时）', () {
+      const shellInfo = ShellInfo();
       final session = TerminalSession(
         id: 'test-1',
         name: 'Test',
-        shellInfo: _mockShellInfo(),
+        shellInfo: shellInfo,
         cwd: '/home',
       );
 
@@ -160,10 +120,11 @@ void main() {
     });
 
     test('发送 Sigint 不崩溃（无进程时）', () {
+      const shellInfo = ShellInfo();
       final session = TerminalSession(
         id: 'test-1',
         name: 'Test',
-        shellInfo: _mockShellInfo(),
+        shellInfo: shellInfo,
         cwd: '/home',
       );
 
@@ -171,10 +132,11 @@ void main() {
     });
 
     test('销毁不崩溃', () async {
+      const shellInfo = ShellInfo();
       final session = TerminalSession(
         id: 'test-1',
         name: 'Test',
-        shellInfo: _mockShellInfo(),
+        shellInfo: shellInfo,
         cwd: '/home',
       );
 
@@ -187,10 +149,11 @@ void main() {
     });
 
     test('添加输出带换行符', () {
+      const shellInfo = ShellInfo();
       final session = TerminalSession(
         id: 'test-1',
         name: 'Test',
-        shellInfo: _mockShellInfo(),
+        shellInfo: shellInfo,
         cwd: '/home',
       );
 
@@ -202,10 +165,11 @@ void main() {
     });
 
     test('添加空行被过滤', () {
+      const shellInfo = ShellInfo();
       final session = TerminalSession(
         id: 'test-1',
         name: 'Test',
-        shellInfo: _mockShellInfo(),
+        shellInfo: shellInfo,
         cwd: '/home',
       );
 
@@ -216,10 +180,7 @@ void main() {
     });
 
     test('shellInfo 属性传递正确', () {
-      final shellInfo = _mockShellInfo(
-        type: ShellType.termuxBash,
-        path: '/data/data/com.termux/files/usr/bin/bash',
-      );
+      const shellInfo = ShellInfo();
       final session = TerminalSession(
         id: 'test-1',
         name: 'Test',
@@ -228,7 +189,17 @@ void main() {
       );
 
       expect(session.shellInfo, same(shellInfo));
-      expect(session.shellPath, '/data/data/com.termux/files/usr/bin/bash');
+      expect(session.shellPath, '/system/bin/sh');
+    });
+
+    test('ShellInfo 默认值一致', () {
+      const info1 = ShellInfo();
+      const info2 = ShellInfo();
+
+      expect(info1.type, info2.type);
+      expect(info1.shellPath, info2.shellPath);
+      expect(info1.launchArgs, info2.launchArgs);
+      expect(info1.useRunInShell, info2.useRunInShell);
     });
   });
 
@@ -236,23 +207,6 @@ void main() {
     test('创建后会话列表为空', () {
       final service = TerminalService();
       expect(service.sessions, isEmpty);
-    });
-
-    test('getShell 缓存检测结果', () async {
-      final service = TerminalService();
-      final shell1 = await service.getShell();
-      // 第二次获取应返回同一对象（缓存）
-      final shell2 = await service.getShell();
-      expect(shell2, same(shell1));
-    });
-
-    test('refreshShell 返回新结果', () async {
-      final service = TerminalService();
-      final shell1 = await service.getShell();
-      final shell2 = await service.refreshShell();
-      expect(shell2, isNotNull);
-      // refresh 可能返回不同对象
-      expect(shell2, isNot(same(shell1)));
     });
 
     test('获取不存在的会话返回 null', () {

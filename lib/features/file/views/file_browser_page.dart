@@ -29,7 +29,7 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
         // 默认路径
         ref
             .read(fileBrowserProvider.notifier)
-            .buildTree('/data/data/com.termux/files/home');
+            .buildTree('/storage/emulated/0');
       }
     });
   }

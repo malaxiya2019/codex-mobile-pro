@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/logger/log_service.dart';
 import '../../../core/termux/shell_detector.dart';
@@ -22,6 +23,9 @@ class TerminalLine {
 }
 
 /// 终端会话
+///
+/// 使用 Android 系统 Shell（/system/bin/sh）运行交互式终端。
+/// 不依赖 Termux，不访问其他 App 的数据目录。
 class TerminalSession {
   final String id;
   String name;
@@ -72,21 +76,20 @@ class TerminalSession {
 
     // ── 日志：启动前记录关键信息 ──
     LogService.info('Terminal', '启动会话 $id');
-    LogService.info('Terminal', '  Shell 类型: ${shellInfo.type}');
-    LogService.info('Terminal', '  Shell 路径: ${shellInfo.shellPath}');
+    LogService.info('Terminal', '  Shell: /system/bin/sh');
     LogService.info('Terminal', '  工作目录: $cwd');
 
     try {
-      final env = ShellDetector.getTermuxEnvironment();
-      LogService.info('Terminal', '  PATH: ${env['PATH']}');
+      // 使用 App 私有目录作为 HOME
+      final appDir = await getApplicationDocumentsDirectory();
+      final env = ShellDetector.getShellEnvironment(appDir.path);
       LogService.info('Terminal', '  HOME: ${env['HOME']}');
-      LogService.info('Terminal', '  PREFIX: ${env['PREFIX']}');
+      LogService.info('Terminal', '  PATH: ${env['PATH']}');
 
       _process = await Process.start(
-        shellInfo.shellPath,
-        shellInfo.launchArgs,
+        '/system/bin/sh',
+        ['-i'],
         workingDirectory: cwd,
-        runInShell: shellInfo.useRunInShell,
         environment: env,
       );
 
@@ -127,11 +130,7 @@ class TerminalSession {
       final msg = '启动失败: $e';
       addOutput(msg, isStderr: true);
 
-      // ── 增强日志：记录所有诊断信息 ──
       LogService.error('Terminal', '❌ 会话 $id 启动失败');
-      LogService.error('Terminal', '  Shell: ${shellInfo.shellPath}');
-      LogService.error('Terminal', '  类型: ${shellInfo.type}');
-      LogService.error('Terminal', '  CWD: $cwd');
       LogService.error('Terminal', '  错误: $e');
       LogService.error('Terminal', '  堆栈: $stack');
 
@@ -186,42 +185,27 @@ class TerminalSession {
 
 /// 终端服务
 ///
-/// 管理所有终端会话，使用 [ShellDetector] 自动检测可用 Shell。
-/// 不再硬编码 shell 路径，不再拼接 /system/bin/sh -c。
+/// 管理所有终端会话，使用 Android 系统 Shell（/system/bin/sh）。
+/// 不需要 ShellDetector 检测，不再访问 Termux 目录。
 class TerminalService {
   final List<TerminalSession> _sessions = [];
-  ShellInfo? _cachedShell;
 
   List<TerminalSession> get sessions => List.unmodifiable(_sessions);
-
-  /// 获取或检测可用 Shell
-  Future<ShellInfo> getShell() async {
-    _cachedShell ??= await ShellDetector.detect();
-    return _cachedShell!;
-  }
-
-  /// 强制重新检测 Shell
-  Future<ShellInfo> refreshShell() async {
-    _cachedShell = await ShellDetector.detect();
-    return _cachedShell!;
-  }
 
   /// 创建新终端会话
   Future<TerminalSession> createSession({
     String? name,
     String? cwd,
   }) async {
-    final shell = await getShell();
-
-    if (!shell.isAvailable) {
-      throw StateError('无可用 Shell，无法创建终端会话');
-    }
+    // 使用 App 私有目录作为默认工作目录
+    final appDir = await getApplicationDocumentsDirectory();
+    final home = cwd ?? appDir.path;
 
     final session = TerminalSession(
       id: const Uuid().v4(),
       name: name ?? '终端 ${_sessions.length + 1}',
-      shellInfo: shell,
-      cwd: cwd ?? '/data/data/com.termux/files/home',
+      shellInfo: const ShellInfo(),
+      cwd: home,
     );
 
     _sessions.add(session);

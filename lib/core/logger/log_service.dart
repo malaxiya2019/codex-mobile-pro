@@ -57,7 +57,7 @@ class LogService {
   static String _defaultLogDir() {
     // 优先使用应用文档目录，回退到临时目录
     if (Platform.isAndroid) {
-      return '/data/data/com.termux/files/home/.codex-mobile-pro/logs';
+      return '/storage/emulated/0/Android/data/com.codexmobile.app/files/.codex-mobile-pro/logs';
     }
     return '${Platform.environment['HOME'] ?? '/tmp'}/.codex-mobile-pro/logs';
   }

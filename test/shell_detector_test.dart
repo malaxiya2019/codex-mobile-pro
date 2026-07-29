@@ -3,29 +3,8 @@ import 'package:codex_mobile_pro/core/termux/shell_detector.dart';
 
 void main() {
   group('ShellInfo', () {
-    test('Termux Bash 信息正确', () {
-      final info = ShellInfo(
-        type: ShellType.termuxBash,
-        shellPath: '/data/data/com.termux/files/usr/bin/bash',
-        version: 'GNU bash, version 5.2.26(1)-release',
-        isTermuxAccessible: true,
-      );
-
-      expect(info.type, ShellType.termuxBash);
-      expect(info.shellPath, '/data/data/com.termux/files/usr/bin/bash');
-      expect(info.version, contains('GNU bash'));
-      expect(info.isAvailable, true);
-      expect(info.isTermuxBash, true);
-      expect(info.friendlyDescription, 'Termux Bash');
-      expect(info.launchArgs, ['-i']);
-      expect(info.useRunInShell, false);
-    });
-
-    test('Android System Shell 信息正确', () {
-      final info = ShellInfo(
-        type: ShellType.systemSh,
-        shellPath: '/system/bin/sh',
-      );
+    test('默认构造使用系统 Shell', () {
+      const info = ShellInfo();
 
       expect(info.type, ShellType.systemSh);
       expect(info.shellPath, '/system/bin/sh');
@@ -37,122 +16,51 @@ void main() {
       expect(info.useRunInShell, false);
     });
 
-    test('Unknown Shell 信息正确', () {
-      const info = ShellInfo(
-        type: ShellType.unknown,
-        shellPath: '',
-      );
-
-      expect(info.type, ShellType.unknown);
-      expect(info.isAvailable, false);
-      expect(info.isTermuxBash, false);
-      expect(info.friendlyDescription, '无可用 Shell');
-    });
-
-    test('ShellType 枚举值正确', () {
-      expect(ShellType.values.length, 3);
-      expect(ShellType.values, contains(ShellType.termuxBash));
-      expect(ShellType.values, contains(ShellType.systemSh));
-      expect(ShellType.values, contains(ShellType.unknown));
-    });
-
     test('toString 包含完整信息', () {
-      final info = ShellInfo(
-        type: ShellType.termuxBash,
-        shellPath: '/data/data/com.termux/files/usr/bin/bash',
-        version: '5.2.26',
-        isTermuxAccessible: true,
-      );
-
+      const info = ShellInfo();
       final str = info.toString();
-      expect(str, contains('termuxBash'));
-      expect(str, contains('/data/data/com.termux/files/usr/bin/bash'));
-      expect(str, contains('5.2.26'));
-      expect(str, contains('termuxAccessible=true'));
+      expect(str, contains('systemSh'));
+      expect(str, contains('/system/bin/sh'));
     });
 
     test('const 构造函数可用', () {
       const info = ShellInfo(
-        type: ShellType.unknown,
-        shellPath: '',
+        type: ShellType.systemSh,
+        shellPath: '/system/bin/sh',
       );
       expect(info, isA<ShellInfo>());
     });
 
-    test('launchArgs 可用 Shell 返回 -i 交互模式', () {
-      final termuxInfo = ShellInfo(
-        type: ShellType.termuxBash,
-        shellPath: '/data/data/com.termux/files/usr/bin/bash',
-      );
-      expect(termuxInfo.launchArgs, ['-i']);
-
-      final shInfo = ShellInfo(
-        type: ShellType.systemSh,
-        shellPath: '/system/bin/sh',
-      );
-      expect(shInfo.launchArgs, ['-i']);
-
-      const unknownInfo = ShellInfo(
-        type: ShellType.unknown,
-        shellPath: '',
-      );
-      expect(unknownInfo.launchArgs, isEmpty);
-    });
-
-    test('useRunInShell 绝对路径返回 false，相对路径返回 true', () {
-      final absInfo = ShellInfo(
-        type: ShellType.termuxBash,
-        shellPath: '/data/data/com.termux/files/usr/bin/bash',
-      );
-      expect(absInfo.useRunInShell, false);
-
-      final relInfo = ShellInfo(
-        type: ShellType.systemSh,
-        shellPath: 'sh',
-      );
-      expect(relInfo.useRunInShell, true);
+    test('版本号可设置', () {
+      const info = ShellInfo(version: 'sh (Android 10)');
+      expect(info.version, 'sh (Android 10)');
     });
   });
 
   group('ShellDetector', () {
-    test('getTermuxEnvironment 返回完整环境变量', () {
-      final env = ShellDetector.getTermuxEnvironment();
+    test('detect 始终返回 Android 系统 Shell', () async {
+      final shell = await ShellDetector.detect();
 
-      expect(env['HOME'], '/data/data/com.termux/files/home');
-      expect(env['PREFIX'], '/data/data/com.termux/files/usr');
-      expect(env['PATH'], contains('/data/data/com.termux/files/usr/bin'));
-      expect(env['LANG'], 'zh_CN.UTF-8');
+      expect(shell.isAvailable, true);
+      expect(shell.shellPath, '/system/bin/sh');
+      expect(shell.type, ShellType.systemSh);
+      expect(shell.friendlyDescription, 'Android 系统 Shell');
+    });
+
+    test('getShellEnvironment 返回基础环境变量', () {
+      final env = ShellDetector.getShellEnvironment('/data/app/home');
+
+      expect(env['HOME'], '/data/app/home');
+      expect(env['PATH'], '/system/bin:/system/xbin');
       expect(env['TERM'], 'xterm-256color');
-      expect(env['TMPDIR'], '/data/data/com.termux/files/usr/tmp');
-      expect(env['SHELL'], '/data/data/com.termux/files/usr/bin/bash');
+      expect(env['SHELL'], '/system/bin/sh');
     });
 
-    test('getTermuxEnvironment 所有字段非空', () {
-      final env = ShellDetector.getTermuxEnvironment();
-      for (final entry in env.entries) {
-        expect(entry.value, isNotEmpty,
-            reason: '环境变量 ${entry.key} 不应为空');
-      }
-    });
+    test('getShellEnvironment 可以设置不同路径', () {
+      final env = ShellDetector.getShellEnvironment('/custom/path');
 
-    test('detect 返回可用 Shell（Termux 环境）', () async {
-      // 在 Termux 环境下，应检测到 Termux Bash 或至少系统 sh
-      final shell = await ShellDetector.detect();
-
-      expect(shell.isAvailable, true,
-          reason: '应有可用的 Shell');
-      expect(shell.shellPath, isNotEmpty,
-          reason: 'Shell 路径不应为空');
-    });
-
-    test('detect 返回的 Shell 类型有效', () async {
-      final shell = await ShellDetector.detect();
-
-      expect(
-        shell.type,
-        anyOf(ShellType.termuxBash, ShellType.systemSh),
-        reason: 'Shell 类型应为 termuxBash / systemSh 之一',
-      );
+      expect(env['HOME'], '/custom/path');
+      expect(env['PATH'], '/system/bin:/system/xbin');
     });
   });
 }

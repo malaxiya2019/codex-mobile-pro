@@ -275,7 +275,7 @@ class EnvironmentManager {
         args.first,
         args.sublist(1),
         runInShell: true,
-        environment: {'HOME': '/data/data/com.termux/files/home'},
+        environment: {'HOME': '/data/data/com.termux/files/home'} // TODO: 安装工具需要 Termux 环境
       );
 
       if (result.exitCode == 0) {

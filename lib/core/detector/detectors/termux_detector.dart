@@ -1,13 +1,16 @@
 import 'dart:io';
 import '../detection_result.dart';
 import '../detector.dart';
-import '../environment_service.dart';
 
+/// Shell 环境检测器
+///
+/// 检测 Android 系统 Shell（/system/bin/sh）是否可用。
+/// 不检测 Termux，不访问 /data/data/com.termux/ 路径。
 class TermuxDetector extends Detector {
   @override
   String get id => 'termux';
   @override
-  String get name => 'Termux 环境';
+  String get name => 'Shell 环境';
   @override
   String get icon => '📱';
   @override
@@ -17,68 +20,39 @@ class TermuxDetector extends Detector {
   Future<DetectionResult> detect() async {
     final start = DateTime.now();
     try {
-      final check = await EnvironmentService.checkTermux();
+      // 检测 /system/bin/sh 是否可执行
+      final result = await Process.run(
+        '/system/bin/sh',
+        ['-c', 'echo ok'],
+      );
       final elapsed = DateTime.now().difference(start).inMilliseconds;
 
-      if (check.isTermuxAvailable) {
-        // 通过执行命令验证 Termux Bash 是否可访问
-        // 不使用 File.exists()，Android 11+ Scoped Storage 限制访问其他应用目录
-        String version = 'Termux (受限)';
-        try {
-          final bashResult = await Process.run(
-            '/system/bin/sh',
-            [
-              '-c',
-              'if [ -x /data/data/com.termux/files/usr/bin/bash ]; then '
-              '  /data/data/com.termux/files/usr/bin/bash --version 2>/dev/null | head -1; '
-              'else '
-              '  echo "BASH_NO"; '
-              'fi',
-            ],
-            runInShell: false,
-          );
-          final bashOut = (bashResult.stdout as String?)?.trim() ?? '';
-          if (bashOut.isNotEmpty && !bashOut.contains('BASH_NO')) {
-            version = bashOut;
-          }
-        } catch (_) {
-          // 降级为默认版本描述
-        }
-
+      if (result.exitCode == 0) {
         return DetectionResult(
-          id: id, name: name, icon: icon,
+          id: id,
+          name: name,
+          icon: icon,
           status: DetectionStatus.installed,
-          version: version,
-          path: '/data/data/com.termux',
+          version: 'Android 系统 Shell',
+          path: '/system/bin/sh',
           durationMs: elapsed,
           category: category,
         );
       }
 
-      // 尝试检测 Android 系统 Shell
-      try {
-        final shResult = await Process.run('/system/bin/sh', ['-c', 'echo ok'],
-            runInShell: false);
-        if (shResult.exitCode == 0) {
-          return DetectionResult(
-            id: id, name: name, icon: icon,
-            status: DetectionStatus.installed,
-            version: 'Android 系统 Shell',
-            durationMs: elapsed,
-            category: category,
-          );
-        }
-      } catch (_) {}
-
       return DetectionResult(
-        id: id, name: name, icon: icon,
+        id: id,
+        name: name,
+        icon: icon,
         status: DetectionStatus.missing,
         durationMs: elapsed,
         category: category,
       );
     } catch (e) {
       return DetectionResult(
-        id: id, name: name, icon: icon,
+        id: id,
+        name: name,
+        icon: icon,
         status: DetectionStatus.error,
         durationMs: DateTime.now().difference(start).inMilliseconds,
         errorMessage: e.toString(),

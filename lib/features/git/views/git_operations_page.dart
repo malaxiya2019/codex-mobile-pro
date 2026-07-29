@@ -226,7 +226,7 @@ class _GitOperationsPageState extends ConsumerState<GitOperationsPage> {
     });
 
     try {
-      final home = '/data/data/com.termux/files/home';
+      final home = '/storage/emulated/0';
       final destDir = '${home}/${widget.repo.name}';
 
       final result = await _gitService.clone(
