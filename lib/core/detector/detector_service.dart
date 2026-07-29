@@ -68,6 +68,8 @@ class DetectorService {
   static Map<String, int> summarize(List<DetectionResult> results) {
     int installed = 0;
     int missing = 0;
+    int failed = 0;
+    int blocked = 0;
     int errors = 0;
 
     for (final r in results) {
@@ -77,6 +79,12 @@ class DetectorService {
           break;
         case DetectionStatus.missing:
           missing++;
+          break;
+        case DetectionStatus.failed:
+          failed++;
+          break;
+        case DetectionStatus.blocked:
+          blocked++;
           break;
         case DetectionStatus.error:
           errors++;
@@ -90,6 +98,8 @@ class DetectorService {
       'total': results.length,
       'installed': installed,
       'missing': missing,
+      'failed': failed,
+      'blocked': blocked,
       'errors': errors,
     };
   }

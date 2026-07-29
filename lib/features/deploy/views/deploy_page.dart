@@ -479,7 +479,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
     if (detection == null) return const SizedBox.shrink();
 
     final codingMissing = detection.coding
-        .where((r) => r.status == DetectionStatus.unsupported)
+        .where((r) => r.status == DetectionStatus.missing)
         .length;
 
     return Column(
@@ -645,10 +645,18 @@ class _DeployPageState extends ConsumerState<DeployPage> {
         statusIcon = Icons.check_circle;
         break;
       case DetectionStatus.missing:
-        statusColor = showMissingAsRed ? Colors.orange : Colors.amber.shade700;
+        statusColor = Colors.orange;
         statusIcon = Icons.info_outline;
         break;
       case DetectionStatus.unsupported:
+        statusColor = Colors.grey;
+        statusIcon = Icons.block;
+        break;
+      case DetectionStatus.failed:
+        statusColor = Colors.red;
+        statusIcon = Icons.error;
+        break;
+      case DetectionStatus.blocked:
         statusColor = Colors.grey;
         statusIcon = Icons.block;
         break;

@@ -3,8 +3,10 @@ import 'detector.dart';
 /// 工具检测状态
 enum DetectionStatus {
   installed,    // ✅ 已安装
-  missing,      // ❌ 未安装（支持自动安装）
+  missing,      // ⬜ 未安装（支持自动安装）
   unsupported,  // ⚠️ 暂不支持自动安装
+  failed,       // ❌ 安装失败
+  blocked,      // ⛔ 依赖阻塞
   checking,     // ⏳ 检测中
   error,        // ⚠️ 检测出错
   unknown,      // ❓ 未知
@@ -65,9 +67,13 @@ class DetectionResult {
       case DetectionStatus.installed:
         return '✅';
       case DetectionStatus.missing:
-        return '❌';
+        return '⬜';
       case DetectionStatus.unsupported:
         return '⚠️';
+      case DetectionStatus.failed:
+        return '❌';
+      case DetectionStatus.blocked:
+        return '⛔';
       case DetectionStatus.checking:
         return '⏳';
       case DetectionStatus.error:
@@ -83,8 +89,12 @@ class DetectionResult {
       case DetectionStatus.installed:
         return 0xFF4CAF50;
       case DetectionStatus.missing:
-        return 0xFFF44336;
+        return 0xFFFF9800;
       case DetectionStatus.unsupported:
+        return 0xFF9E9E9E;
+      case DetectionStatus.failed:
+        return 0xFFF44336;
+      case DetectionStatus.blocked:
         return 0xFF9E9E9E;
       case DetectionStatus.checking:
         return 0xFFFF9800;

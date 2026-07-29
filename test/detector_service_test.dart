@@ -121,7 +121,7 @@ void main() {
         status: DetectionStatus.missing,
         category: DetectorCategory.runtime,
       );
-      expect(result.statusIcon, '❌');
+      expect(result.statusIcon, '⬜');
     });
 
     test('copyWith 工作正常', () {
@@ -169,7 +169,27 @@ void main() {
         category: DetectorCategory.runtime,
       );
       expect(installed.statusColor, 0xFF4CAF50);
-      expect(missing.statusColor, 0xFFF44336);
+      expect(missing.statusColor, 0xFFFF9800);
+    });
+
+    test('failed 状态正确', () {
+      final result = DetectionResult(
+        id: 'test', name: 'Test', icon: '🧪',
+        status: DetectionStatus.failed,
+        category: DetectorCategory.runtime,
+      );
+      expect(result.statusIcon, '❌');
+      expect(result.statusColor, 0xFFF44336);
+    });
+
+    test('blocked 状态正确', () {
+      final result = DetectionResult(
+        id: 'test', name: 'Test', icon: '🧪',
+        status: DetectionStatus.blocked,
+        category: DetectorCategory.runtime,
+      );
+      expect(result.statusIcon, '⛔');
+      expect(result.statusColor, 0xFF9E9E9E);
     });
 
     test('category 传递正确', () {
@@ -254,7 +274,7 @@ void main() {
   });
 
   group('DetectorService.summarize', () {
-    test('正确统计 installed / missing / error', () {
+    test('正确统计 installed / missing / failed / blocked / error', () {
       final results = [
         DetectionResult(
           id: 'a', name: 'A', icon: '🧪',
@@ -273,14 +293,26 @@ void main() {
         ),
         DetectionResult(
           id: 'd', name: 'D', icon: '🧪',
+          status: DetectionStatus.failed,
+          category: DetectorCategory.runtime,
+        ),
+        DetectionResult(
+          id: 'e', name: 'E', icon: '🧪',
+          status: DetectionStatus.blocked,
+          category: DetectorCategory.runtime,
+        ),
+        DetectionResult(
+          id: 'f', name: 'F', icon: '🧪',
           status: DetectionStatus.error,
           category: DetectorCategory.development,
         ),
       ];
       final summary = DetectorService.summarize(results);
-      expect(summary['total'], 4);
+      expect(summary['total'], 6);
       expect(summary['installed'], 2);
       expect(summary['missing'], 1);
+      expect(summary['failed'], 1);
+      expect(summary['blocked'], 1);
       expect(summary['errors'], 1);
     });
 
