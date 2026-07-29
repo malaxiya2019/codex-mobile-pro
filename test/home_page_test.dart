@@ -1,6 +1,5 @@
 import 'package:codex_mobile_pro/app.dart';
 import 'package:codex_mobile_pro/core/i18n/app_locale.dart';
-import 'package:codex_mobile_pro/core/theme/theme_provider.dart';
 import 'package:codex_mobile_pro/core/router/app_router.dart';
 import 'package:codex_mobile_pro/core/router/route_guard.dart';
 import 'package:shared_preferences/shared_preferences.dart';
