@@ -1,13 +1,11 @@
 /*
- * Feature test macros: must be defined before any #include.
- * _GNU_SOURCE enables forkpty() via <pty.h> on Android NDK (Bionic).
- */
-#define _GNU_SOURCE
-
-/*
  * pty.c — JNI PTY 实现
  *
- * 使用 forkpty() 创建真实伪终端，支持：
+ * 使用 POSIX 标准 PTY 接口创建伪终端：
+ *   posix_openpt() → grantpt() → unlockpt() → ptsname() → fork()
+ *
+ * 不依赖 <pty.h>（不同 NDK 版本 forkpty() 可用性不一致）。
+ * 支持：
  *   - 创建子进程并连接 PTY
  *   - 读写 PTY master 端
  *   - 调整窗口大小
@@ -26,6 +24,7 @@
 #include <sys/wait.h>
 #include <sys/ioctl.h>
 #include <termios.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <android/log.h>
 #include <sys/types.h>
@@ -33,16 +32,6 @@
 #define TAG "PtyNative"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
-
-/*
- * forkpty() 在 Android Bionic libc 中可以通过 <pty.h> 使用。
- * Bionic 的 forkpty() 内部实现为：
- *   1. openpty() — 打开 PTY master/slave 对
- *   2. fork()
- *      - 子进程：setsid() → 打开 slave 作为 stdin/stdout/stderr → 关闭 master
- *      - 父进程：关闭 slave，返回 master_fd
- */
-#include <pty.h>
 
 // ──────────────────────────────────────────────
 // 辅助函数：释放 JNI 字符串数组
@@ -77,6 +66,108 @@ static char **build_env_array(JNIEnv *env, jobjectArray env_array, int env_len) 
     }
     envp[env_len] = NULL;
     return envp;
+}
+
+// ──────────────────────────────────────────────
+// 创建 PTY 子进程（替代 forkpty，不依赖 <pty.h>）
+// ──────────────────────────────────────────────
+static pid_t create_pty_process(int *master_fd,
+                                const struct termios *termp,
+                                const struct winsize *winp,
+                                const char *shell_path,
+                                char **argv,
+                                char **envp,
+                                const char *work_dir) {
+    // 1. 打开 PTY master
+    int mfd = posix_openpt(O_RDWR | O_NOCTTY);
+    if (mfd < 0) {
+        LOGE("posix_openpt failed: %s", strerror(errno));
+        return -1;
+    }
+
+    // 2. 授权 slave 访问
+    if (grantpt(mfd) < 0) {
+        LOGE("grantpt failed: %s", strerror(errno));
+        close(mfd);
+        return -1;
+    }
+
+    // 3. 解锁 slave
+    if (unlockpt(mfd) < 0) {
+        LOGE("unlockpt failed: %s", strerror(errno));
+        close(mfd);
+        return -1;
+    }
+
+    // 4. 获取 slave 路径
+    const char *slave_name = ptsname(mfd);
+    if (slave_name == NULL) {
+        LOGE("ptsname failed: %s", strerror(errno));
+        close(mfd);
+        return -1;
+    }
+
+    // 5. 设置 termios（仅在 master 上设置，slave 会继承）
+    if (termp != NULL) {
+        tcsetattr(mfd, TCSANOW, termp);
+    }
+
+    // 6. 设置窗口大小
+    if (winp != NULL) {
+        ioctl(mfd, TIOCSWINSZ, winp);
+    }
+
+    // 7. fork
+    pid_t pid = fork();
+    if (pid < 0) {
+        LOGE("fork failed: %s", strerror(errno));
+        close(mfd);
+        return -1;
+    }
+
+    if (pid == 0) {
+        // ── 子进程 ──
+        close(mfd);  // 子进程关闭 master
+
+        // 打开 slave
+        int sfd = open(slave_name, O_RDWR);
+        if (sfd < 0) {
+            LOGE("open slave '%s' failed: %s", slave_name, strerror(errno));
+            _exit(127);
+        }
+
+        // 创建新会话并设置 controlling terminal
+        setsid();
+        ioctl(sfd, TIOCSCTTY, 0);
+
+        // 复制到 stdin/stdout/stderr
+        dup2(sfd, STDIN_FILENO);
+        dup2(sfd, STDOUT_FILENO);
+        dup2(sfd, STDERR_FILENO);
+
+        // 安全地关闭多余的 fd
+        if (sfd > STDERR_FILENO) {
+            close(sfd);
+        }
+
+        // 切换工作目录
+        if (work_dir != NULL) {
+            if (chdir(work_dir) != 0) {
+                LOGE("chdir(%s) failed: %s", work_dir, strerror(errno));
+                // 忽略错误，继续启动 shell
+            }
+        }
+
+        // 执行 shell
+        execve(shell_path, argv, envp);
+        LOGE("execve(%s) failed: %s", shell_path, strerror(errno));
+        _exit(127);
+    }
+
+    // ── 父进程 ──
+    *master_fd = mfd;
+    LOGD("pty created: pid=%d, master_fd=%d, slave=%s", pid, mfd, slave_name);
+    return pid;
 }
 
 // ──────────────────────────────────────────────
@@ -161,12 +252,15 @@ Java_com_codexmobile_app_terminal_PtySession_createProcess(
     ws.ws_xpixel = 0;
     ws.ws_ypixel = 0;
 
-    // ── forkpty ──
+    // ── 创建 PTY 子进程 ──
     int master_fd;
-    pid_t pid = forkpty(&master_fd, NULL, &tt, &ws);
+    pid_t pid = create_pty_process(
+        &master_fd, &tt, &ws,
+        shell_path_cstr, argv, envp,
+        work_dir_dup);
 
     if (pid < 0) {
-        LOGE("forkpty failed: %s", strerror(errno));
+        LOGE("create_pty_process failed: %s", strerror(errno));
         // 清理
         free(argv[0]);
         free(argv[1]);
@@ -183,25 +277,8 @@ Java_com_codexmobile_app_terminal_PtySession_createProcess(
         return error_result;
     }
 
-    if (pid == 0) {
-        // ── 子进程 ──
-        // 切换到工作目录
-        if (work_dir_dup != NULL) {
-            if (chdir(work_dir_dup) != 0) {
-                LOGE("chdir(%s) failed: %s", work_dir_dup, strerror(errno));
-                // 忽略错误，继续启动
-            }
-        }
-
-        // 执行 shell
-        execve(shell_path_cstr, argv, envp);
-        // execve 失败时才到达这里
-        LOGE("execve(%s) failed: %s", shell_path_cstr, strerror(errno));
-        _exit(127);
-    }
-
-    // ── 父进程 ──
-    LOGD("forkpty success: pid=%d, master_fd=%d", pid, master_fd);
+    // ── 父进程继续 ──
+    LOGD("createProcess success: pid=%d, master_fd=%d", pid, master_fd);
 
     // 释放资源
     free(argv[0]);
