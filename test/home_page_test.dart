@@ -15,21 +15,7 @@ void main() {
     });
 
     // 提供稳定的 Mock Router（避免 GoRouter 在测试环境初始化复杂路由）
-    final mockRouterProvider = Provider<GoRouter>((ref) {
-      return GoRouter(
-        initialLocation: '/',
-        routes: [
-          GoRoute(
-            path: '/',
-            builder: (context, state) => const Placeholder(),
-          ),
-        ],
-      );
-    });
 
-    final mockAuthProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-      return AuthNotifier();
-    });
 
     testWidgets('首页正确渲染', (tester) async {
       final localeNotifier = LocaleNotifier();
@@ -39,8 +25,8 @@ void main() {
         ProviderScope(
           overrides: [
             localeProvider.overrideWith((ref) => localeNotifier),
-            appRouterProvider.overrideWith(mockRouterProvider),
-            authProvider.overrideWith(mockAuthProvider),
+            appRouterProvider.overrideWithValue(GoRouter(initialLocation: '/', routes: [GoRoute(path: '/', builder: (context, state) => const Placeholder())])),
+            authProvider.overrideWith((ref) => AuthNotifier()),
           ],
           child: const CodexMobileApp(),
         ),
@@ -61,8 +47,8 @@ void main() {
         ProviderScope(
           overrides: [
             localeProvider.overrideWith((ref) => localeNotifier),
-            appRouterProvider.overrideWith(mockRouterProvider),
-            authProvider.overrideWith(mockAuthProvider),
+            appRouterProvider.overrideWithValue(GoRouter(initialLocation: '/', routes: [GoRoute(path: '/', builder: (context, state) => const Placeholder())])),
+            authProvider.overrideWith((ref) => AuthNotifier()),
           ],
           child: const CodexMobileApp(),
         ),
