@@ -89,7 +89,7 @@ void main() {
     test('getShellEnvironment 返回的环境变量包含所有必需键', () {
       final env = ShellDetector.getShellEnvironment('/data/app/home');
 
-      expect(env, containsAll(<String>['HOME', 'PATH', 'TERM', 'SHELL']));
+      expect(env.keys, containsAll(<String>['HOME', 'PATH', 'TERM', 'SHELL']));
     });
 
     test('getShellEnvironment TERM 默认为 xterm-256color', () {
