@@ -12,6 +12,7 @@ import '../../../core/terminal/iterminal_backend.dart';
 import '../../../core/terminal/native_pty_backend.dart';
 import '../../../core/terminal/process_terminal_backend.dart';
 import '../../../core/termux/shell_detector.dart';
+import '../../../runtime/runtime_manager.dart';
 
 /// 终端会话状态
 enum TerminalSessionStatus { running, exited, error }
@@ -118,7 +119,15 @@ class TerminalSession {
   /// 使用 Process.start() 启动（回退方案）
   Future<bool> _startWithProcess() async {
     final appDir = await getApplicationDocumentsDirectory();
-    final env = ShellDetector.getShellEnvironment(appDir.path);
+    var env = ShellDetector.getShellEnvironment(appDir.path);
+    // 合并 Runtime Manager 提供的环境变量（注入 runtime/bin 到 PATH）
+    try {
+      final runtimeEnv = RuntimeManager.instance.getTerminalEnvironment();
+      if (runtimeEnv.isNotEmpty) {
+        env = {...runtimeEnv, ...env}; // runtimeEnv 优先
+        LogService.info('Terminal', '  已注入 Runtime 环境: PATH=${runtimeEnv['PATH']?.substring(0, 80)}...');
+      }
+    } catch (_) {}
     LogService.info('Terminal', '  使用 Process 回退');
     LogService.info('Terminal', '  HOME: ${env['HOME']}');
     LogService.info('Terminal', '  SHELL: ${env['SHELL']}');
@@ -167,7 +176,15 @@ class TerminalSession {
   /// 使用 Native PTY 启动
   Future<bool> _startWithNativePty() async {
     final appDir = await getApplicationDocumentsDirectory();
-    final env = ShellDetector.getShellEnvironment(appDir.path);
+    var env = ShellDetector.getShellEnvironment(appDir.path);
+    // 合并 Runtime Manager 提供的环境变量（注入 runtime/bin 到 PATH）
+    try {
+      final runtimeEnv = RuntimeManager.instance.getTerminalEnvironment();
+      if (runtimeEnv.isNotEmpty) {
+        env = {...runtimeEnv, ...env}; // runtimeEnv 优先
+        LogService.info('Terminal', '  已注入 Runtime 环境: PATH=${runtimeEnv['PATH']?.substring(0, 80)}...');
+      }
+    } catch (_) {}
 
     try {
       _nativeSession = await _backend!.createSession(

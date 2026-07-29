@@ -11,6 +11,7 @@ class FlutterDetector extends Detector {
   String get icon => '🦋';
   @override
   DetectorCategory get category => DetectorCategory.development;
+  RuntimeSubCategory? get subCategory => RuntimeSubCategory.development;
   @override
   String? get missingHint => 'Flutter SDK（可选，用于 Flutter 开发）';
 

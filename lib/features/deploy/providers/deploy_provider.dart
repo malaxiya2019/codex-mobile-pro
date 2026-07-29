@@ -1,102 +1,77 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/detector/detection_result.dart';
 import '../../../core/detector/detector_service.dart';
 import '../../../core/detector/detector.dart';
+import '../../../runtime/runtime_manager.dart';
+import '../../../runtime/runtime_dependency.dart';
+import '../../../runtime/runtime_detector.dart';
+import '../../../runtime/runtime_installer.dart';
 
-/// 检测状态
+/// 状态
 enum DeployState {
   idle,       // 未开始
   checking,   // 检测中
   completed,  // 检测完成
-  error,      // 检测出错
+  installing, // 安装中
+  verifying,  // 验证中
+  error,      // 出错
 }
 
 /// 部署中心状态
 class DeployStatus {
   final DeployState state;
-  final List<DetectionResult> results;
-  final int totalDetectors;
+  final RuntimeDetectionResult? detectionResult;
   final String? errorMessage;
   final DateTime? lastChecked;
 
+  /// 安装进度信息
+  final InstallProgress? currentProgress;
+
+  /// 安装结果列表
+  final Map<RuntimeTool, InstallResult> installResults;
+
   const DeployStatus({
     this.state = DeployState.idle,
-    this.results = const [],
-    this.totalDetectors = 10,
+    this.detectionResult,
     this.errorMessage,
     this.lastChecked,
+    this.currentProgress,
+    this.installResults = const {},
   });
 
   DeployStatus copyWith({
     DeployState? state,
-    List<DetectionResult>? results,
-    int? totalDetectors,
+    RuntimeDetectionResult? detectionResult,
     String? errorMessage,
     DateTime? lastChecked,
+    InstallProgress? currentProgress,
+    Map<RuntimeTool, InstallResult>? installResults,
   }) {
     return DeployStatus(
       state: state ?? this.state,
-      results: results ?? this.results,
-      totalDetectors: totalDetectors ?? this.totalDetectors,
+      detectionResult: detectionResult ?? this.detectionResult,
       errorMessage: errorMessage ?? this.errorMessage,
       lastChecked: lastChecked ?? this.lastChecked,
+      currentProgress: currentProgress ?? this.currentProgress,
+      installResults: installResults ?? this.installResults,
     );
   }
 
-  /// 已安装数量
-  int get installedCount => results.where((r) => r.status == DetectionStatus.installed).length;
-
-  /// 缺失数量
-  int get missingCount => results.where((r) => r.status == DetectionStatus.missing).length;
-
-  /// Runtime 类结果
-  List<DetectionResult> get runtimeResults =>
-      results.where((r) => r.category == DetectorCategory.runtime).toList();
-
-  /// Development 类结果
-  List<DetectionResult> get developmentResults =>
-      results.where((r) => r.category == DetectorCategory.development).toList();
-
-  /// Runtime 已安装数量
-  int get runtimeInstalled =>
-      runtimeResults.where((r) => r.status == DetectionStatus.installed).length;
-
-  /// Runtime 缺失数量
-  int get runtimeMissing =>
-      runtimeResults.where((r) => r.status == DetectionStatus.missing).length;
-
-  /// Development 已安装数量
-  int get developmentInstalled =>
-      developmentResults.where((r) => r.status == DetectionStatus.installed).length;
-
-  /// Development 缺失数量
-  int get developmentMissing =>
-      developmentResults.where((r) => r.status == DetectionStatus.missing).length;
-
-  /// 总进度百分比
-  double get progressPercent => results.isEmpty ? 0 : installedCount / totalDetectors;
-
-  /// 是否所有工具都已安装
-  bool get allInstalled =>
-      results.length == totalDetectors &&
-      results.every((r) => r.status == DetectionStatus.installed);
-
-  /// 摘要文字
+  /// 摘要
   String get summary {
-    if (state == DeployState.idle) return '点击"开始检测"检查环境';
-    if (state == DeployState.checking) return '正在检测 (${results.length}/$totalDetectors)...';
-    if (state == DeployState.error) return '检测出错: $errorMessage';
-    final pct = (progressPercent * 100).toInt();
-    if (allInstalled) return '🎉 全部就绪！';
-    final parts = <String>[];
-    if (runtimeResults.isNotEmpty) {
-      parts.add('Runtime: ✅ $runtimeInstalled ❌ $runtimeMissing');
-    }
-    if (developmentResults.isNotEmpty) {
-      parts.add('Dev: ✅ $developmentInstalled ❌ $developmentMissing');
-    }
-    return '✅ $installedCount/$totalDetectors 已安装 ($pct%)\n${parts.join(" | ")}';
+    if (state == DeployState.idle) return '点击「开始检测」检查环境';
+    if (state == DeployState.checking) return '正在检测...';
+    if (state == DeployState.installing) return currentProgress?.message ?? '安装中...';
+    if (state == DeployState.verifying) return '验证环境中...';
+    if (state == DeployState.error) return '出错: $errorMessage';
+
+    if (detectionResult != null) return detectionResult!.summary;
+    return '';
   }
+
+  /// 是否有安装中的进度
+  bool get isInstalling => state == DeployState.installing;
 }
 
 /// 部署中心 Provider
@@ -106,84 +81,185 @@ final deployStatusProvider =
 });
 
 class DeployNotifier extends StateNotifier<DeployStatus> {
+  StreamSubscription<InstallProgress>? _progressSub;
+
   DeployNotifier() : super(const DeployStatus());
 
-  DetectorService? _service;
-
-  /// 设置自定义检测器服务（测试用）
-  void setService(DetectorService service) {
-    _service = service;
+  /// 初始化
+  Future<void> initialize() async {
+    await RuntimeManager.instance.initialize();
   }
 
-  /// 获取或创建检测器服务
-  DetectorService _getService() {
-    _service ??= DetectorService.create();
-    return _service!;
-  }
-
-  /// 开始检测所有工具
+  /// 检测所有
   Future<void> checkAll() async {
     state = state.copyWith(
-        state: DeployState.checking, results: [], errorMessage: null);
+        state: DeployState.checking, errorMessage: null);
 
-    final service = _getService();
-    final results = <DetectionResult>[];
+    try {
+      await RuntimeManager.instance.initialize();
+      final result = await RuntimeManager.instance.detectAll();
 
-    // 逐个检测，让 UI 实时显示进度
-    for (final id in service.detectorIds) {
-      // 先添加"检测中"占位
-      final detector = service.getDetector(id);
-      if (detector != null) {
-        results.add(DetectionResult(
-          id: id,
-          name: detector.name,
-          icon: detector.icon,
-          status: DetectionStatus.checking,
-          category: detector.category,
-          missingHint: detector.missingHint,
-        ));
-        state = state.copyWith(results: List.from(results));
+      state = state.copyWith(
+        state: DeployState.completed,
+        detectionResult: result,
+        lastChecked: DateTime.now(),
+      );
+    } catch (e) {
+      state = state.copyWith(
+        state: DeployState.error,
+        errorMessage: e.toString(),
+      );
+    }
+  }
+
+  /// 单工具检测
+  Future<void> checkOne(String id) async {
+    try {
+      final detector = RuntimeDetector();
+      final result = await detector.detectOne(id);
+      if (result == null || state.detectionResult == null) return;
+
+      final all = List<DetectionResult>.from(state.detectionResult!.all);
+      final index = all.indexWhere((r) => r.id == id);
+      if (index >= 0) {
+        all[index] = result;
+      } else {
+        all.add(result);
       }
 
-      // 执行检测
-      final result = await service.detectOne(id);
-      if (result != null) {
-        final index = results.indexWhere((r) => r.id == id);
-        if (index >= 0) {
-          results[index] = result;
-        } else {
-          results.add(result);
-        }
-        state = state.copyWith(results: List.from(results));
-      }
+      final grouped = _groupResults(all);
+      state = state.copyWith(
+        detectionResult: grouped,
+        lastChecked: DateTime.now(),
+      );
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  /// 一键部署 Coding Runtime
+  Future<void> installCodingRuntime() async {
+    state = state.copyWith(
+      state: DeployState.installing,
+      installResults: {},
+    );
+
+    final mgr = RuntimeManager.instance;
+
+    // 订阅进度
+    _progressSub?.cancel();
+    _progressSub = mgr.progressStream.listen((progress) {
+      state = state.copyWith(currentProgress: progress);
+    });
+
+    // 执行安装
+    final results = await mgr.installCodingRuntime().toList();
+
+    // 安装完成后重新检测
+    await checkAll();
+
+    // 构建安装结果 map
+    final resultMap = <RuntimeTool, InstallResult>{};
+    for (final r in results) {
+      resultMap[r.tool] = r;
     }
 
     state = state.copyWith(
-      state: DeployState.completed,
-      results: results,
-      lastChecked: DateTime.now(),
+      installResults: resultMap,
     );
   }
 
-  /// 检测单个工具（刷新）
-  Future<void> checkOne(String id) async {
-    final service = _getService();
-    final result = await service.detectOne(id);
-    if (result == null) return;
+  /// 安装单个工具
+  Future<void> installTool(RuntimeTool tool) async {
+    state = state.copyWith(
+      state: DeployState.installing,
+    );
 
-    final results = List<DetectionResult>.from(state.results);
-    final index = results.indexWhere((r) => r.id == id);
-    if (index >= 0) {
-      results[index] = result;
-    } else {
-      results.add(result);
+    final mgr = RuntimeManager.instance;
+
+    _progressSub?.cancel();
+    _progressSub = mgr.progressStream.listen((progress) {
+      state = state.copyWith(currentProgress: progress);
+    });
+
+    final result = await mgr.install(tool);
+
+    // 重新检测
+    await checkAll();
+
+    final resultMap = Map<RuntimeTool, InstallResult>.from(state.installResults);
+    resultMap[tool] = result;
+    state = state.copyWith(installResults: resultMap);
+  }
+
+  /// 验证环境
+  Future<List<VerificationResult>> verifyEnvironment() async {
+    state = state.copyWith(state: DeployState.verifying);
+    try {
+      final results = await RuntimeManager.instance.verifyEnvironment();
+      await checkAll();
+      return results;
+    } catch (e) {
+      state = state.copyWith(
+        state: DeployState.error,
+        errorMessage: e.toString(),
+      );
+      return [];
     }
-
-    state = state.copyWith(results: results, lastChecked: DateTime.now());
   }
 
   /// 重置
   void reset() {
+    _progressSub?.cancel();
     state = const DeployStatus();
+  }
+
+  @override
+  void dispose() {
+    _progressSub?.cancel();
+    super.dispose();
+  }
+
+  RuntimeDetectionResult _groupResults(List<DetectionResult> results) {
+    // Reuse RuntimeDetector's grouping
+    final detector = RuntimeDetector();
+    // We need to reconstruct - call detectAll would re-execute
+    // Instead, manual group
+    final basic = <DetectionResult>[];
+    final coding = <DetectionResult>[];
+    final ai = <DetectionResult>[];
+    final development = <DetectionResult>[];
+
+    for (final r in results) {
+      switch (r.id) {
+        case 'termux':
+        case 'curl':
+        case 'storage':
+          basic.add(r);
+          break;
+        case 'node':
+        case 'git':
+        case 'python':
+        case 'codex':
+        case 'mimo2codex':
+          coding.add(r);
+          break;
+        case 'deepseek_key':
+          ai.add(r);
+          break;
+        case 'flutter':
+          development.add(r);
+          break;
+      }
+    }
+
+    return RuntimeDetectionResult(
+      basic: basic,
+      coding: coding,
+      ai: ai,
+      development: development,
+      all: results,
+      isComplete: true,
+    );
   }
 }

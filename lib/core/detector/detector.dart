@@ -1,11 +1,26 @@
 import 'detection_result.dart';
 
-/// 环境类别
+/// 环境类别（旧版 — 保持向后兼容）
 enum DetectorCategory {
   /// 运行环境 — Termux、Shell、Node、Git、Python、Codex 等
   runtime,
 
   /// 开发环境 — Flutter SDK、Android SDK、Java、Gradle 等
+  development,
+}
+
+/// Runtime 子类别（新版 — 用于 Deployment Center 精细分组）
+enum RuntimeSubCategory {
+  /// 基础 Runtime — Android Shell / cURL / Storage
+  basic,
+
+  /// Coding Runtime — Node.js / Git / Python / Codex CLI / mimo2codex
+  coding,
+
+  /// AI Runtime — DeepSeek API Key
+  ai,
+
+  /// Development Runtime — Flutter SDK（可选）
   development,
 }
 
@@ -24,6 +39,9 @@ abstract class Detector {
 
   /// 所属类别（Runtime / Development）
   DetectorCategory get category;
+
+  /// Runtime 子类别（用于新版 Deployment Center 分组）
+  RuntimeSubCategory? get subCategory => null;
 
   /// 缺失时的友好提示（用于 Development 类工具）
   /// 例如 "Flutter SDK（可选，用于 Flutter 开发）"

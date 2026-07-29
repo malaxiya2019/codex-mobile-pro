@@ -11,6 +11,7 @@ class Mimo2codexDetector extends Detector {
   String get icon => '🔌';
   @override
   DetectorCategory get category => DetectorCategory.runtime;
+  RuntimeSubCategory? get subCategory => RuntimeSubCategory.coding;
 
   @override
   Future<DetectionResult> detect() async {
