@@ -292,21 +292,25 @@ class PtyPlugin(private val context: Context) {
                     System.arraycopy(buf, 0, chunk, 0, nread)
                     val text = String(chunk, Charsets.UTF_8)
 
-                    outputSinks[sessionId]?.success(mapOf(
-                        "sessionId" to sessionId,
-                        "data" to text,
-                        "isStderr" to false
-                    ))
+                    withContext(Dispatchers.Main) {
+                        outputSinks[sessionId]?.success(mapOf(
+                            "sessionId" to sessionId,
+                            "data" to text,
+                            "isStderr" to false
+                        ))
+                    }
                 }
             } catch (e: Exception) {
                 Log.d(TAG, "Read loop ended for session $sessionId: ${e.message}")
             } finally {
-                outputSinks[sessionId]?.success(mapOf(
-                    "sessionId" to sessionId,
-                    "data" to "",
-                    "isStderr" to false,
-                    "closed" to true
-                ))
+                withContext(Dispatchers.Main) {
+                    outputSinks[sessionId]?.success(mapOf(
+                        "sessionId" to sessionId,
+                        "data" to "",
+                        "isStderr" to false,
+                        "closed" to true
+                    ))
+                }
             }
         }
         readJobs[sessionId] = readJob
