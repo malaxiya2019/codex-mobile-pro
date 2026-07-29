@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import 'ring_buffer.dart';
+
 import '../../../core/logger/log_service.dart';
 import '../../../core/terminal/iterminal_backend.dart';
 import '../../../core/terminal/native_pty_backend.dart';
@@ -38,7 +40,7 @@ class TerminalSession {
   final ShellInfo shellInfo;
   String cwd;
   TerminalSessionStatus status;
-  final List<TerminalLine> outputBuffer;
+  final RingBuffer<TerminalLine> outputBuffer;
   Process? _process;
   StreamSubscription? _stdoutSub;
   StreamSubscription? _stderrSub;
@@ -48,7 +50,7 @@ class TerminalSession {
   ITerminalBackend? _backend;
   SessionHandle? _nativeSession;
 
-  static const int maxBufferSize = 1000;
+  static const int maxBufferSize = 10000;
 
   TerminalSession({
     required this.id,
@@ -56,16 +58,16 @@ class TerminalSession {
     required this.shellInfo,
     required this.cwd,
     this.status = TerminalSessionStatus.running,
-    List<TerminalLine>? outputBuffer,
+    RingBuffer<TerminalLine>? outputBuffer,
     ITerminalBackend? backend,
-  }) : outputBuffer = outputBuffer ?? [],
+  }) : outputBuffer = outputBuffer ?? RingBuffer<TerminalLine>(maxBufferSize),
        _backend = backend;
 
   bool get isDisposed => _disposed;
   String get shellPath => shellInfo.shellPath;
 
   /// 获取当前输出文本
-  String get outputText => outputBuffer.map((l) => l.text).join('\n');
+  String get outputText => outputBuffer.toList().map((l) => l.text).join('\n');
 
   /// 添加输出行
   void addOutput(String text, {bool isStderr = false}) {
@@ -76,9 +78,6 @@ class TerminalSession {
       outputBuffer.add(
         TerminalLine(text: line, isStderr: isStderr, timestamp: DateTime.now()),
       );
-    }
-    while (outputBuffer.length > maxBufferSize) {
-      outputBuffer.removeAt(0);
     }
   }
 
@@ -219,6 +218,20 @@ class TerminalSession {
     } catch (e) {
       addOutput('写入失败: $e', isStderr: true);
       LogService.error('Terminal', '  写入失败: $e');
+    }
+  }
+
+  /// 写入原始数据（不添加回显，用于 ExtraKeys 工具栏）
+  void writeRaw(String data) {
+    if (_disposed || data.isEmpty) return;
+    try {
+      if (_nativeSession != null) {
+        _nativeSession!.write(data);
+      } else if (_process != null) {
+        _process!.stdin.write(data);
+      }
+    } catch (e) {
+      LogService.error('Terminal', '  写入原始数据失败: $e');
     }
   }
 

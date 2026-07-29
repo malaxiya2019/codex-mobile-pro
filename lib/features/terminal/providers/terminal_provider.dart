@@ -110,6 +110,13 @@ class TerminalNotifier extends StateNotifier<TerminalState> {
     }
   }
 
+  /// 写入原始数据（不添加 $ 前缀，用于 ExtraKeys）
+  void writeRaw(String data) {
+    if (data.isEmpty) return;
+    state.activeSession?.writeRaw(data);
+    state = state.copyWith();
+  }
+
   void writeCommand(String command) {
     if (command.trim().isEmpty) return;
     state.activeSession?.write(command);

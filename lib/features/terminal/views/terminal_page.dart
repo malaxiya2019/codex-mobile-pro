@@ -5,10 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/i18n/app_locale.dart';
 import '../../../core/i18n/strings.dart';
 import '../providers/terminal_provider.dart';
+import '../providers/terminal_settings_provider.dart';
 import '../services/terminal_service.dart';
+import '../widgets/extra_keys_toolbar.dart';
 import '../widgets/terminal_output.dart';
 
-/// 终端页面（多标签 + 命令历史 + ANSI 渲染）
+/// 终端页面（多标签 + 命令历史 + ANSI 渲染 + 功能键 + 外观设置）
 ///
 /// 沉浸式布局：自动适配系统导航栏，输入框上移不被遮挡。
 class TerminalPage extends ConsumerStatefulWidget {
@@ -18,22 +20,69 @@ class TerminalPage extends ConsumerStatefulWidget {
   ConsumerState<TerminalPage> createState() => _TerminalPageState();
 }
 
-class _TerminalPageState extends ConsumerState<TerminalPage> {
+class _TerminalPageState extends ConsumerState<TerminalPage>
+    with WidgetsBindingObserver {
   final _commandController = TextEditingController();
   final _scrollController = ScrollController();
+  bool _autoScroll = true;
+  bool _settingsVisible = false;
 
   @override
   void initState() {
     super.initState();
-    // 进入终端时启用边缘到边缘布局
+    WidgetsBinding.instance.addObserver(this);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+    // 加载设置
+    Future.microtask(() {
+      ref.read(terminalSettingsProvider.notifier).load();
+    });
+
+    // 监听滚动事件 — 检测用户是否手动滚动
+    _scrollController.addListener(_onScroll);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _commandController.dispose();
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    // 横竖屏切换时调整 PTY 大小
+    _resizeActiveSession();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    // 如果用户向上滚动，停止自动滚动
+    final isAtBottom = _scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 50;
+    if (_autoScroll != isAtBottom) {
+      _autoScroll = isAtBottom;
+    }
+  }
+
+  void _resizeActiveSession() {
+    final state = ref.read(terminalProvider);
+    final session = state.activeSession;
+    if (session == null) return;
+
+    final mediaQuery = MediaQuery.of(context);
+    final availableHeight = mediaQuery.size.height -
+        mediaQuery.padding.top -
+        mediaQuery.padding.bottom -
+        kToolbarHeight -
+        120; // 减去输入栏和工具栏高度
+    final availableWidth = mediaQuery.size.width - 24; // 减去 padding
+
+    final rows = (availableHeight / 20).floor().clamp(10, 200);
+    final cols = (availableWidth / 9).floor().clamp(20, 200);
+    session.resize(rows, cols);
   }
 
   void _submitCommand() {
@@ -46,15 +95,21 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   }
 
   void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
+    _autoScroll = true;
+    Future.delayed(const Duration(milliseconds: 50), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 100),
           curve: Curves.easeOut,
         );
       }
     });
+  }
+
+  /// 向 PTY 写入原始数据（由 ExtraKeysToolbar 调用）
+  void _writeToPty(String data) {
+    ref.read(terminalProvider.notifier).writeRaw(data);
   }
 
   @override
@@ -62,10 +117,12 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final state = ref.watch(terminalProvider);
+    final settings = ref.watch(terminalSettingsProvider);
     final locale = ref.watch(localeProvider);
     final s = Strings.get(locale);
-    // 获取底部安全区域高度（适配系统导航栏）
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
     return Scaffold(
       appBar: AppBar(
@@ -73,6 +130,16 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
         centerTitle: false,
         backgroundColor: colorScheme.surfaceContainer,
         actions: [
+          // 设置按钮
+          IconButton(
+            icon: Icon(_settingsVisible ? Icons.settings : Icons.settings_outlined),
+            tooltip: '外观设置',
+            onPressed: () {
+              setState(() {
+                _settingsVisible = !_settingsVisible;
+              });
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.add),
             tooltip: s.terminalNew,
@@ -100,6 +167,21 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
       ),
       body: Column(
         children: [
+          // ── 外观设置面板 ──
+          if (_settingsVisible)
+            _SettingsPanel(
+              settings: settings,
+              onFontSizeChanged: (v) {
+                ref.read(terminalSettingsProvider.notifier).setFontSize(v);
+              },
+              onThemeModeChanged: (v) {
+                ref.read(terminalSettingsProvider.notifier).setThemeMode(v);
+              },
+              onCursorBlinkChanged: (v) {
+                ref.read(terminalSettingsProvider.notifier).setCursorBlink(v);
+              },
+            ),
+
           // ── Tab 栏 ──
           if (state.sessions.length > 1)
             Container(
@@ -126,18 +208,34 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
               ),
             ),
 
-          // ── 终端输出（ANSI 渲染） ──
+          // ── 终端输出（ANSI 渲染 + 可滚动历史） ──
           Expanded(
             child: Container(
-              color: Colors.black87,
+              color: settings.backgroundColor,
               child: state.activeSession != null
                   ? GestureDetector(
-                      onTap: () {},
+                      onTap: () {
+                        // 点击终端区域，收起设置面板
+                        if (_settingsVisible) {
+                          setState(() => _settingsVisible = false);
+                        }
+                      },
                       child: SingleChildScrollView(
                         controller: _scrollController,
-                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                        padding: EdgeInsets.fromLTRB(
+                          12,
+                          12,
+                          12,
+                          isLandscape ? 4 : 4,
+                        ),
                         child: TerminalOutput(
                           text: state.activeSession!.outputText,
+                          fontSize: settings.fontSize,
+                          fontFamily: settings.fontFamily,
+                          defaultForeground: settings.foregroundColor,
+                          defaultBackground: settings.backgroundColor,
+                          cursorBlink: settings.cursorBlink,
+                          cursorColor: settings.cursorColor,
                         ),
                       ),
                     )
@@ -153,10 +251,26 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
             ),
           ),
 
+          // ── 功能键工具栏（仅横屏或显示时显示） ──
+          if (state.activeSession != null && isLandscape)
+            ExtraKeysToolbar(
+              onWrite: _writeToPty,
+              onSendSigint: () => state.activeSession?.sendSigint(),
+              onSendEof: () => state.activeSession?.write('\x04'),
+            ),
+
+          // ── 功能键工具栏（竖屏时收起的版本 — 点击显示） ──
+          if (state.activeSession != null && !isLandscape)
+            _ExtraKeysToggle(
+              onWrite: _writeToPty,
+              onSendSigint: () => state.activeSession?.sendSigint(),
+            ),
+
           // ── 命令输入区（适配系统导航栏） ──
           if (state.activeSession != null)
             Container(
-              padding: EdgeInsets.fromLTRB(4, 2, 4, bottomPadding > 0 ? bottomPadding - 4 : 6),
+              padding: EdgeInsets.fromLTRB(4, 2, 4,
+                  bottomPadding > 0 ? bottomPadding - 4 : 6),
               color: colorScheme.surfaceContainerHighest,
               child: Row(
                 children: [
@@ -241,6 +355,188 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
   }
 }
 
+/// ── 功能键折叠开关（竖屏用） ──
+class _ExtraKeysToggle extends StatefulWidget {
+  final void Function(String data) onWrite;
+  final VoidCallback? onSendSigint;
+
+  const _ExtraKeysToggle({
+    required this.onWrite,
+    this.onSendSigint,
+  });
+
+  @override
+  State<_ExtraKeysToggle> createState() => _ExtraKeysToggleState();
+}
+
+class _ExtraKeysToggleState extends State<_ExtraKeysToggle> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 展开/收起按钮
+        GestureDetector(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Container(
+            height: 20,
+            color: colorScheme.surfaceContainerHighest,
+            alignment: Alignment.center,
+            child: Icon(
+              _expanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+              size: 16,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        // 展开时显示工具栏
+        if (_expanded)
+          ExtraKeysToolbar(
+            onWrite: widget.onWrite,
+            onSendSigint: widget.onSendSigint,
+          ),
+      ],
+    );
+  }
+}
+
+/// ── 外观设置面板 ──
+class _SettingsPanel extends StatelessWidget {
+  final TerminalSettings settings;
+  final ValueChanged<double> onFontSizeChanged;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
+  final ValueChanged<bool> onCursorBlinkChanged;
+
+  const _SettingsPanel({
+    required this.settings,
+    required this.onFontSizeChanged,
+    required this.onThemeModeChanged,
+    required this.onCursorBlinkChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: colorScheme.surfaceContainerLow,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 字体大小
+          Row(
+            children: [
+              const Text('字体大小', style: TextStyle(fontSize: 12)),
+              Expanded(
+                child: Slider(
+                  value: settings.fontSize,
+                  min: 8,
+                  max: 32,
+                  divisions: 24,
+                  label: '${settings.fontSize.round()}',
+                  onChanged: onFontSizeChanged,
+                ),
+              ),
+              Text(
+                '${settings.fontSize.round()}',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          // 主题 + 光标
+          Row(
+            children: [
+              // 主题选择
+              _SettingChip(
+                icon: Icons.dark_mode,
+                label: '深色',
+                selected: settings.themeMode == ThemeMode.dark,
+                onTap: () => onThemeModeChanged(ThemeMode.dark),
+              ),
+              const SizedBox(width: 8),
+              _SettingChip(
+                icon: Icons.light_mode,
+                label: '浅色',
+                selected: settings.themeMode == ThemeMode.light,
+                onTap: () => onThemeModeChanged(ThemeMode.light),
+              ),
+              const SizedBox(width: 8),
+              _SettingChip(
+                icon: Icons.auto_mode,
+                label: '系统',
+                selected: settings.themeMode == ThemeMode.system,
+                onTap: () => onThemeModeChanged(ThemeMode.system),
+              ),
+              const Spacer(),
+              // 光标闪烁
+              _SettingChip(
+                icon: Icons.blink_on,
+                label: '光标',
+                selected: settings.cursorBlink,
+                onTap: () => onCursorBlinkChanged(!settings.cursorBlink),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 设置项 Chip
+class _SettingChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SettingChip({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: selected
+          ? colorScheme.primaryContainer
+          : colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: selected ? FontWeight.bold : null,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// 终端 Tab
 class _TerminalTab extends StatelessWidget {
   final String name;
@@ -303,22 +599,6 @@ class _TerminalTab extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// 状态点
-class _StatusDot extends StatelessWidget {
-  final Color color;
-
-  const _StatusDot({required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }
