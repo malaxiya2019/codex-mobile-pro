@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/i18n/app_locale.dart';
 import '../../../core/i18n/strings.dart';
 import '../providers/terminal_provider.dart';
-import "package:codex_mobile_pro/features/terminal/services/terminal_service.dart";
+import '../services/terminal_service.dart';
 import '../widgets/terminal_output.dart';
 
 /// 终端页面（多标签 + 命令历史 + ANSI 渲染）
+///
+/// 沉浸式布局：自动适配系统导航栏，输入框上移不被遮挡。
 class TerminalPage extends ConsumerStatefulWidget {
   const TerminalPage({super.key});
 
@@ -18,6 +21,13 @@ class TerminalPage extends ConsumerStatefulWidget {
 class _TerminalPageState extends ConsumerState<TerminalPage> {
   final _commandController = TextEditingController();
   final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // 进入终端时启用边缘到边缘布局
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  }
 
   @override
   void dispose() {
@@ -54,6 +64,8 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
     final state = ref.watch(terminalProvider);
     final locale = ref.watch(localeProvider);
     final s = Strings.get(locale);
+    // 获取底部安全区域高度（适配系统导航栏）
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       appBar: AppBar(
@@ -123,7 +135,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
                       onTap: () {},
                       child: SingleChildScrollView(
                         controller: _scrollController,
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
                         child: TerminalOutput(
                           text: state.activeSession!.outputText,
                         ),
@@ -141,44 +153,10 @@ class _TerminalPageState extends ConsumerState<TerminalPage> {
             ),
           ),
 
-          // ── 状态栏 ──
+          // ── 命令输入区（适配系统导航栏） ──
           if (state.activeSession != null)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              color: colorScheme.surfaceContainerHighest,
-              child: Row(
-                children: [
-                  _StatusDot(
-                    color: state.activeSession!.status ==
-                            TerminalSessionStatus.running
-                        ? Colors.green
-                        : Colors.grey,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    state.activeSession!.cwd,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontFamily: 'monospace',
-                      fontSize: 11,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    state.activeSession!.name,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // ── 命令输入（↑↓键历史导航） ──
-          if (state.activeSession != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding: EdgeInsets.fromLTRB(4, 2, 4, bottomPadding > 0 ? bottomPadding - 4 : 6),
               color: colorScheme.surfaceContainerHighest,
               child: Row(
                 children: [

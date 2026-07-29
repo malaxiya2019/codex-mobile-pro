@@ -1,6 +1,6 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:codex_mobile_pro/features/terminal/services/terminal_service.dart';
 import 'package:codex_mobile_pro/core/termux/shell_detector.dart';
+import 'package:codex_mobile_pro/features/terminal/services/terminal_service.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('ShellInfo', () {
@@ -11,16 +11,30 @@ void main() {
       expect(info.isTermuxBash, false);
     });
 
-    test('toString 包含关键信息', () {
-      const info = ShellInfo();
-      final str = info.toString();
-      expect(str, contains('systemSh'));
-      expect(str, contains('/system/bin/sh'));
+    test('termuxBash 描述正确', () {
+      const info = ShellInfo(
+        type: ShellType.termuxBash,
+        shellPath: '/data/data/com.termux/files/usr/bin/bash',
+        version: 'Termux Bash',
+        isTermuxAvailable: true,
+      );
+      expect(info.friendlyDescription, 'Termux Bash（完整 Linux 环境）');
+      expect(info.isTermuxBash, true);
+    });
+
+    test('termuxSh 描述正确', () {
+      const info = ShellInfo(
+        type: ShellType.termuxSh,
+        shellPath: '/data/data/com.termux/files/usr/bin/sh',
+        version: 'Termux sh',
+      );
+      expect(info.friendlyDescription, 'Termux SH（兼容模式）');
+      expect(info.isTermuxBash, false);
     });
   });
 
   group('TerminalSession', () {
-    test('创建会话', () {
+    test('创建会话（系统 Shell）', () {
       const shellInfo = ShellInfo();
       final session = TerminalSession(
         id: 'test-1',
@@ -37,6 +51,24 @@ void main() {
       expect(session.isDisposed, false);
       expect(session.outputBuffer, isEmpty);
       expect(session.outputText, '');
+    });
+
+    test('创建会话（Termux Bash）', () {
+      const shellInfo = ShellInfo(
+        type: ShellType.termuxBash,
+        shellPath: '/data/data/com.termux/files/usr/bin/bash',
+        version: 'Termux Bash',
+        isTermuxAvailable: true,
+      );
+      final session = TerminalSession(
+        id: 'test-2',
+        name: 'Termux Terminal',
+        shellInfo: shellInfo,
+        cwd: '/data/data/com.termux/files/home',
+      );
+
+      expect(session.shellPath, '/data/data/com.termux/files/usr/bin/bash');
+      expect(session.shellInfo.isTermuxBash, true);
     });
 
     test('添加输出行', () {
