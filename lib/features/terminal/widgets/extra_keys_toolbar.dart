@@ -1,265 +1,351 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-/// 功能键工具栏 — 终端底部的可横向滚动 Extra Keys
+/// ====================================================================
+/// 终端扩展按键栏（Extra Keys）
 ///
-/// 支持：
-/// - Ctrl 组合键（点击 Ctrl 后进入组合模式，再点字母键发送 Ctrl+字母）
-/// - Alt Meta 键
-/// - Esc、Tab
-/// - 方向键、Home、End、PageUp、PageDown
-class ExtraKeysToolbar extends StatefulWidget {
+/// 两行布局，参考 Termux Extra Keys，保持 Material 3 风格。
+///
+/// 按键配置采用数据驱动，便于后续扩展 F1~F12、Insert、Delete 等。
+///
+/// 布局：
+///   第一行：ESC   /    -    HOME   ↑   END   PGUP
+///   第二行：TAB   CTRL   ALT   ←    ↓   →    PGDN
+///
+/// Ctrl 模式：一次性，下一按键自动组合为 Ctrl+Key，发送后退出。
+/// Alt 模式：一次性，下一按键发送 ESC + Key（Meta），发送后退出。
+/// ====================================================================
+
+/// 按键类型
+enum ExtraKeyType {
+  /// 普通按键 — 直接发送指定数据
+  normal,
+
+  /// Ctrl 模式切换
+  ctrl,
+
+  /// Alt 模式切换
+  alt,
+
+  /// Ctrl 组合键（仅在 Ctrl 模式下可见）
+  ctrlCombo,
+}
+
+/// 扩展按键配置
+class ExtraKeyConfig {
+  /// 按钮标签
+  final String label;
+
+  /// 按键类型
+  final ExtraKeyType type;
+
+  /// 按键数据（发送到 PTY 的内容）
+  final String data;
+
+  /// 仅在 Ctrl 模式下显示
+  final bool ctrlOnly;
+
+  /// 仅在 Alt 模式下显示
+  final bool altOnly;
+
+  const ExtraKeyConfig({
+    required this.label,
+    this.type = ExtraKeyType.normal,
+    this.data = '',
+    this.ctrlOnly = false,
+    this.altOnly = false,
+  });
+}
+
+/// 两行布局的按键定义
+///
+/// 使用数据驱动方式，便于后续扩展。
+const List<List<ExtraKeyConfig>> kExtraKeyRows = [
+  // ── 第一行 ──
+  [
+    ExtraKeyConfig(label: 'ESC', data: '\x1b'),
+    ExtraKeyConfig(label: '/', data: '/'),
+    ExtraKeyConfig(label: '-', data: '-'),
+    ExtraKeyConfig(label: 'HOME', data: '\x1b[H'),
+    ExtraKeyConfig(label: '↑', data: '\x1b[A'),
+    ExtraKeyConfig(label: 'END', data: '\x1b[F'),
+    ExtraKeyConfig(label: 'PGUP', data: '\x1b[5~'),
+  ],
+  // ── 第二行 ──
+  [
+    ExtraKeyConfig(label: 'TAB', data: '\t'),
+    ExtraKeyConfig(label: 'CTRL', type: ExtraKeyType.ctrl),
+    ExtraKeyConfig(label: 'ALT', type: ExtraKeyType.alt),
+    ExtraKeyConfig(label: '←', data: '\x1b[D'),
+    ExtraKeyConfig(label: '↓', data: '\x1b[B'),
+    ExtraKeyConfig(label: '→', data: '\x1b[C'),
+    ExtraKeyConfig(label: 'PGDN', data: '\x1b[6~'),
+  ],
+];
+
+/// Ctrl 模式下的常用组合键
+const List<ExtraKeyConfig> kCtrlCombos = [
+  ExtraKeyConfig(label: 'C', data: '\x03', type: ExtraKeyType.ctrlCombo),
+  ExtraKeyConfig(label: 'D', data: '\x04', type: ExtraKeyType.ctrlCombo),
+  ExtraKeyConfig(label: 'L', data: '\x0c', type: ExtraKeyType.ctrlCombo),
+  ExtraKeyConfig(label: 'Z', data: '\x1a', type: ExtraKeyType.ctrlCombo),
+  ExtraKeyConfig(label: 'A', data: '\x01', type: ExtraKeyType.ctrlCombo),
+  ExtraKeyConfig(label: 'W', data: '\x17', type: ExtraKeyType.ctrlCombo),
+  ExtraKeyConfig(label: 'U', data: '\x15', type: ExtraKeyType.ctrlCombo),
+];
+
+/// Alt 模式下的常用组合键
+const List<ExtraKeyConfig> kAltCombos = [
+  ExtraKeyConfig(label: 'B', data: '\x1bb', type: ExtraKeyType.ctrlCombo),
+  ExtraKeyConfig(label: 'F', data: '\x1bf', type: ExtraKeyType.ctrlCombo),
+  ExtraKeyConfig(label: 'D', data: '\x1bd', type: ExtraKeyType.ctrlCombo),
+];
+
+/// 终端扩展按键栏
+class TerminalExtraKeys extends StatefulWidget {
   /// 写入回调 — 向 PTY 发送原始字节
   final void Function(String data) onWrite;
 
-  /// 发送 Ctrl+C 快捷方式
-  final VoidCallback? onSendSigint;
-
-  /// 发送 Ctrl+D 快捷方式
-  final VoidCallback? onSendEof;
-
-  const ExtraKeysToolbar({
+  const TerminalExtraKeys({
     super.key,
     required this.onWrite,
-    this.onSendSigint,
-    this.onSendEof,
   });
 
   @override
-  State<ExtraKeysToolbar> createState() => _ExtraKeysToolbarState();
+  State<TerminalExtraKeys> createState() => _TerminalExtraKeysState();
 }
 
-class _ExtraKeysToolbarState extends State<ExtraKeysToolbar> {
+class _TerminalExtraKeysState extends State<TerminalExtraKeys> {
   bool _ctrlMode = false;
   bool _altMode = false;
 
-  Future<bool> _onWillPop() async {
-    // 如果处于 Ctrl 或 Alt 模式，先退出模式
-    if (_ctrlMode || _altMode) {
+  /// 处理按键点击
+  void _handleKeyTap(ExtraKeyConfig config) {
+    // Ctrl/Alt 模式切换
+    if (config.type == ExtraKeyType.ctrl) {
       setState(() {
-        _ctrlMode = false;
-        _altMode = false;
+        _ctrlMode = !_ctrlMode;
+        if (_ctrlMode) _altMode = false;
       });
-      return false; // 不返回
+      return;
     }
-    return true;
+    if (config.type == ExtraKeyType.alt) {
+      setState(() {
+        _altMode = !_altMode;
+        if (_altMode) _ctrlMode = false;
+      });
+      return;
+    }
+
+    // Ctrl 组合键 — 直接发送
+    if (config.type == ExtraKeyType.ctrlCombo) {
+      widget.onWrite(config.data);
+      setState(() => _ctrlMode = false);
+      return;
+    }
+
+    // 普通按键 — 如果处于 Ctrl 或 Alt 模式，应用修饰符
+    if (_ctrlMode) {
+      // Ctrl + 按键
+      if (config.data.length == 1) {
+        final ch = config.data.codeUnitAt(0);
+        if (ch >= 0x61 && ch <= 0x7A) {
+          // 小写字母 → Ctrl+letter
+          widget.onWrite(String.fromCharCode(ch - 0x60));
+        } else if (ch >= 0x41 && ch <= 0x5A) {
+          // 大写字母 → Ctrl+letter
+          widget.onWrite(String.fromCharCode(ch - 0x40));
+        } else {
+          // 非字母按键 — 发送 Ctrl+key 的简化形式
+          // 对于特殊键（HOME/END/方向键等），Ctrl 模式不适用，发送原始数据
+          widget.onWrite(config.data);
+        }
+      } else {
+        // 多字节序列（方向键等）— Ctrl 模式下不转换，发送原始数据
+        widget.onWrite(config.data);
+      }
+      setState(() => _ctrlMode = false);
+      return;
+    }
+
+    if (_altMode) {
+      // Alt + 按键 = ESC + 原始数据
+      widget.onWrite('\x1b${config.data}');
+      setState(() => _altMode = false);
+      return;
+    }
+
+    // 普通模式 — 直接发送
+    widget.onWrite(config.data);
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return PopScope(
-      canPop: !_ctrlMode && !_altMode,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) {
-          setState(() {
-            _ctrlMode = false;
-            _altMode = false;
-          });
-        }
-      },
-      child: Container(
-        height: 44,
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
-          border: Border(
-            top: BorderSide(
-              color: colorScheme.outlineVariant,
-              width: 0.5,
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLow,
+        border: Border(
+          top: BorderSide(
+            color: colorScheme.outlineVariant,
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Ctrl/Alt 组合键面板（展开时显示）
+          if (_ctrlMode) _buildCtrlPanel(colorScheme),
+          if (_altMode) _buildAltPanel(colorScheme),
+
+          // 两行主按键
+          _buildKeyRow(kExtraKeyRows[0], colorScheme),
+          const SizedBox(height: 2),
+          _buildKeyRow(kExtraKeyRows[1], colorScheme),
+          const SizedBox(height: 2),
+        ],
+      ),
+    );
+  }
+
+  /// 构建 Ctrl 组合键面板
+  Widget _buildCtrlPanel(ColorScheme colorScheme) {
+    return Container(
+      height: 36,
+      margin: const EdgeInsets.only(top: 2),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        children: [
+          ...kCtrlCombos.map((config) => _buildCtrlAltChip(config, colorScheme)),
+          const SizedBox(width: 12),
+        ],
+      ),
+    );
+  }
+
+  /// 构建 Alt 组合键面板
+  Widget _buildAltPanel(ColorScheme colorScheme) {
+    return Container(
+      height: 36,
+      margin: const EdgeInsets.only(top: 2),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        children: [
+          ...kAltCombos.map((config) => _buildCtrlAltChip(config, colorScheme)),
+          const SizedBox(width: 12),
+        ],
+      ),
+    );
+  }
+
+  /// 构建 Ctrl/Alt 组合键 Chip
+  Widget _buildCtrlAltChip(ExtraKeyConfig config, ColorScheme colorScheme) {
+    final isCtrl = _ctrlMode;
+    final accent = isCtrl ? colorScheme.primary : colorScheme.secondary;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Material(
+        color: accent.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => _handleKeyTap(config),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: accent.withValues(alpha: 0.4),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isCtrl ? '^' : 'M-',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: accent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  config.label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: accent,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        child: GestureDetector(
-          onVerticalDragStart: (_) {
-            // 阻止垂直滑动冲突
-          },
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            physics: const ClampingScrollPhysics(),
-            children: [
-              // Ctrl 模式切换
-              _KeyButton(
-                label: 'Ctrl',
-                isActive: _ctrlMode,
-                activeColor: colorScheme.primary,
-                onTap: () {
-                  setState(() {
-                    _ctrlMode = !_ctrlMode;
-                    if (_ctrlMode) _altMode = false;
-                  });
-                },
-              ),
-              // Alt 模式切换
-              _KeyButton(
-                label: 'Alt',
-                isActive: _altMode,
-                activeColor: colorScheme.secondary,
-                onTap: () {
-                  setState(() {
-                    _altMode = !_altMode;
-                    if (_altMode) _ctrlMode = false;
-                  });
-                },
-              ),
-              _divider(),
-              // Esc
-              _KeyButton(
-                label: 'Esc',
-                onTap: () => _send('\x1b'),
-              ),
-              // Tab
-              _KeyButton(
-                label: 'Tab',
-                onTap: () => _send('\t'),
-              ),
-              // Ctrl 组合键（Ctrl 模式下显示）
-              if (_ctrlMode) ...[
-                _divider(),
-                _KeyButton(label: 'C', onTap: () => _sendCtrl('c')),
-                _KeyButton(label: 'D', onTap: () => _sendCtrl('d')),
-                _KeyButton(label: 'L', onTap: () => _sendCtrl('l')),
-                _KeyButton(label: 'Z', onTap: () => _sendCtrl('z')),
-                _KeyButton(label: 'A', onTap: () => _sendCtrl('a')),
-                _KeyButton(label: 'W', onTap: () => _sendCtrl('w')),
-                _KeyButton(label: 'U', onTap: () => _sendCtrl('u')),
-                _KeyButton(label: 'R', onTap: () => _sendCtrl('r')),
-              ],
-              // Alt 组合键（Alt 模式下显示）
-              if (_altMode) ...[
-                _divider(),
-                _KeyButton(label: 'B', onTap: () => _sendAlt('b')),
-                _KeyButton(label: 'F', onTap: () => _sendAlt('f')),
-                _KeyButton(label: 'D', onTap: () => _sendAlt('d')),
-              ],
-              _divider(),
-              // 方向键
-              _KeyButton(
-                label: '↑',
-                onTap: () => _send('\x1b[A'),
-              ),
-              _KeyButton(
-                label: '↓',
-                onTap: () => _send('\x1b[B'),
-              ),
-              _KeyButton(
-                label: '→',
-                onTap: () => _send('\x1b[C'),
-              ),
-              _KeyButton(
-                label: '←',
-                onTap: () => _send('\x1b[D'),
-              ),
-              _divider(),
-              // Home / End
-              _KeyButton(
-                label: 'Home',
-                onTap: () => _send('\x1b[H'),
-              ),
-              _KeyButton(
-                label: 'End',
-                onTap: () => _send('\x1b[F'),
-              ),
-              // PgUp / PgDn
-              _KeyButton(
-                label: 'PgUp',
-                onTap: () => _send('\x1b[5~'),
-              ),
-              _KeyButton(
-                label: 'PgDn',
-                onTap: () => _send('\x1b[6~'),
-              ),
-              const SizedBox(width: 12),
-            ],
-          ),
-        ),
       ),
     );
   }
 
-  Widget _divider() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Container(
-        width: 1,
-        color: Colors.grey.withValues(alpha: 0.3),
+  /// 构建一行按键
+  Widget _buildKeyRow(List<ExtraKeyConfig> configs, ColorScheme colorScheme) {
+    return SizedBox(
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        physics: const ClampingScrollPhysics(),
+        children: [
+          ...configs.map((config) => _buildKeyButton(config, colorScheme)),
+          const SizedBox(width: 8),
+        ],
       ),
     );
   }
 
-  void _send(String data) {
-    widget.onWrite(data);
-    // Ctrl 和 Alt 模式在发送后不自动退出，让用户可以连续发 Ctrl+C、Ctrl+D 等
-  }
-
-  void _sendCtrl(String ch) {
-    // Ctrl+字母 = ch.codeUnitAt(0) - 0x60 (0x01-0x1A)
-    final code = ch.toUpperCase().codeUnitAt(0) - 0x40;
-    widget.onWrite(String.fromCharCode(code));
-    // 发送后退出 Ctrl 模式
-    setState(() {
-      _ctrlMode = false;
-    });
-  }
-
-  void _sendAlt(String ch) {
-    // Alt+字母 = ESC + 字母
-    widget.onWrite('\x1b$ch');
-    setState(() {
-      _altMode = false;
-    });
-  }
-}
-
-/// 单个功能键按钮
-class _KeyButton extends StatelessWidget {
-  final String label;
-  final bool isActive;
-  final Color? activeColor;
-  final VoidCallback onTap;
-
-  const _KeyButton({
-    required this.label,
-    required this.onTap,
-    this.isActive = false,
-    this.activeColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+  /// 构建单个按键
+  Widget _buildKeyButton(ExtraKeyConfig config, ColorScheme colorScheme) {
+    final isCtrlActive = config.type == ExtraKeyType.ctrl && _ctrlMode;
+    final isAltActive = config.type == ExtraKeyType.alt && _altMode;
+    final isActive = isCtrlActive || isAltActive;
+    final accentColor = isCtrlActive
+        ? colorScheme.primary
+        : (isAltActive ? colorScheme.secondary : null);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: Material(
         color: isActive
-            ? (activeColor ?? colorScheme.primary).withValues(alpha: 0.2)
+            ? (accentColor ?? colorScheme.primary).withValues(alpha: 0.2)
             : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(8),
         child: InkWell(
-          borderRadius: BorderRadius.circular(6),
-          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => _handleKeyTap(config),
           child: Container(
-            constraints: const BoxConstraints(minWidth: 36),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            constraints: const BoxConstraints(minWidth: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: isActive
-                    ? (activeColor ?? colorScheme.primary)
+                    ? (accentColor ?? colorScheme.primary)
                     : colorScheme.outlineVariant,
                 width: isActive ? 1.5 : 0.5,
               ),
             ),
             alignment: Alignment.center,
             child: Text(
-              label,
+              config.label,
               style: TextStyle(
                 fontSize: 12,
-                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
                 color: isActive
-                    ? (activeColor ?? colorScheme.primary)
+                    ? (accentColor ?? colorScheme.primary)
                     : colorScheme.onSurface,
                 fontFamily: 'monospace',
               ),

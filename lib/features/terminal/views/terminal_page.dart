@@ -107,7 +107,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage>
     });
   }
 
-  /// 向 PTY 写入原始数据（由 ExtraKeysToolbar 调用）
+  /// 向 PTY 写入原始数据（由 TerminalExtraKeys 调用）
   void _writeToPty(String data) {
     ref.read(terminalProvider.notifier).writeRaw(data);
   }
@@ -251,20 +251,13 @@ class _TerminalPageState extends ConsumerState<TerminalPage>
             ),
           ),
 
-          // ── 功能键工具栏（仅横屏或显示时显示） ──
-          if (state.activeSession != null && isLandscape)
-            ExtraKeysToolbar(
+          // ── 终端扩展按键栏（Extra Keys） ──
+          if (state.activeSession != null)
+            TerminalExtraKeys(
               onWrite: _writeToPty,
-              onSendSigint: () => state.activeSession?.sendSigint(),
-              onSendEof: () => state.activeSession?.write('\x04'),
             ),
 
-          // ── 功能键工具栏（竖屏时收起的版本 — 点击显示） ──
-          if (state.activeSession != null && !isLandscape)
-            _ExtraKeysToggle(
-              onWrite: _writeToPty,
-              onSendSigint: () => state.activeSession?.sendSigint(),
-            ),
+
 
           // ── 命令输入区（适配系统导航栏） ──
           if (state.activeSession != null)
@@ -355,56 +348,6 @@ class _TerminalPageState extends ConsumerState<TerminalPage>
   }
 }
 
-/// ── 功能键折叠开关（竖屏用） ──
-class _ExtraKeysToggle extends StatefulWidget {
-  final void Function(String data) onWrite;
-  final VoidCallback? onSendSigint;
-
-  const _ExtraKeysToggle({
-    required this.onWrite,
-    this.onSendSigint,
-  });
-
-  @override
-  State<_ExtraKeysToggle> createState() => _ExtraKeysToggleState();
-}
-
-class _ExtraKeysToggleState extends State<_ExtraKeysToggle> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 展开/收起按钮
-        GestureDetector(
-          onTap: () => setState(() => _expanded = !_expanded),
-          child: Container(
-            height: 20,
-            color: colorScheme.surfaceContainerHighest,
-            alignment: Alignment.center,
-            child: Icon(
-              _expanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
-              size: 16,
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-        // 展开时显示工具栏
-        if (_expanded)
-          ExtraKeysToolbar(
-            onWrite: widget.onWrite,
-            onSendSigint: widget.onSendSigint,
-          ),
-      ],
-    );
-  }
-}
-
-/// ── 外观设置面板 ──
 class _SettingsPanel extends StatelessWidget {
   final TerminalSettings settings;
   final ValueChanged<double> onFontSizeChanged;
