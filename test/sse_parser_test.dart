@@ -88,9 +88,13 @@ void main() {
         'data: [DONE]\n\n',
       );
 
+      // 使用 Stream.fromIterable 确保明确的完成信号
+      final sourceStream = Stream<List<int>>.fromIterable([input]);
       final events = <SseEvent>[];
-      final result = await parser.byteTransformer.bind(Stream.value(input)).toList();
-      events.addAll(result);
+      await parser.byteTransformer
+          .bind(sourceStream)
+          .timeout(const Duration(seconds: 5))
+          .forEach((event) => events.add(event));
 
       expect(events.length, 3);
       expect(events[0].type, SseEventType.data);

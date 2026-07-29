@@ -85,13 +85,8 @@ class LogFileWriter {
     final lines = List<String>.from(_buffer);
     _buffer.clear();
 
-    try {
-      await _writeLines(lines);
-    } catch (_) {
-      // 写入失败时不阻塞调用方
-      // 将数据放回缓冲区以防丢失
-      _buffer.insertAll(0, lines);
-    }
+    // 写入文件；异常向上传播以便调用方知晓
+    await _writeLines(lines);
   }
 
   Future<void> _writeLines(List<String> lines) async {

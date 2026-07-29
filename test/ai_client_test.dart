@@ -10,17 +10,12 @@ class MockHttpClient extends Mock implements http.Client {}
 
 class FakeUri extends Fake implements Uri {}
 
-class FakeBaseRequest extends Fake implements http.BaseRequest {}
-
-class FakeStreamedResponse extends Fake implements http.StreamedResponse {}
-
 void main() {
   late MockHttpClient mockClient;
   late AiClient aiClient;
 
   setUp(() {
     registerFallbackValue(FakeUri());
-    registerFallbackValue(FakeBaseRequest());
     mockClient = MockHttpClient();
     aiClient = AiClient(
       config: const AiClientConfig(
@@ -163,7 +158,7 @@ void main() {
         'data: {"choices":[{"delta":{"content":"lo"},"index":0}]}\n\n'
         'data: [DONE]\n\n';
 
-      when(() => mockClient.send(any<http.BaseRequest>())).thenAnswer((_) async {
+      when(() => mockClient.send(any(named: 'request'))).thenAnswer((_) async {
         // 确保 stream 可以被多次监听
         final bytes = utf8.encode(sseData);
         final controller = http.ByteStream.fromBytes(bytes);
@@ -175,9 +170,10 @@ void main() {
       ];
 
       final events = <SseEvent>[];
-      await for (final event in aiClient.chatStream(messages: messages)) {
-        events.add(event);
-      }
+      await aiClient
+          .chatStream(messages: messages)
+          .timeout(const Duration(seconds: 5))
+          .forEach((event) => events.add(event));
 
       expect(events.length, 3);
       expect(events[0].content, 'Hel');
@@ -189,7 +185,7 @@ void main() {
       final mockStream = http.ByteStream.fromBytes(utf8.encode('Unauthorized'));
       final mockResponse = http.StreamedResponse(mockStream, 401);
 
-      when(() => mockClient.send(any<http.BaseRequest>())).thenAnswer((_) async => mockResponse);
+      when(() => mockClient.send(any(named: 'request'))).thenAnswer((_) async => mockResponse);
 
       final messages = [
         ChatMessage(id: '1', role: ChatRole.user, content: 'test', timestamp: DateTime(2026)),

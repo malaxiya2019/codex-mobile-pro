@@ -9,38 +9,55 @@ import 'dart:convert';
 ///   data: [DONE]
 class SseParser {
   /// 转换原始字节流为 SSE 事件流
+  ///
+  /// 使用显式 StreamSubscription 模式，避免 StreamTransformer.fromHandlers
+  /// 在某些 Dart SDK 版本中 handleDone 不触发的问题。
   StreamTransformer<List<int>, SseEvent> get byteTransformer {
-    // 缓冲所有字节块，在流关闭时统一处理
-    final chunks = <int>[];
-    return StreamTransformer<List<int>, SseEvent>.fromHandlers(
-      handleData: (data, sink) {
-        chunks.addAll(data);
-      },
-      handleDone: (sink) {
-        if (chunks.isEmpty) {
-          sink.close();
-          return;
+    return StreamTransformer<List<int>, SseEvent>((Stream<List<int>> input, bool cancelOnError) {
+      final chunks = <int>[];
+      final controller = StreamController<SseEvent>();
+      StreamSubscription<List<int>>? subscription;
+
+      subscription = input.listen(
+        (data) {
+          chunks.addAll(data);
+        },
+        onDone: () {
+          _emitEvents(chunks, controller);
+          controller.close();
+        },
+        onError: (Object e, StackTrace st) {
+          controller.addError(e, st);
+        },
+        cancelOnError: cancelOnError,
+      );
+
+      controller.onCancel = () => subscription?.cancel();
+
+      return controller.stream.listen(null);
+    });
+  }
+
+  /// 从缓冲字节块中解析 SSE 事件并发送到 controller
+  void _emitEvents(List<int> chunks, StreamController<SseEvent> controller) {
+    if (chunks.isEmpty) return;
+    final text = utf8.decode(chunks, allowMalformed: true);
+    for (final line in const LineSplitter().convert(text)) {
+      if (line.isEmpty || line.startsWith(':')) continue;
+      if (line.startsWith('data: ')) {
+        final jsonStr = line.substring(6).trim();
+        if (jsonStr == '[DONE]') {
+          controller.add(SseEvent.done());
+          break;
         }
-        final text = utf8.decode(chunks, allowMalformed: true);
-        for (final line in const LineSplitter().convert(text)) {
-          if (line.isEmpty || line.startsWith(':')) continue;
-          if (line.startsWith('data: ')) {
-            final jsonStr = line.substring(6).trim();
-            if (jsonStr == '[DONE]') {
-              sink.add(SseEvent.done());
-              break;
-            }
-            try {
-              final json = jsonDecode(jsonStr) as Map<String, dynamic>;
-              sink.add(SseEvent.data(json));
-            } catch (e) {
-              sink.add(SseEvent.error('SSE 解析失败: $e'));
-            }
-          }
+        try {
+          final json = jsonDecode(jsonStr) as Map<String, dynamic>;
+          controller.add(SseEvent.data(json));
+        } catch (e) {
+          controller.add(SseEvent.error('SSE 解析失败: $e'));
         }
-        sink.close();
-      },
-    );
+      }
+    }
   }
 
   /// 解析单行文本为 SSE 事件（用于测试）
