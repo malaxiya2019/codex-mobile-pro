@@ -8,7 +8,7 @@ import android.util.Log
  * 对应 jni/pty.c 中的 C 函数。
  * 所有方法都是静态的，通过 System.loadLibrary("pty_native") 加载。
  */
-internal object PtyNative {
+object PtyNative {
 
     private const val TAG = "PtyNative"
     private var loaded = false

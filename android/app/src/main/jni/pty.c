@@ -174,7 +174,7 @@ static pid_t create_pty_process(int *master_fd,
 // JNI: createProcess
 // ──────────────────────────────────────────────
 JNIEXPORT jintArray JNICALL
-Java_com_codexmobile_app_terminal_PtySession_createProcess(
+Java_com_codexmobile_app_terminal_PtyNative_createProcess(
     JNIEnv *env,
     jobject thiz,
     jstring shell_path,
@@ -302,7 +302,7 @@ Java_com_codexmobile_app_terminal_PtySession_createProcess(
 // JNI: writeToPty
 // ──────────────────────────────────────────────
 JNIEXPORT jint JNICALL
-Java_com_codexmobile_app_terminal_PtySession_writeToPty(
+Java_com_codexmobile_app_terminal_PtyNative_writeToPty(
     JNIEnv *env,
     jobject thiz,
     jint fd,
@@ -333,7 +333,7 @@ Java_com_codexmobile_app_terminal_PtySession_writeToPty(
 // JNI: readFromPty
 // ──────────────────────────────────────────────
 JNIEXPORT jint JNICALL
-Java_com_codexmobile_app_terminal_PtySession_readFromPty(
+Java_com_codexmobile_app_terminal_PtyNative_readFromPty(
     JNIEnv *env,
     jobject thiz,
     jint fd,
@@ -371,7 +371,7 @@ Java_com_codexmobile_app_terminal_PtySession_readFromPty(
 // JNI: resizePty
 // ──────────────────────────────────────────────
 JNIEXPORT jint JNICALL
-Java_com_codexmobile_app_terminal_PtySession_resizePty(
+Java_com_codexmobile_app_terminal_PtyNative_resizePty(
     JNIEnv *env,
     jobject thiz,
     jint fd,
@@ -403,7 +403,7 @@ Java_com_codexmobile_app_terminal_PtySession_resizePty(
 // JNI: waitForExit
 // ──────────────────────────────────────────────
 JNIEXPORT jint JNICALL
-Java_com_codexmobile_app_terminal_PtySession_waitForExit(
+Java_com_codexmobile_app_terminal_PtyNative_waitForExit(
     JNIEnv *env,
     jobject thiz,
     jint pid) {
@@ -433,7 +433,7 @@ Java_com_codexmobile_app_terminal_PtySession_waitForExit(
 // JNI: signalProcess
 // ──────────────────────────────────────────────
 JNIEXPORT jint JNICALL
-Java_com_codexmobile_app_terminal_PtySession_signalProcess(
+Java_com_codexmobile_app_terminal_PtyNative_signalProcess(
     JNIEnv *env,
     jobject thiz,
     jint pid,
@@ -455,7 +455,7 @@ Java_com_codexmobile_app_terminal_PtySession_signalProcess(
 // JNI: closeFd
 // ──────────────────────────────────────────────
 JNIEXPORT jint JNICALL
-Java_com_codexmobile_app_terminal_PtySession_closeFd(
+Java_com_codexmobile_app_terminal_PtyNative_closeFd(
     JNIEnv *env,
     jobject thiz,
     jint fd) {
