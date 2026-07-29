@@ -142,7 +142,7 @@ class RuntimeManager {
         }
 
         // 检查依赖
-        if (dep != null && dep.dependencies.isNotEmpty) {
+        if (dep.dependencies.isNotEmpty) {
           bool depMissing = false;
           for (final d in dep.dependencies) {
             if (!await _environment!.isToolInstalled(d)) {

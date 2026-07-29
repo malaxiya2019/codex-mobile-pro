@@ -479,9 +479,6 @@ class _DeployPageState extends ConsumerState<DeployPage> {
     if (detection == null) return const SizedBox.shrink();
 
     final codingMissing = detection.coding
-        .where((r) => r.status == DetectionStatus.missing)
-        .length;
-    final codingUnsupported = detection.coding
         .where((r) => r.status == DetectionStatus.unsupported)
         .length;
 
