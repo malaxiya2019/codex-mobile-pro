@@ -15,6 +15,9 @@ class RingBuffer<E> {
   /// 当前元素数量
   int get size => _size;
 
+  /// 当前元素数量（兼容 List API）
+  int get length => _size;
+
   /// 容量
   int get capacity => _capacity;
 

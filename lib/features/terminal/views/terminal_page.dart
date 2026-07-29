@@ -476,7 +476,7 @@ class _SettingsPanel extends StatelessWidget {
               const Spacer(),
               // 光标闪烁
               _SettingChip(
-                icon: Icons.blink_on,
+                icon: Icons.flash_on,
                 label: '光标',
                 selected: settings.cursorBlink,
                 onTap: () => onCursorBlinkChanged(!settings.cursorBlink),
