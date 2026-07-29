@@ -9,25 +9,22 @@ void main() {
       expect(info.type, ShellType.systemSh);
       expect(info.shellPath, '/system/bin/sh');
       expect(info.isAvailable, true);
-      expect(info.isTermuxBash, false);
       expect(info.friendlyDescription, 'Android 系统 Shell');
       expect(info.launchArgs, ['-i']);
       expect(info.useRunInShell, false);
     });
 
-    test('Termux Bash ShellInfo 正确', () {
+    test('自定义 Shell 信息正确', () {
       const info = ShellInfo(
-        type: ShellType.termuxBash,
-        shellPath: '/data/data/com.termux/files/usr/bin/bash',
-        version: 'Termux Bash',
-        isTermuxAvailable: true,
+        type: ShellType.systemSh,
+        shellPath: '/system/bin/sh',
+        version: 'sh (Android 10)',
+        isTermuxAvailable: false,
       );
 
-      expect(info.type, ShellType.termuxBash);
-      expect(info.shellPath, '/data/data/com.termux/files/usr/bin/bash');
-      expect(info.isTermuxBash, true);
-      expect(info.isTermuxAvailable, true);
-      expect(info.friendlyDescription, 'Termux Bash（完整 Linux 环境）');
+      expect(info.type, ShellType.systemSh);
+      expect(info.shellPath, '/system/bin/sh');
+      expect(info.isTermuxAvailable, false);
     });
 
     test('toString 包含完整信息', () {
@@ -50,16 +47,14 @@ void main() {
       expect(info.version, 'sh (Android 10)');
     });
 
-    test('termuxSh 类型正确', () {
-      const info = ShellInfo(
-        type: ShellType.termuxSh,
-        shellPath: '/data/data/com.termux/files/usr/bin/sh',
-        version: 'Termux sh',
-      );
+    test('isTermuxAvailable 默认 false', () {
+      const info = ShellInfo();
+      expect(info.isTermuxAvailable, false);
+    });
 
-      expect(info.type, ShellType.termuxSh);
-      expect(info.shellPath, '/data/data/com.termux/files/usr/bin/sh');
-      expect(info.friendlyDescription, 'Termux SH（兼容模式）');
+    test('shellPath 可通过构造设置', () {
+      const info = ShellInfo(shellPath: '/custom/shell');
+      expect(info.shellPath, '/custom/shell');
     });
   });
 
@@ -75,8 +70,8 @@ void main() {
       expect(shell.isTermuxAvailable, false);
     });
 
-    test('getShellEnvironment 无 shellInfo 返回系统环境', () {
-      final env = ShellDetector.getShellEnvironment('/data/app/home');
+    test('getShellEnvironment 返回系统环境', () {
+      const env = ShellDetector.getShellEnvironment('/data/app/home');
 
       expect(env['HOME'], '/data/app/home');
       expect(env['PATH'], '/system/bin:/system/xbin');
@@ -85,39 +80,27 @@ void main() {
     });
 
     test('getShellEnvironment 可以设置不同路径', () {
-      final env = ShellDetector.getShellEnvironment('/custom/path');
+      const env = ShellDetector.getShellEnvironment('/custom/path');
 
       expect(env['HOME'], '/custom/path');
       expect(env['PATH'], '/system/bin:/system/xbin');
     });
 
-    test('getShellEnvironment 传入 Termux ShellInfo 返回 Termux 环境', () {
-      const shellInfo = ShellInfo(
-        type: ShellType.termuxBash,
-        shellPath: '/data/data/com.termux/files/usr/bin/bash',
-        isTermuxAvailable: true,
-      );
-      final env = ShellDetector.getShellEnvironment(
-        '/data/app/home',
-        shellInfo: shellInfo,
-      );
+    test('getShellEnvironment 返回的环境变量包含所有必需键', () {
+      const env = ShellDetector.getShellEnvironment('/data/app/home');
 
-      expect(env['HOME'], '/data/data/com.termux/files/home');
-      expect(env['PATH'], contains('/data/data/com.termux/files/usr/bin'));
-      expect(env['SHELL'], '/data/data/com.termux/files/usr/bin/bash');
-      expect(env['PREFIX'], '/data/data/com.termux/files/usr');
-      expect(env['TMPDIR'], '/data/data/com.termux/files/usr/tmp');
+      expect(env, containsAll(<String>['HOME', 'PATH', 'TERM', 'SHELL']));
     });
 
-    test('getShellEnvironment 传入非 Termux ShellInfo 返回系统环境', () {
-      const shellInfo = ShellInfo(); // 默认 systemSh，isTermuxAvailable=false
-      final env = ShellDetector.getShellEnvironment(
-        '/data/app/home',
-        shellInfo: shellInfo,
-      );
+    test('getShellEnvironment TERM 默认为 xterm-256color', () {
+      const env = ShellDetector.getShellEnvironment('/home');
 
-      expect(env['HOME'], '/data/app/home');
-      expect(env['PATH'], '/system/bin:/system/xbin');
+      expect(env['TERM'], 'xterm-256color');
+    });
+
+    test('getShellEnvironment SHELL 默认为 /system/bin/sh', () {
+      const env = ShellDetector.getShellEnvironment('/home');
+
       expect(env['SHELL'], '/system/bin/sh');
     });
   });

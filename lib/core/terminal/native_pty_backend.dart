@@ -23,6 +23,12 @@ class NativePtyBackend implements ITerminalBackend {
   String? _shellPath;
   String? _busyboxPath;
 
+  /// BusyBox shell 路径
+  String? get shellPath => _shellPath;
+
+  /// BusyBox 二进制路径
+  String? get busyboxPath => _busyboxPath;
+
   @override
   String get name => 'native_pty';
 
