@@ -5,6 +5,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/logger/log_service.dart';
 import '../../../core/termux/shell_detector.dart';
+import '../../../core/terminal/iterminal_backend.dart';
+import '../../../core/terminal/process_terminal_backend.dart';
+import '../../../core/terminal/native_pty_backend.dart';
 
 /// 终端会话状态
 enum TerminalSessionStatus { running, exited, error }
@@ -25,9 +28,10 @@ class TerminalLine {
 /// 终端会话
 ///
 /// 使用 ShellDetector 自动检测可用 Shell，优先级：
-/// 1. Termux Bash（完整 Linux 环境）
-/// 2. Termux sh（备用）
-/// 3. Android 系统 Shell（兜底）
+/// 1. Native PTY + BusyBox（如果启用）
+/// 2. Termux Bash（完整 Linux 环境）
+/// 3. Termux sh（备用）
+/// 4. Android 系统 Shell（兜底）
 class TerminalSession {
   final String id;
   String name;
@@ -40,6 +44,10 @@ class TerminalSession {
   StreamSubscription? _stderrSub;
   bool _disposed = false;
 
+  /// Native PTY 后端（可选）
+  ITerminalBackend? _backend;
+  SessionHandle? _nativeSession;
+
   static const int maxBufferSize = 1000;
 
   TerminalSession({
@@ -49,7 +57,9 @@ class TerminalSession {
     required this.cwd,
     this.status = TerminalSessionStatus.running,
     List<TerminalLine>? outputBuffer,
-  }) : outputBuffer = outputBuffer ?? [];
+    ITerminalBackend? backend,
+  }) : outputBuffer = outputBuffer ?? [],
+       _backend = backend;
 
   bool get isDisposed => _disposed;
   String get shellPath => shellInfo.shellPath;
@@ -74,7 +84,7 @@ class TerminalSession {
 
   /// 启动进程
   Future<bool> start() async {
-    if (_process != null) return true;
+    if (_process != null || _nativeSession != null) return true;
 
     // ── 日志：启动前记录关键信息 ──
     LogService.info('Terminal', '启动会话 $id');
@@ -82,54 +92,16 @@ class TerminalSession {
     LogService.info('Terminal', '  类型: ${shellInfo.friendlyDescription}');
     LogService.info('Terminal', '  Termux: ${shellInfo.isTermuxAvailable}');
     LogService.info('Terminal', '  工作目录: $cwd');
+    LogService.info('Terminal', '  后端: ${_backend?.name ?? "process"}');
 
     try {
-      // 获取完整环境变量（根据 Shell 类型）
-      final appDir = await getApplicationDocumentsDirectory();
-      final env = ShellDetector.getShellEnvironment(appDir.path);
-      LogService.info('Terminal', '  HOME: ${env['HOME']}');
-      LogService.info('Terminal', '  PATH: ${env['PATH']}');
-      LogService.info('Terminal', '  SHELL: ${env['SHELL']}');
+      // 如果设置了 Native PTY 后端，优先使用
+      if (_backend != null && _backend is NativePtyBackend) {
+        return await _startWithNativePty();
+      }
 
-      _process = await Process.start(
-        shellInfo.shellPath,
-        shellInfo.launchArgs,
-        workingDirectory: cwd,
-        environment: env,
-      );
-
-      status = TerminalSessionStatus.running;
-      LogService.info('Terminal', '  进程已启动 (PID: ${_process!.pid})');
-
-      _stdoutSub = _process!.stdout
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen(
-            (line) => addOutput(line),
-            onError: (e) {
-              LogService.error('Terminal', '  stdout 错误: $e');
-              addOutput('stdout error: $e', isStderr: true);
-            },
-          );
-
-      _stderrSub = _process!.stderr
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen(
-            (line) => addOutput(line, isStderr: true),
-            onError: (e) {
-              LogService.error('Terminal', '  stderr 错误: $e');
-              addOutput('stderr error: $e', isStderr: true);
-            },
-          );
-
-      _process!.exitCode.then((code) {
-        status = TerminalSessionStatus.exited;
-        addOutput('进程退出 (exit code: $code)');
-        LogService.info('Terminal', '  会话 $id 退出，code=$code');
-      });
-
-      return true;
+      // 否则使用 Process.start()（现有方式）
+      return await _startWithProcess();
     } catch (e, stack) {
       status = TerminalSessionStatus.error;
       final msg = '启动失败: $e';
@@ -144,11 +116,105 @@ class TerminalSession {
     }
   }
 
+  /// 使用 Process.start() 启动
+  Future<bool> _startWithProcess() async {
+    final appDir = await getApplicationDocumentsDirectory();
+    final env = ShellDetector.getShellEnvironment(appDir.path);
+    LogService.info('Terminal', '  HOME: ${env['HOME']}');
+    LogService.info('Terminal', '  PATH: ${env['PATH']}');
+    LogService.info('Terminal', '  SHELL: ${env['SHELL']}');
+
+    _process = await Process.start(
+      shellInfo.shellPath,
+      shellInfo.launchArgs,
+      workingDirectory: cwd,
+      environment: env,
+    );
+
+    status = TerminalSessionStatus.running;
+    LogService.info('Terminal', '  进程已启动 (PID: ${_process!.pid})');
+
+    _stdoutSub = _process!.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen(
+          (line) => addOutput(line),
+          onError: (e) {
+            LogService.error('Terminal', '  stdout 错误: $e');
+            addOutput('stdout error: $e', isStderr: true);
+          },
+        );
+
+    _stderrSub = _process!.stderr
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())
+        .listen(
+          (line) => addOutput(line, isStderr: true),
+          onError: (e) {
+            LogService.error('Terminal', '  stderr 错误: $e');
+            addOutput('stderr error: $e', isStderr: true);
+          },
+        );
+
+    _process!.exitCode.then((code) {
+      status = TerminalSessionStatus.exited;
+      addOutput('进程退出 (exit code: $code)');
+      LogService.info('Terminal', '  会话 $id 退出，code=$code');
+    });
+
+    return true;
+  }
+
+  /// 使用 Native PTY 启动
+  Future<bool> _startWithNativePty() async {
+    final appDir = await getApplicationDocumentsDirectory();
+    final env = ShellDetector.getShellEnvironment(appDir.path);
+
+    try {
+      _nativeSession = await _backend!.createSession(
+        shellPath: shellInfo.shellPath,
+        args: shellInfo.launchArgs,
+        workingDirectory: cwd,
+        environment: env,
+      );
+
+      status = TerminalSessionStatus.running;
+      LogService.info('Terminal', '  Native PTY 会话已创建');
+
+      // 订阅输出流
+      _nativeSession!.outputStream.listen(
+        (line) => addOutput(line),
+        onError: (e) {
+          LogService.error('Terminal', '  PTY 输出错误: $e');
+          addOutput('PTY error: $e', isStderr: true);
+        },
+      );
+
+      _nativeSession!.errorStream.listen(
+        (line) => addOutput(line, isStderr: true),
+        onError: (e) {
+          LogService.error('Terminal', '  PTY 错误流: $e');
+        },
+      );
+
+      return true;
+    } catch (e) {
+      LogService.error('Terminal', '  Native PTY 启动失败: $e，回退到 Process 后端');
+      // 回退到 Process 启动
+      _backend = null;
+      return await _startWithProcess();
+    }
+  }
+
   /// 写入命令
   void write(String command) {
-    if (_process == null || _disposed) return;
+    if (_disposed) return;
     try {
-      _process!.stdin.writeln(command);
+      if (_nativeSession != null) {
+        _nativeSession!.write(command);
+      } else if (_process != null) {
+        _process!.stdin.writeln(command);
+      }
       addOutput('\$ $command');
     } catch (e) {
       addOutput('写入失败: $e', isStderr: true);
@@ -158,16 +224,33 @@ class TerminalSession {
 
   /// 发送 Ctrl+C
   void sendSigint() {
-    if (_process == null || _disposed) return;
+    if (_disposed) return;
     try {
-      _process!.stdin.write('\x03');
+      if (_nativeSession != null) {
+        _nativeSession!.sendSigint();
+      } else if (_process != null) {
+        _process!.stdin.write('\x03');
+      }
     } catch (_) {}
+  }
+
+  /// 调整终端大小（仅 Native PTY 支持）
+  void resize(int rows, int cols) {
+    if (_disposed) return;
+    if (_nativeSession != null) {
+      _nativeSession!.resize(rows, cols);
+    }
   }
 
   /// 销毁会话
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+
+    if (_nativeSession != null) {
+      await _nativeSession!.close();
+      _nativeSession = null;
+    }
 
     await _stdoutSub?.cancel();
     await _stderrSub?.cancel();
@@ -192,11 +275,48 @@ class TerminalSession {
 /// 终端服务
 ///
 /// 管理所有终端会话，通过 ShellDetector 自动选择可用 Shell。
+/// 支持运行时切换后端：ProcessTerminalBackend（默认）或 NativePtyBackend。
 class TerminalService {
   final List<TerminalSession> _sessions = [];
   ShellInfo? _cachedShellInfo;
+  ITerminalBackend? _backend;
 
   List<TerminalSession> get sessions => List.unmodifiable(_sessions);
+
+  /// 当前后端
+  ITerminalBackend? get backend => _backend;
+
+  /// Native PTY 后端的便捷访问
+  NativePtyBackend? get nativePtyBackend {
+    if (_backend is NativePtyBackend) {
+      return _backend as NativePtyBackend;
+    }
+    return null;
+  }
+
+  /// 设置后端（运行时切换）
+  void setBackend(ITerminalBackend backend) {
+    _backend = backend;
+    LogService.info('Terminal', '后端切换为: ${backend.name}');
+  }
+
+  /// 初始化 Native PTY 后端
+  Future<bool> initNativePtyBackend() async {
+    final native = NativePtyBackend();
+    final ok = await native.initialize();
+    if (ok) {
+      setBackend(native);
+    } else {
+      LogService.warning('Terminal', 'Native PTY 后端初始化失败，将使用默认 Process 后端');
+    }
+    return ok;
+  }
+
+  /// 重置为 Process 后端
+  void useProcessBackend() {
+    _backend = ProcessTerminalBackend();
+    LogService.info('Terminal', '后端切换为: ${_backend!.name}');
+  }
 
   /// 创建新终端会话
   Future<TerminalSession> createSession({
@@ -216,11 +336,13 @@ class TerminalService {
       name: name ?? '终端 ${_sessions.length + 1}',
       shellInfo: shellInfo,
       cwd: home,
+      backend: _backend,
     );
 
     _sessions.add(session);
     LogService.info('Terminal', '创建会话: ${session.id} (${session.name})');
     LogService.info('Terminal', '  Shell: ${shellInfo.shellPath} (${shellInfo.friendlyDescription})');
+    LogService.info('Terminal', '  后端: ${_backend?.name ?? "process"}');
 
     final started = await session.start();
     if (!started) {
