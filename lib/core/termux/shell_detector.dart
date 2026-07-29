@@ -59,23 +59,20 @@ class ShellDetector {
 
   /// 获取终端环境变量
   ///
-  /// 始终返回一组完整的环境变量。如果系统未提供某个变量，使用合理默认值。
+  /// 始终返回一组完整的环境变量，使用合理默认值。
+  /// 不依赖 Platform.environment，确保在任何环境下返回一致的值。
   /// [appHome] 作为 HOME 的值。
   static Map<String, String> getShellEnvironment(String appHome) {
-    // 优先从系统环境读取，缺失时使用合理默认值
-    String getEnv(String key, String defaultValue) =>
-        Platform.environment[key] ?? defaultValue;
-
     return {
       'HOME': appHome,
       'PATH': '/system/bin:/system/xbin',
       'SHELL': '/system/bin/sh',
-      'TERM': getEnv('TERM', 'xterm-256color'),
-      'PWD': getEnv('PWD', appHome),
-      'TMPDIR': getEnv('TMPDIR', Directory.systemTemp.path),
-      'LANG': getEnv('LANG', 'en_US.UTF-8'),
-      'USER': getEnv('USER', 'user'),
-      'LOGNAME': getEnv('LOGNAME', getEnv('USER', 'user')),
+      'TERM': 'xterm-256color',
+      'PWD': appHome,
+      'TMPDIR': Directory.systemTemp.path,
+      'LANG': 'en_US.UTF-8',
+      'USER': 'user',
+      'LOGNAME': 'user',
     };
   }
 }

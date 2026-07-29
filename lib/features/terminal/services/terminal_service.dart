@@ -124,7 +124,7 @@ class TerminalSession {
     try {
       final runtimeEnv = RuntimeManager.instance.getTerminalEnvironment();
       if (runtimeEnv.isNotEmpty) {
-        env = {...runtimeEnv, ...env}; // runtimeEnv 优先
+        env = {...env, ...runtimeEnv}; // runtimeEnv 优先（覆盖 ShellDetector 的基础值）
         LogService.info('Terminal', '  已注入 Runtime 环境: PATH=${runtimeEnv['PATH']?.substring(0, 80)}...');
       }
     } catch (_) {}
@@ -181,7 +181,7 @@ class TerminalSession {
     try {
       final runtimeEnv = RuntimeManager.instance.getTerminalEnvironment();
       if (runtimeEnv.isNotEmpty) {
-        env = {...runtimeEnv, ...env}; // runtimeEnv 优先
+        env = {...env, ...runtimeEnv}; // runtimeEnv 优先（覆盖 ShellDetector 的基础值）
         LogService.info('Terminal', '  已注入 Runtime 环境: PATH=${runtimeEnv['PATH']?.substring(0, 80)}...');
       }
     } catch (_) {}

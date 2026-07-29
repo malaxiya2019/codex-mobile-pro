@@ -87,7 +87,9 @@ class RuntimeEnvironment {
     }
   }
 
+  /// 检查二进制是否存在（先在 runtime bin 目录找，再遍历系统 PATH）
   Future<bool> _binaryExists(String name) async {
+    // 检查 runtime 安装目录
     final runtimeBin = File('$binDir/$name');
     if (runtimeBin.existsSync()) return true;
     final nodeBin = File('$nodeBinDir/$name');
@@ -99,14 +101,16 @@ class RuntimeEnvironment {
     final npmBin = File('$npmGlobalBinDir/$name');
     if (npmBin.existsSync()) return true;
 
-    try {
-      final result = await Process.run('which', [name],
-          runInShell: true,
-          environment: {'PATH': '/system/bin:/system/xbin'});
-      return result.exitCode == 0;
-    } catch (_) {
-      return false;
+    // 遍历系统 PATH 目录（不依赖 which 命令）
+    final systemPaths = ['/system/bin', '/system/xbin', '/bin', '/usr/bin'];
+    for (final dirPath in systemPaths) {
+      final dir = Directory(dirPath);
+      if (dir.existsSync()) {
+        final f = File('$dirPath/$name');
+        if (f.existsSync()) return true;
+      }
     }
+    return false;
   }
 
   bool _configFileExists() {

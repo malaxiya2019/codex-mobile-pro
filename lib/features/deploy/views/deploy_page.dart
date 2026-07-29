@@ -275,19 +275,28 @@ class _DeployPageState extends ConsumerState<DeployPage> {
       subtitle = '请稍候...';
     } else if (status.state == DeployState.completed &&
         status.detectionResult != null) {
-      final ready = status.detectionResult!.codingReady;
+      final detection = status.detectionResult!;
+      final ready = detection.codingReady;
+      final installed = detection.codingInstalled;
+      final total = detection.codingTotal;
+      final unsupported = detection.codingUnsupported;
+      final missing = total - installed - unsupported;
+
       if (ready) {
         cardColor = Colors.green;
         iconData = Icons.check_circle;
         title = '✅ Coding Environment READY';
-        subtitle = status.detectionResult!.summary;
+        subtitle = detection.summary;
+      } else if (missing == 0 && unsupported > 0) {
+        cardColor = Colors.green;
+        iconData = Icons.check_circle;
+        title = '✅ Coding Environment 可用';
+        subtitle = '已安装 $installed 个，$unsupported 个暂不支持自动安装';
       } else {
         cardColor = Colors.orange;
         iconData = Icons.warning_amber;
-        final installed = status.detectionResult!.codingInstalled;
-        final total = status.detectionResult!.codingTotal;
         title = '⚠️ Coding Environment 未就绪';
-        subtitle = '$installed/$total 已安装';
+        subtitle = '$installed/$total 已安装 · $missing 个待安装 · $unsupported 个暂不支持';
       }
     } else if (status.state == DeployState.checking) {
       cardColor = Colors.blue;
@@ -472,10 +481,13 @@ class _DeployPageState extends ConsumerState<DeployPage> {
     final codingMissing = detection.coding
         .where((r) => r.status == DetectionStatus.missing)
         .length;
+    final codingUnsupported = detection.coding
+        .where((r) => r.status == DetectionStatus.unsupported)
+        .length;
 
     return Column(
       children: [
-        // 一键部署
+        // 一键部署（仅在有可安装的工具时显示）
         if (codingMissing > 0 && !status.isInstalling)
           SizedBox(
             width: double.infinity,
@@ -636,8 +648,12 @@ class _DeployPageState extends ConsumerState<DeployPage> {
         statusIcon = Icons.check_circle;
         break;
       case DetectionStatus.missing:
-        statusColor = showMissingAsRed ? Colors.red : Colors.amber.shade700;
-        statusIcon = Icons.error;
+        statusColor = showMissingAsRed ? Colors.orange : Colors.amber.shade700;
+        statusIcon = Icons.info_outline;
+        break;
+      case DetectionStatus.unsupported:
+        statusColor = Colors.grey;
+        statusIcon = Icons.block;
         break;
       case DetectionStatus.checking:
         statusColor = Colors.orange;
@@ -793,14 +809,12 @@ class _DeployPageState extends ConsumerState<DeployPage> {
   // ════════════════════════════════════════════════════════════════
 
   /// 哪些工具支持自动安装
+  /// node 已实现完整 Node.js 安装流程（Termux .deb + SHA256 + 健康检查）
+  /// git/python/codex/mimo2codex 暂未实现自动安装
   bool _canInstall(String id) {
-    return [
-      'node',
-      'git',
-      'python',
-      'codex',
-      'mimo2codex',
-    ].contains(id);
+    // node 已实现完整安装流程
+    // git/python/codex/mimo2codex 暂未实现安装
+    return id == 'node';
   }
 
   /// 安装工具

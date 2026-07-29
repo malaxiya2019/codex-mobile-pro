@@ -4,6 +4,7 @@ import 'runtime_dependency.dart';
 import 'runtime_detector.dart';
 import 'runtime_environment.dart';
 import 'runtime_installer.dart';
+import 'runtime_manifest.dart';
 
 /// ====================================================================
 /// Runtime 管理器
@@ -129,18 +130,47 @@ class RuntimeManager {
           continue;
         }
 
+        // 检查是否支持安装
+        if (!RuntimeManifest.isSupported(tool)) {
+          controller.add(InstallResult(
+            tool: tool,
+            success: false,
+            errorMessage: '暂不支持自动安装',
+            phase: InstallPhase.failed,
+          ));
+          continue;  // 跳过，不中断整个部署
+        }
+
+        // 检查依赖
+        if (dep != null && dep.dependencies.isNotEmpty) {
+          bool depMissing = false;
+          for (final d in dep.dependencies) {
+            if (!await _environment!.isToolInstalled(d)) {
+              controller.add(InstallResult(
+                tool: tool,
+                success: false,
+                errorMessage: '⛔ 需要先安装 ${d.name}',
+                phase: InstallPhase.failed,
+              ));
+              depMissing = true;
+              break;
+            }
+          }
+          if (depMissing) continue;  // 跳过，不中断
+        }
+
         // 安装
         final result = await _installer!.install(tool);
         controller.add(result);
-
-        if (!result.success) {
-          LogService.error('RuntimeMgr', '部署中止: ${tool.name} 安装失败');
-          break;
-        }
       }
     } catch (e) {
       LogService.error('RuntimeMgr', '一键部署失败: $e');
-      controller.addError(e);
+      controller.add(InstallResult(
+        tool: RuntimeTool.node,
+        success: false,
+        errorMessage: '部署失败: $e',
+        phase: InstallPhase.failed,
+      ));
     } finally {
       _state = RuntimeManagerState.ready;
       // 安装完成后重新检测

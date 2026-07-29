@@ -43,7 +43,12 @@ class RuntimeDetectionResult {
   int get codingInstalled =>
       coding.where((r) => r.status == DetectionStatus.installed).length;
   int get codingTotal => coding.length;
-  bool get codingReady => codingInstalled == codingTotal;
+  int get codingUnsupported =>
+      coding.where((r) => r.status == DetectionStatus.unsupported).length;
+  /// coding ready 表示所有可安装的工具都已安装
+  /// unsupported 工具不计入未就绪
+  bool get codingReady =>
+      codingInstalled >= codingTotal - codingUnsupported;
 
   /// 环境就绪状态
   bool get isEnvironmentReady => codingReady;
