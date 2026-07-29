@@ -86,10 +86,7 @@ class TerminalSession {
     try {
       // 获取完整环境变量（根据 Shell 类型）
       final appDir = await getApplicationDocumentsDirectory();
-      final env = ShellDetector.getShellEnvironment(
-        appDir.path,
-        shellInfo: shellInfo,
-      );
+      final env = ShellDetector.getShellEnvironment(appDir.path);
       LogService.info('Terminal', '  HOME: ${env['HOME']}');
       LogService.info('Terminal', '  PATH: ${env['PATH']}');
       LogService.info('Terminal', '  SHELL: ${env['SHELL']}');
