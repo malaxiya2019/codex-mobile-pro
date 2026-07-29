@@ -1,4 +1,10 @@
 /*
+ * Feature test macros: must be defined before any #include.
+ * _GNU_SOURCE enables forkpty() via <pty.h> on Android NDK (Bionic).
+ */
+#define _GNU_SOURCE
+
+/*
  * pty.c — JNI PTY 实现
  *
  * 使用 forkpty() 创建真实伪终端，支持：
