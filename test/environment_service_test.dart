@@ -1,7 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/core/detector/environment_service.dart';
-import 'package:codex_mobile_pro/core/termux/termux_service.dart';
 
 void main() {
   const channel = MethodChannel('com.codexmobile.app/termux');
