@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/detector/detection_result.dart';
 import '../../../runtime/runtime_dependency.dart';
-import '../../../runtime/runtime_installer.dart';
 import '../../../runtime/runtime_detector.dart';
 import '../../../runtime/runtime_manager.dart';
 import '../providers/deploy_provider.dart';
@@ -465,7 +464,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
   // ════════════════════════════════════════════════════════════════
 
   Widget _buildActionButtons(BuildContext context, DeployStatus status) {
-    final theme = Theme.of(context);
+
     final detection = status.detectionResult;
 
     if (detection == null) return const SizedBox.shrink();

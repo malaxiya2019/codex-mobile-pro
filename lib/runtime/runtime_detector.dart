@@ -1,6 +1,5 @@
 import 'dart:io';
 import '../core/detector/detection_result.dart';
-import '../core/detector/detector.dart';
 import '../core/detector/detector_service.dart';
 import 'runtime_dependency.dart';
 

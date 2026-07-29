@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/detector/detection_result.dart';
-import '../../../core/detector/detector_service.dart';
-import '../../../core/detector/detector.dart';
 import '../../../runtime/runtime_manager.dart';
 import '../../../runtime/runtime_dependency.dart';
 import '../../../runtime/runtime_detector.dart';
@@ -222,10 +220,7 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
 
   RuntimeDetectionResult _groupResults(List<DetectionResult> results) {
     // Reuse RuntimeDetector's grouping
-    final detector = RuntimeDetector();
-    // We need to reconstruct - call detectAll would re-execute
-    // Instead, manual group
-    final basic = <DetectionResult>[];
+        final basic = <DetectionResult>[];
     final coding = <DetectionResult>[];
     final ai = <DetectionResult>[];
     final development = <DetectionResult>[];
