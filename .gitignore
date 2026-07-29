@@ -36,3 +36,8 @@ Thumbs.db
 *.jsonl
 test_report*.json
 .gh_test_report/
+
+# backup files
+*.bak2
+*.empty
+.ci_trigger
