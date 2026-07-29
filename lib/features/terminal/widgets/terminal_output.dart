@@ -66,46 +66,4 @@ class TerminalOutput extends StatelessWidget {
       ),
     );
   }
-
-  void _copyAll(BuildContext context, String fullText) {
-    if (fullText.isEmpty) return;
-    Clipboard.setData(ClipboardData(text: fullText));
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('已复制全部'),
-          duration: Duration(seconds: 1),
-        ),
-      );
-    }
-  }
-}
-
-/// 终端上下文菜单 — 在系统菜单基础上增加「全选复制」
-class _TerminalContextMenu extends StatelessWidget {
-  final EditableTextState editableTextState;
-  final VoidCallback onCopyAll;
-
-  const _TerminalContextMenu({
-    required this.editableTextState,
-    required this.onCopyAll,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final adaptor = EditableText.getAdaptiveInputConnectionActivator(
-      editableTextState,
-    );
-
-    return AdaptiveTextSelectionToolbar.buttonItems(
-      buttonItems: [
-        ...editableTextState.contextMenuButtonItems,
-        const ContextMenuButtonItem(
-          label: '全选复制',
-          type: ContextMenuButtonType.copy,
-        ),
-      ],
-      anchors: editableTextState.contextMenuAnchors,
-    );
-  }
 }
