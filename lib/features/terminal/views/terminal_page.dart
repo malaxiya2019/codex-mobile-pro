@@ -251,19 +251,10 @@ class _TerminalPageState extends ConsumerState<TerminalPage>
             ),
           ),
 
-          // ── 终端扩展按键栏（Extra Keys） ──
-          if (state.activeSession != null)
-            TerminalExtraKeys(
-              onWrite: _writeToPty,
-            ),
-
-
-
-          // ── 命令输入区（适配系统导航栏） ──
+          // ── 命令输入区 ──
           if (state.activeSession != null)
             Container(
-              padding: EdgeInsets.fromLTRB(4, 2, 4,
-                  bottomPadding > 0 ? bottomPadding - 4 : 6),
+              padding: const EdgeInsets.fromLTRB(4, 2, 4, 4),
               color: colorScheme.surfaceContainerHighest,
               child: Row(
                 children: [
@@ -339,9 +330,22 @@ class _TerminalPageState extends ConsumerState<TerminalPage>
                     onPressed: _submitCommand,
                     visualDensity: VisualDensity.compact,
                   ),
+
                 ],
               ),
             ),
+
+          // ── 终端扩展按键栏（Extra Keys，适配系统导航栏） ──
+          if (state.activeSession != null)
+            Padding(
+              padding: EdgeInsets.only(
+                bottom: bottomPadding > 0 ? bottomPadding - 4 : 0,
+              ),
+              child: TerminalExtraKeys(
+                onWrite: _writeToPty,
+              ),
+            ),
+
         ],
       ),
     );
