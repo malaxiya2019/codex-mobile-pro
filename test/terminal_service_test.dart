@@ -8,28 +8,11 @@ void main() {
       const info = ShellInfo();
       expect(info.friendlyDescription, 'Android 系统 Shell');
       expect(info.isAvailable, true);
-      expect(info.isTermuxBash, false);
     });
 
-    test('termuxBash 描述正确', () {
-      const info = ShellInfo(
-        type: ShellType.termuxBash,
-        shellPath: '/data/data/com.termux/files/usr/bin/bash',
-        version: 'Termux Bash',
-        isTermuxAvailable: true,
-      );
-      expect(info.friendlyDescription, 'Termux Bash（完整 Linux 环境）');
-      expect(info.isTermuxBash, true);
-    });
-
-    test('termuxSh 描述正确', () {
-      const info = ShellInfo(
-        type: ShellType.termuxSh,
-        shellPath: '/data/data/com.termux/files/usr/bin/sh',
-        version: 'Termux sh',
-      );
-      expect(info.friendlyDescription, 'Termux SH（兼容模式）');
-      expect(info.isTermuxBash, false);
+    test('isTermuxAvailable 默认 false', () {
+      const info = ShellInfo();
+      expect(info.isTermuxAvailable, false);
     });
   });
 
@@ -53,22 +36,19 @@ void main() {
       expect(session.outputText, '');
     });
 
-    test('创建会话（Termux Bash）', () {
+    test('创建会话（自定义 Shell）', () {
       const shellInfo = ShellInfo(
-        type: ShellType.termuxBash,
-        shellPath: '/data/data/com.termux/files/usr/bin/bash',
-        version: 'Termux Bash',
-        isTermuxAvailable: true,
+        shellPath: '/custom/shell',
+        version: 'Custom Shell',
       );
       final session = TerminalSession(
         id: 'test-2',
-        name: 'Termux Terminal',
+        name: 'Custom Terminal',
         shellInfo: shellInfo,
-        cwd: '/data/data/com.termux/files/home',
+        cwd: '/data/data/com.test/files',
       );
 
-      expect(session.shellPath, '/data/data/com.termux/files/usr/bin/bash');
-      expect(session.shellInfo.isTermuxBash, true);
+      expect(session.shellPath, '/custom/shell');
     });
 
     test('添加输出行', () {
@@ -255,6 +235,18 @@ void main() {
       final service = TerminalService();
       await service.disposeAll();
       expect(service.sessions, isEmpty);
+    });
+
+    test('默认后端为 null（使用 Process 后端）', () {
+      final service = TerminalService();
+      expect(service.backend, isNull);
+    });
+
+    test('后端切换可用', () {
+      final service = TerminalService();
+      service.useProcessBackend();
+      expect(service.backend, isNotNull);
+      expect(service.backend!.name, 'process');
     });
   });
 }

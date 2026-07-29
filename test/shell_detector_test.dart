@@ -71,7 +71,7 @@ void main() {
     });
 
     test('getShellEnvironment 返回系统环境', () {
-      const env = ShellDetector.getShellEnvironment('/data/app/home');
+      final env = ShellDetector.getShellEnvironment('/data/app/home');
 
       expect(env['HOME'], '/data/app/home');
       expect(env['PATH'], '/system/bin:/system/xbin');
@@ -80,26 +80,26 @@ void main() {
     });
 
     test('getShellEnvironment 可以设置不同路径', () {
-      const env = ShellDetector.getShellEnvironment('/custom/path');
+      final env = ShellDetector.getShellEnvironment('/custom/path');
 
       expect(env['HOME'], '/custom/path');
       expect(env['PATH'], '/system/bin:/system/xbin');
     });
 
     test('getShellEnvironment 返回的环境变量包含所有必需键', () {
-      const env = ShellDetector.getShellEnvironment('/data/app/home');
+      final env = ShellDetector.getShellEnvironment('/data/app/home');
 
       expect(env, containsAll(<String>['HOME', 'PATH', 'TERM', 'SHELL']));
     });
 
     test('getShellEnvironment TERM 默认为 xterm-256color', () {
-      const env = ShellDetector.getShellEnvironment('/home');
+      final env = ShellDetector.getShellEnvironment('/home');
 
       expect(env['TERM'], 'xterm-256color');
     });
 
     test('getShellEnvironment SHELL 默认为 /system/bin/sh', () {
-      const env = ShellDetector.getShellEnvironment('/home');
+      final env = ShellDetector.getShellEnvironment('/home');
 
       expect(env['SHELL'], '/system/bin/sh');
     });
