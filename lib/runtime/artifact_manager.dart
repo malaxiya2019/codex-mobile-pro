@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:path/path.dart' as path;
-import '../core/logger/log_service.dart';
 import 'runtime_manifest.dart';
 
 /// ====================================================================
@@ -188,7 +187,7 @@ class ArtifactManager {
     if (magic != '!<arch>\n') return null;
 
     int offset = magicSize;
-    final nameBytes = memberName.codeUnits;
+    
 
     // 获取文件名表（如果有 GNU 长文件名）
     Map<int, String>? nameMap;
@@ -307,7 +306,7 @@ class ArtifactManager {
         File(destPath).writeAsBytesSync(entry.content as List<int>);
 
         // 设置执行权限（如果原文件有 x 权限）
-        if (entry.mode != null && (entry.mode! & 0x40) != 0) {
+        if ((entry.mode & 0x40) != 0) {
           Process.runSync('chmod', ['+x', destPath]);
         }
       }
