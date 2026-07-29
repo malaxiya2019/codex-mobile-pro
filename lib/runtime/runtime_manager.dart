@@ -120,7 +120,7 @@ class RuntimeManager {
         if (dep == null || dep.category != RuntimeCategory.coding) continue;
 
         // 跳过已安装的
-        if (_environment!.isToolInstalled(tool)) {
+        if (await _environment!.isToolInstalled(tool)) {
           controller.add(InstallResult(
             tool: tool,
             success: true,
@@ -183,8 +183,8 @@ class RuntimeManager {
   }
 
   /// 检查工具是否已安装
-  bool isInstalled(RuntimeTool tool) {
-    return _environment?.isToolInstalled(tool) ?? false;
+  Future<bool> isInstalled(RuntimeTool tool) async {
+    return await _environment?.isToolInstalled(tool) ?? false;
   }
 
   /// 安装进度回调

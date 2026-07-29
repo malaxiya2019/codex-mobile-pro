@@ -156,7 +156,7 @@ class RuntimeInstaller {
       if (dep.optional) continue;
 
       // 跳过已安装的
-      if (_env.isToolInstalled(tool)) {
+      if (await _env.isToolInstalled(tool)) {
         results.add(InstallResult(
           tool: tool,
           success: true,
@@ -166,9 +166,12 @@ class RuntimeInstaller {
       }
 
       // 检查依赖是否满足
-      final missingDep = dep.dependencies
-          .where((d) => !_env.isToolInstalled(d))
-          .toList();
+      final missingDep = <RuntimeTool>[];
+      for (final d in dep.dependencies) {
+        if (!await _env.isToolInstalled(d)) {
+          missingDep.add(d);
+        }
+      }
       if (missingDep.isNotEmpty) {
         results.add(InstallResult(
           tool: tool,
