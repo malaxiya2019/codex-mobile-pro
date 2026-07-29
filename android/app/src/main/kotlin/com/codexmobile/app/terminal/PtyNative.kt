@@ -42,7 +42,7 @@ object PtyNative {
      * @param cols      终端列数
      * @return int[3]: { pid, master_fd, error_code }
      */
-    internal external fun createProcess(
+    external fun createProcess(
         shellPath: String,
         envArray: Array<String>,
         workDir: String,
@@ -59,7 +59,7 @@ object PtyNative {
      * @param length 长度
      * @return 实际写入字节数，-1 表示错误
      */
-    internal external fun writeToPty(
+    external fun writeToPty(
         fd: Int,
         data: ByteArray,
         offset: Int,
@@ -75,7 +75,7 @@ object PtyNative {
      * @param length 长度
      * @return 实际读取字节数，-1 表示错误，0 表示 EOF
      */
-    internal external fun readFromPty(
+    external fun readFromPty(
         fd: Int,
         buffer: ByteArray,
         offset: Int,
@@ -90,7 +90,7 @@ object PtyNative {
      * @param cols 列数
      * @return 0=成功，-1=失败
      */
-    internal external fun resizePty(
+    external fun resizePty(
         fd: Int,
         rows: Int,
         cols: Int
@@ -102,7 +102,7 @@ object PtyNative {
      * @param pid 子进程 PID
      * @return 退出码，-1 表示失败
      */
-    internal external fun waitForExit(pid: Int): Int
+    external fun waitForExit(pid: Int): Int
 
     /**
      * 发送信号给子进程
@@ -111,7 +111,7 @@ object PtyNative {
      * @param signal 信号编号
      * @return 0=成功，-1=失败
      */
-    internal external fun signalProcess(pid: Int, signal: Int): Int
+    external fun signalProcess(pid: Int, signal: Int): Int
 
     /**
      * 关闭文件描述符
@@ -119,5 +119,5 @@ object PtyNative {
      * @param fd 文件描述符
      * @return 0=成功，-1=失败
      */
-    internal external fun closeFd(fd: Int): Int
+    external fun closeFd(fd: Int): Int
 }
