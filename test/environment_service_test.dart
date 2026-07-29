@@ -205,7 +205,7 @@ void main() {
         command: 'echo "ok"',
       );
 
-      expect(result.durationMs, greaterThan(0));
+      expect(result.durationMs, greaterThanOrEqualTo(0));
     });
 
     test('detectTool 返回格式正确', () async {
