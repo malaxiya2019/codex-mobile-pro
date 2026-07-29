@@ -53,6 +53,8 @@ final workspaceProvider =
     });
 
 class WorkspaceNotifier extends StateNotifier<WorkspaceState> {
+  bool _loaded = false;
+
   WorkspaceNotifier() : super(const WorkspaceState()) {
     _load();
   }
@@ -86,13 +88,21 @@ class WorkspaceNotifier extends StateNotifier<WorkspaceState> {
         validCurrentId = currentId;
       }
 
-      state = WorkspaceState(
-        workspaces: workspaces,
-        currentWorkspaceId: validCurrentId,
-        isLoading: false,
-      );
+      // 只在首次加载时设置状态，避免覆盖后续操作的状态
+      if (!_loaded && state.workspaces.isEmpty && state.currentWorkspaceId == null) {
+        state = WorkspaceState(
+          workspaces: workspaces,
+          currentWorkspaceId: validCurrentId,
+          isLoading: false,
+        );
+      } else {
+        // 后续加载仅更新 isLoading，不影响已有状态
+        state = state.copyWith(isLoading: false);
+      }
     } catch (e) {
       state = state.copyWith(isLoading: false);
+    } finally {
+      _loaded = true;
     }
   }
 
@@ -135,7 +145,8 @@ class WorkspaceNotifier extends StateNotifier<WorkspaceState> {
   /// 删除工作区
   Future<void> delete(String id) async {
     final ws = state.workspaces.where((w) => w.id != id).toList();
-    final shouldClear = state.currentWorkspaceId == id;
+    final shouldClear = state.currentWorkspaceId == id
+        || (state.currentWorkspaceId != null && !ws.any((w) => w.id == state.currentWorkspaceId));
     state = state.copyWith(
       workspaces: ws,
       clearCurrent: shouldClear,

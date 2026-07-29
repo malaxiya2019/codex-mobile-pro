@@ -92,7 +92,7 @@ class TerminalSession {
     LogService.info('Terminal', '  类型: ${shellInfo.friendlyDescription}');
     LogService.info('Terminal', '  Termux: ${shellInfo.isTermuxAvailable}');
     LogService.info('Terminal', '  工作目录: $cwd');
-    LogService.info('Terminal', '  后端: ${_backend?.name ?? "process"}');
+    LogService.info('Terminal', '  后端: ${_backend?.name ?? "process"} (${_backend?.runtimeType ?? "null"})');
 
     try {
       // 如果设置了 Native PTY 后端，优先使用
@@ -316,12 +316,14 @@ class TerminalService {
     if (initialized) {
       setBackend(native);
       LogService.info('Terminal', '使用 Native PTY 后端');
+      LogService.info('Terminal', '  backend runtimeType: ${_backend.runtimeType}');
       return;
     }
 
     // 回退到 Process 后端
     LogService.warning('Terminal', 'Native PTY 初始化失败，使用 Process 后端');
     setBackend(ProcessTerminalBackend());
+      LogService.info('Terminal', '  backend runtimeType: ${_backend.runtimeType}');
   }
 
   /// 创建新终端会话
@@ -331,6 +333,7 @@ class TerminalService {
   }) async {
     // 确保后端已初始化
     await initDefaultBackend();
+    LogService.info('Terminal', 'createSession 后端: ${_backend?.runtimeType ?? "null"}');
 
     // 检测可用 Shell
     _cachedShellInfo ??= await ShellDetector.detect();
@@ -351,7 +354,7 @@ class TerminalService {
     _sessions.add(session);
     LogService.info('Terminal', '创建会话: ${session.id} (${session.name})');
     LogService.info('Terminal', '  Shell: ${shellInfo.shellPath} (${shellInfo.friendlyDescription})');
-    LogService.info('Terminal', '  后端: ${_backend?.name ?? "process"}');
+    LogService.info('Terminal', '  后端: ${_backend?.name ?? "process"} (${_backend?.runtimeType ?? "null"})');
 
     final started = await session.start();
     if (!started) {

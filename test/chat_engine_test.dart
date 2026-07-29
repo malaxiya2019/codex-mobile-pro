@@ -684,17 +684,19 @@ void main() {
         expect(engine.isGenerating(session.sessionId), true);
 
         // 尝试第二个流应抛出 sessionBusy
-        final secondStream = engine.streamMessage(
-          sessionId: session.sessionId,
-          content: '第二轮',
-        );
+        // 使用 toList() 将流转换为 Future，流中的错误会转为 Future 异常
         await expectLater(
-          secondStream,
-          emitsError(isA<ChatEngineException>().having(
-            (e) => e.type,
-            'type',
-            ChatEngineErrorType.sessionBusy,
-          )),
+          () => engine.streamMessage(
+            sessionId: session.sessionId,
+            content: '第二轮',
+          ).toList(),
+          throwsA(
+            isA<ChatEngineException>().having(
+              (e) => e.type,
+              'type',
+              ChatEngineErrorType.sessionBusy,
+            ),
+          ),
         );
 
         // 清理

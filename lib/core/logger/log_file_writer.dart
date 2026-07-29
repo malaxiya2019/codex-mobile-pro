@@ -70,27 +70,39 @@ class LogFileWriter {
     }
   }
 
+  bool _flushing = false;
+
   /// 立即刷入缓冲区
   Future<void> flush() async {
-    if (_disposed) return;
+    if (_disposed || _flushing) return;
     _flushTimer?.cancel();
     _flushTimer = null;
     await _flush();
   }
 
   Future<void> _flush() async {
+    if (_flushing) return;
+    _flushing = true;
     _flushTimer = null;
-    if (_buffer.isEmpty) return;
+    try {
+      if (_buffer.isEmpty) return;
 
-    final lines = List<String>.from(_buffer);
-    _buffer.clear();
+      final lines = List<String>.from(_buffer);
+      _buffer.clear();
 
-    // 写入文件；异常向上传播以便调用方知晓
-    await _writeLines(lines);
+      // 写入文件；异常向上传播以便调用方知晓
+      await _writeLines(lines);
+    } finally {
+      _flushing = false;
+    }
   }
 
   Future<void> _writeLines(List<String> lines) async {
-    if (_currentFile == null) return;
+    if (_currentFile == null) {
+      // 如果文件未初始化，尝试重新打开
+      await _openCurrentFile();
+      if (_currentFile == null) return;
+    }
 
     final content = lines.join('\n') + '\n';
     final bytes = utf8.encode(content);
@@ -98,6 +110,12 @@ class LogFileWriter {
     // 检查是否需要轮转
     if (_currentSize + bytes.length > _maxFileSize) {
       await _rotate();
+    }
+
+    // 轮转后确保文件可写（_openCurrentFile 可能失败）
+    if (_currentFile == null) {
+      await _openCurrentFile();
+      if (_currentFile == null) return;
     }
 
     await _currentFile!.writeAsBytes(bytes, mode: FileMode.append);
@@ -123,7 +141,11 @@ class LogFileWriter {
     }
 
     // 重命名当前文件
-    await _currentFile!.rename('$_baseDir/$_fileName.0');
+    try {
+      await _currentFile!.rename('$_baseDir/$_fileName.0');
+    } catch (_) {
+      // 如果重命名失败（例如权限问题），继续创建新文件
+    }
     await _openCurrentFile();
   }
 
