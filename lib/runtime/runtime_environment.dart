@@ -17,6 +17,7 @@ class RuntimeEnvironment {
   String get pythonBinDir => '$pythonDir/bin';
   String get npmGlobalDir => '$runtimeDir/npm-global';
   String get npmGlobalBinDir => '$npmGlobalDir/bin';
+  String get nodeLibDir => '$nodeDir/lib';
 
   RuntimeEnvironment._();
 
@@ -31,7 +32,7 @@ class RuntimeEnvironment {
 
   Future<void> ensureDirectories() async {
     final dirs = [
-      runtimeDir, binDir, nodeDir, nodeBinDir,
+      runtimeDir, binDir, nodeDir, nodeBinDir, nodeLibDir,
       gitDir, gitBinDir, pythonDir, pythonBinDir,
       npmGlobalDir, npmGlobalBinDir,
     ];
@@ -47,7 +48,11 @@ class RuntimeEnvironment {
     ];
     final validPaths = paths.where((p) => Directory(p).existsSync()).toList();
     final pathStr = validPaths.join(':');
-    return {
+
+    final libDirPath = Directory(nodeLibDir).existsSync() ? nodeLibDir : '';
+    final ldLibPath = libDirPath.isNotEmpty ? libDirPath : null;
+
+    final env = <String, String>{
       'HOME': _appFilesDir,
       'PATH': pathStr,
       'SHELL': '/system/bin/sh',
@@ -60,6 +65,15 @@ class RuntimeEnvironment {
       'NPM_CONFIG_PREFIX': npmGlobalDir,
       'NODE_PATH': '$npmGlobalDir/lib/node_modules',
     };
+
+    if (ldLibPath != null) {
+      final existing = Platform.environment['LD_LIBRARY_PATH'];
+      env['LD_LIBRARY_PATH'] = existing != null
+          ? '$ldLibPath:$existing'
+          : ldLibPath;
+    }
+
+    return env;
   }
 
   Future<bool> isToolInstalled(RuntimeTool tool) async {
