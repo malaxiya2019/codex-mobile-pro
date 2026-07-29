@@ -65,7 +65,7 @@ class DetectionResult {
       case DetectionStatus.installed:
         return '✅';
       case DetectionStatus.missing:
-        return '⬜';
+        return '❌';
       case DetectionStatus.unsupported:
         return '⚠️';
       case DetectionStatus.checking:
@@ -83,7 +83,7 @@ class DetectionResult {
       case DetectionStatus.installed:
         return 0xFF4CAF50;
       case DetectionStatus.missing:
-        return 0xFFFF9800;
+        return 0xFFF44336;
       case DetectionStatus.unsupported:
         return 0xFF9E9E9E;
       case DetectionStatus.checking:
