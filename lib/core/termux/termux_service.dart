@@ -46,7 +46,7 @@ class TermuxEnvCheck {
     this.fallbackAvailable = true,
   });
 
-  bool get termuxMode => termuxInstalled && (termuxWorks || termuxIntentAvailable);
+  bool get termuxMode => isAvailable; # Termux 包已安装即视为可用（不依赖 Intent 测试）
   bool get hasAnyShell => fallbackAvailable || termuxMode;
 
   @override
