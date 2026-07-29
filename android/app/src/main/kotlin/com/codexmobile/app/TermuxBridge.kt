@@ -297,9 +297,9 @@ class TermuxBridge(private val context: Context? = null) {
         checks["sh_last_stderr"] = shResult?.stderr?.take(200) ?: "N/A"
 
         // 5. 整体状态
-        val isAvailable = termuxInstalled &&
-                (checks["termux_works"] == true ||
-                        checks["termux_intent_available"] == true)
+        // Termux 已安装即视为可用
+        // 不依赖 RUN_COMMAND Intent 测试结果（部分 Android 版本 Intent 通信可能超时）
+        val isAvailable = termuxInstalled
         checks["is_available"] = isAvailable
         checks["fallback_available"] = (checks["sh_works"] == true)
 
