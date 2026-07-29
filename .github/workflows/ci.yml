@@ -100,6 +100,22 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Install CMake (for native pty library)
+        run: |
+          # GitHub Actions Ubuntu runner 预装 Android SDK，
+          # 但 CMake 3.18.1 需要手动安装
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ -f "$SDKMANAGER" ]; then
+            echo "Installing CMake 3.18.1 via sdkmanager..."
+            yes | "$SDKMANAGER" "cmake;3.18.1" > /dev/null 2>&1 || true
+            echo "CMake installed at: $SDK_ROOT/cmake/3.18.1"
+          else
+            echo "sdkmanager not found at $SDKMANAGER, trying apt..."
+            sudo apt-get update -qq && sudo apt-get install -y -qq cmake
+          fi
+          cmake --version
+
       - name: Install dependencies
         run: flutter pub get
 
