@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
+
 import '../../../core/logger/log_service.dart';
-import '../../../core/termux/shell_detector.dart';
 import '../../../core/terminal/iterminal_backend.dart';
-import '../../../core/terminal/process_terminal_backend.dart';
 import '../../../core/terminal/native_pty_backend.dart';
+import '../../../core/terminal/process_terminal_backend.dart';
+import '../../../core/termux/shell_detector.dart';
 
 /// 终端会话状态
 enum TerminalSessionStatus { running, exited, error }
@@ -28,10 +30,8 @@ class TerminalLine {
 /// 终端会话
 ///
 /// 使用 ShellDetector 自动检测可用 Shell，优先级：
-/// 1. Native PTY + BusyBox（如果启用）
-/// 2. Termux Bash（完整 Linux 环境）
-/// 3. Termux sh（备用）
-/// 4. Android 系统 Shell（兜底）
+/// 1. Native PTY（真实伪终端，支持 job control / vim / Ctrl+C）
+/// 2. Process（回退方案，无 TTY）
 class TerminalSession {
   final String id;
   String name;
@@ -86,7 +86,7 @@ class TerminalSession {
   Future<bool> start() async {
     if (_process != null || _nativeSession != null) return true;
 
-    // ── 日志：启动前记录关键信息 ──
+    // 日志：启动前记录关键信息
     LogService.info('Terminal', '启动会话 $id');
     LogService.info('Terminal', '  Shell: ${shellInfo.shellPath}');
     LogService.info('Terminal', '  类型: ${shellInfo.friendlyDescription}');
@@ -100,14 +100,14 @@ class TerminalSession {
         return await _startWithNativePty();
       }
 
-      // 否则使用 Process.start()（现有方式）
+      // 否则使用 Process.start()（回退）
       return await _startWithProcess();
     } catch (e, stack) {
       status = TerminalSessionStatus.error;
       final msg = '启动失败: $e';
       addOutput(msg, isStderr: true);
 
-      LogService.error('Terminal', '❌ 会话 $id 启动失败');
+      LogService.error('Terminal', '会话 $id 启动失败');
       LogService.error('Terminal', '  Shell: ${shellInfo.shellPath}');
       LogService.error('Terminal', '  错误: $e');
       LogService.error('Terminal', '  堆栈: $stack');
@@ -116,12 +116,12 @@ class TerminalSession {
     }
   }
 
-  /// 使用 Process.start() 启动
+  /// 使用 Process.start() 启动（回退方案）
   Future<bool> _startWithProcess() async {
     final appDir = await getApplicationDocumentsDirectory();
     final env = ShellDetector.getShellEnvironment(appDir.path);
+    LogService.info('Terminal', '  使用 Process 回退');
     LogService.info('Terminal', '  HOME: ${env['HOME']}');
-    LogService.info('Terminal', '  PATH: ${env['PATH']}');
     LogService.info('Terminal', '  SHELL: ${env['SHELL']}');
 
     _process = await Process.start(
@@ -275,7 +275,7 @@ class TerminalSession {
 /// 终端服务
 ///
 /// 管理所有终端会话，通过 ShellDetector 自动选择可用 Shell。
-/// 支持运行时切换后端：ProcessTerminalBackend（默认）或 NativePtyBackend。
+/// 默认使用 NativePtyBackend（真实 PTY），失败时回退到 ProcessTerminalBackend。
 class TerminalService {
   final List<TerminalSession> _sessions = [];
   ShellInfo? _cachedShellInfo;
@@ -300,22 +300,28 @@ class TerminalService {
     LogService.info('Terminal', '后端切换为: ${backend.name}');
   }
 
-  /// 初始化 Native PTY 后端
-  Future<bool> initNativePtyBackend() async {
-    final native = NativePtyBackend();
-    final ok = await native.initialize();
-    if (ok) {
-      setBackend(native);
-    } else {
-      LogService.warning('Terminal', 'Native PTY 后端初始化失败，将使用默认 Process 后端');
-    }
-    return ok;
-  }
-
   /// 重置为 Process 后端
   void useProcessBackend() {
     _backend = ProcessTerminalBackend();
     LogService.info('Terminal', '后端切换为: ${_backend!.name}');
+  }
+
+  /// 初始化默认后端 — 优先 Native PTY
+  Future<void> initDefaultBackend() async {
+    if (_backend != null) return;
+
+    // 尝试 Native PTY
+    final native = NativePtyBackend();
+    final initialized = await native.initialize();
+    if (initialized) {
+      setBackend(native);
+      LogService.info('Terminal', '使用 Native PTY 后端');
+      return;
+    }
+
+    // 回退到 Process 后端
+    LogService.warning('Terminal', 'Native PTY 初始化失败，使用 Process 后端');
+    setBackend(ProcessTerminalBackend());
   }
 
   /// 创建新终端会话
@@ -323,7 +329,10 @@ class TerminalService {
     String? name,
     String? cwd,
   }) async {
-    // 检测可用 Shell（每次创建时检测，确保兼容性）
+    // 确保后端已初始化
+    await initDefaultBackend();
+
+    // 检测可用 Shell
     _cachedShellInfo ??= await ShellDetector.detect();
     final shellInfo = _cachedShellInfo!;
 
@@ -346,7 +355,7 @@ class TerminalService {
 
     final started = await session.start();
     if (!started) {
-      LogService.warning('Terminal', '❌ 会话 ${session.id} 启动失败');
+      LogService.warning('Terminal', '会话 ${session.id} 启动失败');
     }
     return session;
   }
