@@ -232,7 +232,7 @@ class RuntimeInstaller {
     // 设置 LD_LIBRARY_PATH 进行验证
     final nodeBin = '${_env.nodeBinDir}/node';
     final libDir = '${_env.nodeDir}/lib';
-    final env = {'LD_LIBRARY_PATH': libDir};
+    final env = Map<String, String>.from(Platform.environment)..['LD_LIBRARY_PATH'] = libDir;
 
     final healthResult = await _healthCheck(nodeBin, env);
 
