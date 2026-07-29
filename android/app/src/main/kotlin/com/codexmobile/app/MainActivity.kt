@@ -23,4 +23,10 @@ class MainActivity : FlutterActivity() {
             termuxBridge.onMethodCall(call, result)
         }
     }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // 初始化 TermuxBridge 的 BroadcastReceiver 支持
+        termuxBridge.ensureReceiverRegistered()
+    }
 }

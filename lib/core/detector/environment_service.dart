@@ -1,7 +1,7 @@
-import 'dart:io';
 import '../logger/log_service.dart';
+import '../termux/termux_service.dart';
 
-/// Termux 环境检查结果（保留接口兼容）
+/// Termux 环境检查结果
 class TermuxEnvironmentCheck {
   final bool termuxInstalled;
   final bool hasTermuxHome;
@@ -17,7 +17,7 @@ class TermuxEnvironmentCheck {
     this.homePath,
   });
 
-  bool get isTermuxAvailable => false;
+  bool get isTermuxAvailable => termuxInstalled;
 }
 
 /// 通过 Shell 执行的命令结果
@@ -26,12 +26,14 @@ class ShellCommandResult {
   final String stdout;
   final String stderr;
   final int durationMs;
+  final String source; // "termux", "system_sh", "error"
 
   const ShellCommandResult({
     required this.exitCode,
     required this.stdout,
     required this.stderr,
     required this.durationMs,
+    this.source = 'system_sh',
   });
 
   bool get isSuccess => exitCode == 0;
@@ -39,24 +41,47 @@ class ShellCommandResult {
 
 /// 环境服务
 ///
-/// 统一负责通过 Android 系统 Shell 执行检测命令。
-/// 不依赖 Termux，不访问 /data/data/com.termux/ 路径。
+/// 统一负责通过 Termux（优先）或 Android 系统 Shell 执行检测命令。
 class EnvironmentService {
-  /// 检查 Termux 环境
-  ///
-  /// 简化版本：始终返回未安装状态。
-  /// 不再试图检测 /data/data/com.termux/ 目录。
+  /// Termux 是否可用（缓存）
+  static bool? _termuxAvailable;
+
+  /// 检查 Termux 是否可用
+  static Future<bool> isTermuxAvailable() async {
+    if (_termuxAvailable != null) return _termuxAvailable!;
+    try {
+      final env = await TermuxService.checkEnvironment();
+      _termuxAvailable = env.termuxMode;
+      LogService.info('EnvService', 'Termux 可用: $_termuxAvailable');
+      return _termuxAvailable!;
+    } catch (_) {
+      _termuxAvailable = false;
+      return false;
+    }
+  }
+
+  /// 刷新 Termux 可用性缓存
+  static Future<void> refreshTermuxStatus() async {
+    _termuxAvailable = null;
+    await isTermuxAvailable();
+  }
+
+  /// 检查 Shell 环境
   static Future<TermuxEnvironmentCheck> checkTermux() async {
     LogService.info('EnvService', '检查 Shell 环境...');
 
-    // 只检测 /system/bin/sh 是否可用
+    final available = await isTermuxAvailable();
+    if (available) {
+      LogService.info('EnvService', '  ✅ Termux 可用');
+    } else {
+      LogService.info('EnvService', '  ⚠️ Termux 不可用，使用系统 Shell');
+    }
+
+    // 测试系统 Shell
     try {
-      final result = await Process.run(
-        '/system/bin/sh',
-        ['-c', 'echo ok'],
-      );
-      if (result.exitCode == 0) {
-        LogService.info('EnvService', '  ✅ Android 系统 Shell 可用');
+      final result = await executeInTermux(command: 'echo ok');
+      if (result.isSuccess) {
+        LogService.info('EnvService', '  ✅ Shell 可用 (source=${result.source})');
       } else {
         LogService.info('EnvService', '  ❌ Shell 不可用');
       }
@@ -64,10 +89,12 @@ class EnvironmentService {
       LogService.error('EnvService', '  检查失败: $e');
     }
 
-    return const TermuxEnvironmentCheck();
+    return TermuxEnvironmentCheck(
+      termuxInstalled: available,
+    );
   }
 
-  /// 通过系统 Shell 执行命令
+  /// 通过 Termux（优先）或系统 Shell 执行命令
   static Future<ShellCommandResult> executeInTermux({
     required String command,
     String? shellPath,
@@ -77,20 +104,19 @@ class EnvironmentService {
     LogService.info('EnvService', '执行: $command');
 
     try {
-      final shell = shellPath ?? '/system/bin/sh';
-      final result = await Process.run(
-        shell,
-        ['-c', command],
-      ).timeout(timeout);
+      // 使用 TermuxService.execute() — 自动降级
+      final result = await TermuxService.execute(command);
 
       final elapsed = DateTime.now().difference(start).inMilliseconds;
-      LogService.info('EnvService', '  完成: exit=${result.exitCode}, ${elapsed}ms');
+      LogService.info('EnvService',
+          '  完成: exit=${result.exitCode}, source=${result.source}, ${elapsed}ms');
 
       return ShellCommandResult(
         exitCode: result.exitCode,
-        stdout: (result.stdout as String?)?.trim() ?? '',
-        stderr: (result.stderr as String?)?.trim() ?? '',
+        stdout: result.stdout.trim(),
+        stderr: result.stderr.trim(),
         durationMs: elapsed,
+        source: result.source,
       );
     } catch (e, stack) {
       final elapsed = DateTime.now().difference(start).inMilliseconds;
@@ -102,13 +128,12 @@ class EnvironmentService {
         stdout: '',
         stderr: e.toString(),
         durationMs: elapsed,
+        source: 'error',
       );
     }
   }
 
   /// 获取 DETECTION 风格的命令输出
-  ///
-  /// 返回格式：第一行是路径，第二行是版本号
   static Future<ShellCommandResult> detectTool(String command) {
     return executeInTermux(
       command: '$command 2>/dev/null',

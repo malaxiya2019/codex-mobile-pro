@@ -6,99 +6,87 @@ class TermuxResult {
   final String stdout;
   final String stderr;
   final int durationMs;
+  final String source; // "termux", "system_sh", "timeout", "error"
 
   const TermuxResult({
     required this.exitCode,
     required this.stdout,
     required this.stderr,
     required this.durationMs,
+    this.source = 'termux',
   });
 
   bool get isSuccess => exitCode == 0;
 
   @override
   String toString() =>
-      'exitCode=$exitCode, stdout=${stdout.length}chars, stderr=${stderr.length}chars, duration=${durationMs}ms';
+      'exitCode=$exitCode, source=$source, stdout=${stdout.length}chars, '
+      'stderr=${stderr.length}chars, duration=${durationMs}ms';
 }
 
 /// 环境检查结果
 class TermuxEnvCheck {
   final bool termuxInstalled;
-  final bool bashExists;
-  final bool bashCanRead;
-  final bool bashCanExecute;
-  final bool bashWorks;
-  final String bashLastStderr;
-  final bool termuxHomeExists;
-  final bool systemShExists;
-  final bool systemShCanExecute;
+  final bool termuxIntentAvailable;
+  final bool termuxWorks;
+  final String termuxLastStderr;
   final bool shWorks;
   final String shLastStderr;
-  final bool termuxIntentAvailable;
   final bool isAvailable;
   final bool fallbackAvailable;
 
   const TermuxEnvCheck({
     this.termuxInstalled = false,
-    this.bashExists = false,
-    this.bashCanRead = false,
-    this.bashCanExecute = false,
-    this.bashWorks = false,
-    this.bashLastStderr = '',
-    this.termuxHomeExists = false,
-    this.systemShExists = true,
-    this.systemShCanExecute = true,
+    this.termuxIntentAvailable = false,
+    this.termuxWorks = false,
+    this.termuxLastStderr = '',
     this.shWorks = true,
     this.shLastStderr = '',
-    this.termuxIntentAvailable = false,
     this.isAvailable = false,
     this.fallbackAvailable = true,
   });
 
-  bool get termuxMode => termuxInstalled && bashWorks;
+  bool get termuxMode => termuxInstalled && (termuxWorks || termuxIntentAvailable);
   bool get hasAnyShell => fallbackAvailable || termuxMode;
 
   @override
   String toString() =>
-      'termux=$termuxMode (installed=$termuxInstalled, bash=$bashWorks), '
-      'sh=$shWorks, intent=$termuxIntentAvailable';
+      'termuxMode=$termuxMode (installed=$termuxInstalled, '
+      'intent=$termuxIntentAvailable, works=$termuxWorks), '
+      'sh=$shWorks';
 }
 
 /// Termux 通信服务
 ///
-/// 注意：此服务需要 Android 原生插件实现（MethodChannel）。
-/// 在没有原生实现时，返回默认值。
+/// 通过 MethodChannel 与 Android 原生层通信。
+/// 支持：
+/// - execute() — 执行命令（自动降级：Termux → 系统 Shell）
+/// - executeInTermux() — 强制在 Termux 中执行
+/// - checkEnvironment() — 检查环境状态
 class TermuxService {
   static const _channel = MethodChannel('com.codexmobile.app/termux');
 
-  /// 检查环境
+  /// 检查环境（包括 Termux 和系统 Shell）
   static Future<TermuxEnvCheck> checkEnvironment() async {
     try {
       final result = await _channel.invokeMethod<dynamic>('checkEnvironment');
       final map = result as Map<dynamic, dynamic>? ?? <dynamic, dynamic>{};
       return TermuxEnvCheck(
         termuxInstalled: _bool(map['termux_installed']),
-        bashExists: _bool(map['bash_exists']),
-        bashCanRead: _bool(map['bash_can_read']),
-        bashCanExecute: _bool(map['bash_can_execute']),
-        bashWorks: _bool(map['bash_works']),
-        bashLastStderr: _str(map['bash_last_stderr']),
-        termuxHomeExists: _bool(map['termux_home_exists']),
-        systemShExists: _bool(map['system_sh_exists']),
-        systemShCanExecute: _bool(map['system_sh_can_execute']),
+        termuxIntentAvailable: _bool(map['termux_intent_available']),
+        termuxWorks: _bool(map['termux_works']),
+        termuxLastStderr: _str(map['termux_last_stderr']),
         shWorks: _bool(map['sh_works']),
         shLastStderr: _str(map['sh_last_stderr']),
-        termuxIntentAvailable: _bool(map['termux_intent_available']),
         isAvailable: _bool(map['is_available']),
         fallbackAvailable: _bool(map['fallback_available']),
       );
     } catch (_) {
-      // MethodChannel 未实现时返回默认值
       return const TermuxEnvCheck();
     }
   }
 
-  /// 执行单条命令
+  /// 执行单条命令（自动降级：Termux → 系统 Shell）
   static Future<TermuxResult> execute(String command) async {
     try {
       final result = await _channel.invokeMethod<dynamic>('execute', {
@@ -110,14 +98,15 @@ class TermuxService {
         stdout: _str(map['stdout']),
         stderr: _str(map['stderr']),
         durationMs: _int(map['durationMs']),
+        source: _str(map['source']),
       );
-    } catch (_) {
-      // MethodChannel 未实现时返回默认值
-      return const TermuxResult(
+    } catch (e) {
+      return TermuxResult(
         exitCode: -1,
-        stdout: 'Termux 服务未实现',
-        stderr: 'MethodChannel 未注册',
+        stdout: '',
+        stderr: 'Termux 服务调用失败: $e',
         durationMs: 0,
+        source: 'error',
       );
     }
   }

@@ -1,16 +1,15 @@
-import 'dart:io';
+import '../../termux/termux_service.dart';
 import '../detection_result.dart';
 import '../detector.dart';
 
-/// Shell 环境检测器
+/// Shell/环境检测器
 ///
-/// 检测 Android 系统 Shell（/system/bin/sh）是否可用。
-/// 不检测 Termux，不访问 /data/data/com.termux/ 路径。
+/// 检测 Termux 环境和系统 Shell 是否可用。
 class TermuxDetector extends Detector {
   @override
   String get id => 'termux';
   @override
-  String get name => 'Shell 环境';
+  String get name => 'Termux 环境';
   @override
   String get icon => '📱';
   @override
@@ -20,14 +19,24 @@ class TermuxDetector extends Detector {
   Future<DetectionResult> detect() async {
     final start = DateTime.now();
     try {
-      // 检测 /system/bin/sh 是否可执行
-      final result = await Process.run(
-        '/system/bin/sh',
-        ['-c', 'echo ok'],
-      );
+      final env = await TermuxService.checkEnvironment();
       final elapsed = DateTime.now().difference(start).inMilliseconds;
 
-      if (result.exitCode == 0) {
+      if (env.termuxMode) {
+        // Termux 可用
+        final version = env.termuxWorks ? 'Termux Bash' : 'Termux (Intent)';
+        return DetectionResult(
+          id: id,
+          name: name,
+          icon: icon,
+          status: DetectionStatus.installed,
+          version: version,
+          path: '/data/data/com.termux/files/usr/bin/bash',
+          durationMs: elapsed,
+          category: category,
+        );
+      } else if (env.fallbackAvailable) {
+        // 只有系统 Shell
         return DetectionResult(
           id: id,
           name: name,
