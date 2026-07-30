@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/ai/ai_provider.dart';
+import '../../../core/ai/ai_service.dart';
+import '../../../core/ai/providers/deepseek_provider.dart';
+import '../extensions/inline_completion.dart';
 import '../models/editor_models.dart';
 import '../services/editor_buffer.dart';
-import '../extensions/inline_completion.dart';
-import '../../../core/ai/ai_provider.dart';
-import '../../../core/ai/providers/deepseek_provider.dart';
-import '../../../core/ai/ai_service.dart';
 
 /// 编辑器状态
 class EditorState {
@@ -634,7 +636,6 @@ class EditorNotifier extends StateNotifier<EditorState> {
         return EditorTab(
           id: t.id,
           filePath: t.filePath,
-          isDirty: false,
           isPinned: t.isPinned,
           lastOpened: t.lastOpened,
         );

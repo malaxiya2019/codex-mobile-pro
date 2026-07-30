@@ -1,8 +1,9 @@
-import 'dart:convert';
 import 'dart:async';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:codex_mobile_pro/core/ai/sse_parser.dart';
+import 'dart:convert';
+
 import 'package:codex_mobile_pro/core/ai/ai_message.dart';
+import 'package:codex_mobile_pro/core/ai/sse_parser.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('SseParser.parseLine', () {

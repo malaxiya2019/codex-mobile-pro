@@ -413,7 +413,6 @@ class ArtifactManager {
     _extractTarEntries(
       tarBytes: tarBytes,
       targetDir: targetDir,
-      includeFiles: null,
       stripComponents: stripComponents,
     );
   }

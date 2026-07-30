@@ -11,6 +11,7 @@
 ///
 /// 设计参考 Firecrawl 的 engine fallback + feature matching 模式。
 /// ====================================================================
+library;
 
 import 'runtime_dependency.dart';
 
@@ -248,7 +249,6 @@ class MirrorRegistry {
           url: mirrorUrl,
           region: rule.region,
           priority: rule.priority,
-          requiresDns: true, // 镜像通常有稳定域名
         );
       }).toList();
     } catch (_) {
@@ -425,7 +425,6 @@ class RuntimeManifest {
           size: 64133552,
           mirrors: MirrorRegistry.mirrorsFor('https://github.com/termux/proot-distro/releases/download/v4.18.0/ubuntu-noble-aarch64-pd-v4.18.0.tar.xz'),
           targetSubDir: 'ubuntu/rootfs',
-          includeFiles: null,
           stripComponents: 1,
         ),
         // ─── proot loader 包 ───
@@ -442,7 +441,6 @@ class RuntimeManifest {
             'usr/libexec/proot/loader',
             'usr/libexec/proot/loader32',
           ],
-          stripComponents: 6,
         ),
       ],
     );

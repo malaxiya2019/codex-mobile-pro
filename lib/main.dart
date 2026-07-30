@@ -17,13 +17,13 @@ void main() {
   // 初始化全局异常处理（必须在 runApp 之前）
   GlobalErrorHandler.init(
     config: const ErrorHandlerConfig(
-      state: ErrorHandlerState.debug,
+      
     ),
   );
 
   // 初始化日志系统（含文件落盘）
   LogService.init(
-    level: LogLevel.debug,
+    
   );
 
   // 锁定竖屏

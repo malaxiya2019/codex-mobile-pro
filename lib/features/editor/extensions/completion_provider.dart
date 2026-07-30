@@ -1,5 +1,5 @@
-import '../models/editor_models.dart';
 import '../../../core/ai/ai_provider.dart';
+import '../models/editor_models.dart';
 
 /// 自动补全条目
 class CompletionItem {

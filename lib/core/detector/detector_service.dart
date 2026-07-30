@@ -1,14 +1,14 @@
 import 'detection_result.dart';
 import 'detector.dart';
 import 'detectors/android_system_detector.dart';
-import 'detectors/termux_detector.dart';
-import 'detectors/node_detector.dart';
-import 'detectors/git_detector.dart';
-import 'detectors/python_detector.dart';
 import 'detectors/codex_detector.dart';
-import 'detectors/mimo2codex_detector.dart';
 import 'detectors/deepseek_key_detector.dart';
+import 'detectors/git_detector.dart';
+import 'detectors/mimo2codex_detector.dart';
 import 'detectors/network_detector.dart';
+import 'detectors/node_detector.dart';
+import 'detectors/python_detector.dart';
+import 'detectors/termux_detector.dart';
 
 /// 环境检测编排服务
 ///
@@ -85,7 +85,6 @@ class DetectorService {
   static Map<String, int> summarize(List<DetectionResult> results) {
     int installed = 0;
     int missing = 0;
-    int failed = 0;
     int blocked = 0;
     int errors = 0;
 

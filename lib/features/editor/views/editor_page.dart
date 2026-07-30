@@ -1,20 +1,20 @@
-import 'package:flutter/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../extensions/diagnostics_provider.dart';
+
 import '../../../core/i18n/app_locale.dart';
 import '../../../core/i18n/strings.dart';
-import '../models/editor_models.dart';
-import '../providers/editor_provider.dart';
-import '../widgets/editor_content.dart';
-import '../widgets/editor_find_panel.dart';
-import '../extensions/inline_completion.dart';
 import '../extensions/code_explain.dart';
 import '../extensions/code_review.dart';
-import '../extensions/refactor_code.dart';
-import '../extensions/generate_test.dart';
+import '../extensions/diagnostics_provider.dart';
 import '../extensions/fix_error.dart';
+import '../extensions/generate_test.dart';
+import '../extensions/inline_completion.dart';
+import '../extensions/refactor_code.dart';
+import '../models/editor_models.dart';
+import '../providers/editor_provider.dart';
 import '../widgets/code_review_sheet.dart';
+import '../widgets/editor_content.dart';
+import '../widgets/editor_find_panel.dart';
 
 /// 编辑器页面 — 多标签代码编辑器（带 AI 内联补全 + 代码解释）
 class EditorPage extends ConsumerStatefulWidget {
@@ -723,7 +723,6 @@ class ExplainCodeSheet extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.5,
       minChildSize: 0.3,
       maxChildSize: 0.85,
       expand: false,
@@ -1131,7 +1130,6 @@ class _FixBugSheet extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.5,
       minChildSize: 0.3,
       maxChildSize: 0.85,
       expand: false,
@@ -1192,7 +1190,7 @@ class _FixBugSheet extends StatelessWidget {
               children: [
                 Icon(Icons.error_outline, size: 16, color: colorScheme.error),
                 const SizedBox(width: 6),
-                Text('错误原因', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text('错误原因', style: TextStyle(fontWeight: FontWeight.w600)),
               ],
             ),
             const SizedBox(height: 4),
@@ -1203,7 +1201,7 @@ class _FixBugSheet extends StatelessWidget {
               children: [
                 Icon(Icons.build_outlined, size: 16, color: colorScheme.primary),
                 const SizedBox(width: 6),
-                Text('修复方案', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text('修复方案', style: TextStyle(fontWeight: FontWeight.w600)),
               ],
             ),
             const SizedBox(height: 4),
@@ -1215,7 +1213,7 @@ class _FixBugSheet extends StatelessWidget {
                 children: [
                   Icon(Icons.code, size: 16, color: colorScheme.tertiary),
                   const SizedBox(width: 6),
-                  Text('修复代码', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text('修复代码', style: TextStyle(fontWeight: FontWeight.w600)),
                 ],
               ),
               const SizedBox(height: 4),

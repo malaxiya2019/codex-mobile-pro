@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'dart:async';
+import 'dart:io';
 
 /// 文件条目类型
 enum FileEntryType { file, directory, symlink, unknown }

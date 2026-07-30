@@ -1,5 +1,5 @@
-import 'syntax_highlighter.dart';
 import '../models/editor_models.dart';
+import 'syntax_highlighter.dart';
 
 class YamlHighlighter extends BaseHighlighter {
   @override
@@ -51,14 +51,18 @@ class YamlHighlighter extends BaseHighlighter {
         if (isDigit(text[i]) || text[i] == '-') {
           final start = i;
           i++;
-          while (i < text.length && (isDigit(text[i]) || text[i] == '.')) i++;
+          while (i < text.length && (isDigit(text[i]) || text[i] == '.')) {
+            i++;
+          }
           tokens.add(SyntaxToken(type: TokenType.number, start: start, end: i));
           continue;
         }
 
         if (isIdentChar(text[i])) {
           final start = i;
-          while (i < text.length && isIdentChar(text[i])) i++;
+          while (i < text.length && isIdentChar(text[i])) {
+            i++;
+          }
           final word = text.substring(start, i);
           if (keywords.contains(word.toLowerCase())) {
             tokens.add(SyntaxToken(type: TokenType.builtin, start: start, end: i));

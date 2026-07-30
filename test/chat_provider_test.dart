@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:codex_mobile_pro/core/ai/ai_message.dart';
 import 'package:codex_mobile_pro/core/ai/chat_engine.dart';
 import 'package:codex_mobile_pro/core/ai/chat_session.dart';
 import 'package:codex_mobile_pro/features/ai/providers/chat_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 // ══════════════════════════════════════════════
 // Mock IChatEngine
@@ -12,7 +13,7 @@ import 'package:codex_mobile_pro/features/ai/providers/chat_provider.dart';
 
 class MockChatEngine implements IChatEngine {
   @override
-  String systemPrompt = "";
+  String systemPrompt = '';
   final Map<String, ChatSession> _sessions = {};
   final Map<String, GenerationStatus> _statuses = {};
   final Map<String, StreamController<String>> _streamControllers = {};

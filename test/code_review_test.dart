@@ -1,6 +1,6 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/core/ai/ai_provider.dart';
 import 'package:codex_mobile_pro/features/editor/extensions/code_review.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 /// 模拟 AI Provider（用于测试）
 class MockAiProvider extends AiProvider {
@@ -63,7 +63,7 @@ class MockAiProvider extends AiProvider {
 void main() {
   group('ReviewItem', () {
     test('创建审查条目', () {
-      final item = ReviewItem(
+      const item = ReviewItem(
         category: ReviewCategory.bug,
         severity: ReviewSeverity.critical,
         title: '空指针异常',
@@ -81,7 +81,7 @@ void main() {
     });
 
     test('审查条目支持可选字段为空', () {
-      final item = const ReviewItem(
+      const item = ReviewItem(
         category: ReviewCategory.style,
         severity: ReviewSeverity.suggestion,
         title: '命名规范',
@@ -95,7 +95,7 @@ void main() {
 
   group('CodeReviewResult', () {
     test('创建空结果', () {
-      final result = CodeReviewResult();
+      const result = CodeReviewResult();
 
       expect(result.items, isEmpty);
       expect(result.totalIssues, 0);
@@ -194,7 +194,7 @@ void main() {
     });
 
     test('错误结果', () {
-      final result = CodeReviewResult(
+      const result = CodeReviewResult(
         hasError: true,
         errorMessage: 'API 连接失败',
       );
@@ -216,7 +216,7 @@ void main() {
     });
 
     test('解析有效的 JSON 审查响应', () async {
-      final jsonResponse = '''
+      const jsonResponse = '''
 {
   "summary": "代码整体质量不错，但有一处性能问题",
   "score": 8.0,

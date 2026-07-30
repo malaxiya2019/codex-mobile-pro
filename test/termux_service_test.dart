@@ -1,6 +1,6 @@
+import 'package:codex_mobile_pro/core/termux/termux_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:codex_mobile_pro/core/termux/termux_service.dart';
 
 void main() {
   const channel = MethodChannel('com.codexmobile.app/termux');
@@ -238,17 +238,17 @@ void main() {
 
   group('TermuxResult', () {
     test('isSuccess 在 exitCode=0 时为 true', () {
-      final result = TermuxResult(exitCode: 0, stdout: '', stderr: '', durationMs: 0);
+      const result = TermuxResult(exitCode: 0, stdout: '', stderr: '', durationMs: 0);
       expect(result.isSuccess, true);
     });
 
     test('isSuccess 在 exitCode≠0 时为 false', () {
-      final result = TermuxResult(exitCode: 1, stdout: '', stderr: 'err', durationMs: 0);
+      const result = TermuxResult(exitCode: 1, stdout: '', stderr: 'err', durationMs: 0);
       expect(result.isSuccess, false);
     });
 
     test('toString 包含关键字段', () {
-      final result = TermuxResult(exitCode: 0, stdout: 'hello', stderr: '', durationMs: 42);
+      const result = TermuxResult(exitCode: 0, stdout: 'hello', stderr: '', durationMs: 42);
       final str = result.toString();
       expect(str, contains('exitCode=0'));
       expect(str, contains('stdout=5chars'));
@@ -258,23 +258,16 @@ void main() {
 
   group('TermuxEnvCheck', () {
     test('termuxMode = termuxInstalled && (termuxWorks || termuxIntentAvailable)', () {
-      final env = TermuxEnvCheck(
+      const env = TermuxEnvCheck(
         termuxInstalled: true,
         termuxIntentAvailable: true,
         termuxWorks: true,
-        shWorks: true,
         isAvailable: true,
-        fallbackAvailable: true,
       );
       expect(env.termuxMode, true);
 
-      final env2 = TermuxEnvCheck(
+      const env2 = TermuxEnvCheck(
         termuxInstalled: true,
-        termuxIntentAvailable: false,
-        termuxWorks: false,
-        shWorks: true,
-        isAvailable: false,
-        fallbackAvailable: true,
       );
       expect(env2.termuxMode, false);
     });

@@ -10,18 +10,19 @@
 ///   1. 系统默认 Runtime（/system/bin/sh）— 现有
 ///   2. Ubuntu Runtime（rootfs + proot）— 新增，推荐
 /// ====================================================================
+library;
 
 import 'dart:async';
 
-import '../core/logger/log_service.dart';
 import '../core/detector/detection_result.dart';
+import '../core/logger/log_service.dart';
+import 'download_queue.dart';
 import 'runtime_dependency.dart';
 import 'runtime_detector.dart';
 import 'runtime_environment.dart';
 import 'runtime_installer.dart';
 import 'runtime_manifest.dart';
 import 'ubuntu_runtime_installer.dart';
-import 'download_queue.dart';
 
 /// 管理器状态
 enum RuntimeManagerState {

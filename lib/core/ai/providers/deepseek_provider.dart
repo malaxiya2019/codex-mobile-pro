@@ -1,7 +1,8 @@
 import 'dart:async';
+
+import '../ai_message.dart';
 import '../ai_provider.dart';
 import '../ai_service.dart';
-import '../ai_message.dart';
 
 /// DeepSeek AI Provider 实现
 ///
@@ -235,9 +236,9 @@ Language: $language''';
 
     return '''Complete the code at the cursor position (marked by <CURSOR>):
 
-\`\`\`
-${beforeCursor}<CURSOR>${afterCursor}
-\`\`\`
+```
+$beforeCursor<CURSOR>$afterCursor
+```
 
 Output ONLY the completion text, nothing else.''';
   }

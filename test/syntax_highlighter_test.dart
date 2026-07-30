@@ -1,7 +1,7 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/features/editor/models/editor_models.dart';
 import 'package:codex_mobile_pro/features/editor/syntax/syntax_highlighter.dart';
 import 'package:codex_mobile_pro/features/editor/syntax/syntax_registry.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('SyntaxRegistry', () {
@@ -66,7 +66,7 @@ void main() {
     test('获取 Token 颜色', () {
       final highlighter = SyntaxRegistry.getHighlighter(FileLanguage.dart)!;
       final color =
-          highlighter.getColorForToken(TokenType.keyword, isDark: true);
+          highlighter.getColorForToken(TokenType.keyword);
       expect(color, isNotNull);
 
       final lightColor =

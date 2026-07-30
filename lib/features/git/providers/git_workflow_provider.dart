@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/logger/log_service.dart';
+
 import '../../../core/ai/ai_provider.dart';
-import '../services/git_service.dart';
-import '../services/github_service.dart';
+import '../../../core/logger/log_service.dart';
 import '../models/git_repository.dart';
 import '../models/github_pr.dart';
+import '../services/git_service.dart';
+import '../services/github_service.dart';
 
 /// Git 工作流操作结果
 class WorkflowResult {
@@ -80,10 +82,10 @@ class GitWorkflowProvider {
         ['status', '--porcelain'],
       );
       if (result.exitCode != 0) {
-        return WorkflowResult(success: false, message: '无法获取 Git 状态');
+        return const WorkflowResult(message: '无法获取 Git 状态');
       }
       if (result.stdout.trim().isEmpty) {
-        return WorkflowResult(success: false, message: '没有需要提交的变更');
+        return const WorkflowResult(message: '没有需要提交的变更');
       }
 
       // git add
@@ -102,7 +104,6 @@ class GitWorkflowProvider {
 
       if (commitResult.exitCode != 0) {
         return WorkflowResult(
-          success: false,
           message: 'Commit 失败: ${commitResult.stderr}',
         );
       }
@@ -120,7 +121,7 @@ class GitWorkflowProvider {
         data: {'sha': sha},
       );
     } catch (e) {
-      return WorkflowResult(success: false, message: 'Commit 异常: $e');
+      return WorkflowResult(message: 'Commit 异常: $e');
     }
   }
 
@@ -147,14 +148,13 @@ class GitWorkflowProvider {
 
       if (result.exitCode != 0) {
         return WorkflowResult(
-          success: false,
           message: 'Push 失败: ${result.stderr}',
         );
       }
 
       return WorkflowResult(success: true, message: '推送成功到 $remote/$branch');
     } catch (e) {
-      return WorkflowResult(success: false, message: 'Push 异常: $e');
+      return WorkflowResult(message: 'Push 异常: $e');
     }
   }
 
@@ -196,7 +196,7 @@ class GitWorkflowProvider {
   }) async {
     try {
       if (!_githubService.isLoggedIn) {
-        return const WorkflowResult(success: false, message: '请先登录 GitHub');
+        return const WorkflowResult(message: '请先登录 GitHub');
       }
 
       final payload = {
@@ -213,7 +213,7 @@ class GitWorkflowProvider {
       );
 
       if (response == null) {
-        return const WorkflowResult(success: false, message: '创建 PR 失败');
+        return const WorkflowResult(message: '创建 PR 失败');
       }
 
       return WorkflowResult(
@@ -222,7 +222,7 @@ class GitWorkflowProvider {
         data: {'number': response['number'], 'html_url': response['html_url']},
       );
     } catch (e) {
-      return WorkflowResult(success: false, message: '创建 PR 异常: $e');
+      return WorkflowResult(message: '创建 PR 异常: $e');
     }
   }
 
@@ -236,7 +236,7 @@ class GitWorkflowProvider {
   }) async {
     try {
       if (!_githubService.isLoggedIn) {
-        return const WorkflowResult(success: false, message: '请先登录 GitHub');
+        return const WorkflowResult(message: '请先登录 GitHub');
       }
 
       final payload = <String, dynamic>{
@@ -250,7 +250,7 @@ class GitWorkflowProvider {
       );
 
       if (response == null) {
-        return const WorkflowResult(success: false, message: '合并 PR 失败');
+        return const WorkflowResult(message: '合并 PR 失败');
       }
 
       return WorkflowResult(
@@ -259,7 +259,7 @@ class GitWorkflowProvider {
         data: {'sha': response['sha']},
       );
     } catch (e) {
-      return WorkflowResult(success: false, message: '合并 PR 异常: $e');
+      return WorkflowResult(message: '合并 PR 异常: $e');
     }
   }
 
@@ -294,7 +294,7 @@ class GitWorkflowProvider {
   }) async {
     try {
       if (!_githubService.isLoggedIn) {
-        return const WorkflowResult(success: false, message: '请先登录 GitHub');
+        return const WorkflowResult(message: '请先登录 GitHub');
       }
 
       final payload = <String, dynamic>{
@@ -310,7 +310,7 @@ class GitWorkflowProvider {
       );
 
       if (response == null) {
-        return const WorkflowResult(success: false, message: '创建 Issue 失败');
+        return const WorkflowResult(message: '创建 Issue 失败');
       }
 
       return WorkflowResult(
@@ -319,7 +319,7 @@ class GitWorkflowProvider {
         data: {'number': response['number'], 'html_url': response['html_url']},
       );
     } catch (e) {
-      return WorkflowResult(success: false, message: '创建 Issue 异常: $e');
+      return WorkflowResult(message: '创建 Issue 异常: $e');
     }
   }
 
@@ -347,7 +347,7 @@ class GitWorkflowProvider {
   }) async {
     try {
       if (!_githubService.isLoggedIn) {
-        return const WorkflowResult(success: false, message: '请先登录 GitHub');
+        return const WorkflowResult(message: '请先登录 GitHub');
       }
 
       final payload = {
@@ -361,12 +361,12 @@ class GitWorkflowProvider {
       );
 
       if (response == null) {
-        return const WorkflowResult(success: false, message: '提交 Review 失败');
+        return const WorkflowResult(message: '提交 Review 失败');
       }
 
-      return WorkflowResult(success: true, message: 'Review 已提交');
+      return const WorkflowResult(success: true, message: 'Review 已提交');
     } catch (e) {
-      return WorkflowResult(success: false, message: 'Review 异常: $e');
+      return WorkflowResult(message: 'Review 异常: $e');
     }
   }
 

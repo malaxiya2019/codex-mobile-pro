@@ -1,19 +1,19 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:codex_mobile_pro/features/git/models/git_repository.dart';
 import 'package:codex_mobile_pro/features/git/services/git_service.dart';
 import 'package:codex_mobile_pro/features/git/services/github_service.dart';
-import 'package:codex_mobile_pro/features/git/models/git_repository.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('GitResult', () {
     test('创建成功结果', () {
-      final result = const GitResult(success: true, output: 'ok', exitCode: 0);
+      const result = GitResult(success: true, output: 'ok');
       expect(result.success, true);
       expect(result.output, 'ok');
       expect(result.exitCode, 0);
     });
 
     test('创建失败结果', () {
-      final result = const GitResult(success: false, error: 'error msg', exitCode: 1);
+      const result = GitResult(success: false, error: 'error msg', exitCode: 1);
       expect(result.success, false);
       expect(result.error, 'error msg');
       expect(result.exitCode, 1);
@@ -62,7 +62,7 @@ void main() {
     });
 
     test('toJson 序列化', () {
-      final repo = const GitRepository(
+      const repo = GitRepository(
         id: '1',
         name: 'test',
         fullName: 'user/test',
@@ -129,7 +129,7 @@ void main() {
 
   group('GitCommit', () {
     test('创建提交', () {
-      final commit = const GitCommit(
+      const commit = GitCommit(
         sha: 'abc1234',
         message: 'Fix bug',
         author: 'Dev',
@@ -144,13 +144,13 @@ void main() {
 
   group('GitBranch', () {
     test('创建分支', () {
-      final branch = const GitBranch(name: 'feature-x', isCurrent: true);
+      const branch = GitBranch(name: 'feature-x', isCurrent: true);
       expect(branch.name, 'feature-x');
       expect(branch.isCurrent, true);
     });
 
     test('非当前分支', () {
-      final branch = const GitBranch(name: 'main');
+      const branch = GitBranch(name: 'main');
       expect(branch.isCurrent, false);
     });
   });

@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:codex_mobile_pro/core/ai/ai_message.dart';
 import 'package:codex_mobile_pro/core/ai/ai_provider.dart';
 import 'package:codex_mobile_pro/core/ai/ai_provider_manager.dart';
 import 'package:codex_mobile_pro/core/ai/chat_engine.dart';
 import 'package:codex_mobile_pro/core/ai/chat_session.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 // ══════════════════════════════════════════════
 // Mock IAIProviderManager
@@ -224,7 +225,7 @@ void main() {
     });
 
     test('addMessage 更新 updatedAt', () async {
-      final now = DateTime(2026, 1, 1);
+      final now = DateTime(2026);
       final session = ChatSession(sessionId: 's1', createdAt: now, updatedAt: now);
 
       await Future.delayed(const Duration(milliseconds: 1));
@@ -313,7 +314,7 @@ void main() {
 
     setUp(() {
       // 小 Token 限制方便测试
-      manager = TokenContextManager(maxTokens: 100, minRecentMessages: 2);
+      manager = const TokenContextManager(maxTokens: 100, minRecentMessages: 2);
     });
 
     test('estimateTokens 估算准确', () {

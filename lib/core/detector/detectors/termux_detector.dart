@@ -12,9 +12,10 @@
 ///
 /// 不再把 /system/bin/sh 误报为「Termux 环境」。
 /// ====================================================================
+library;
 
-import '../../termux/termux_runtime_bridge.dart';
 import '../../logger/log_service.dart';
+import '../../termux/termux_runtime_bridge.dart';
 import '../detection_result.dart';
 import '../detector.dart';
 

@@ -126,7 +126,7 @@ class WorkspaceContextProvider implements IWorkspaceContextProvider {
       buf.writeln('### 当前文件: ${fileCtx.path}');
       buf.writeln('语言: ${fileCtx.language}');
       buf.writeln('```${fileCtx.language}');
-      buf.writeln(_truncateContent(fileCtx.content, maxLines: 80));
+      buf.writeln(_truncateContent(fileCtx.content));
       buf.writeln('```');
       buf.writeln();
     }
@@ -251,7 +251,6 @@ class WorkspaceContextProvider implements IWorkspaceContextProvider {
 
     return WorkspaceStructure(
       workspacePath: rootPath,
-      files: const [],
       projectInfo: info,
     );
   }
@@ -264,10 +263,9 @@ class WorkspaceContextProvider implements IWorkspaceContextProvider {
 
     try {
       // 同步获取 git 状态（非阻塞读取已缓存状态）
-      final GitStatus? _ = null; // 占位，异步版本在 getCurrentGitContextAsync
-      return GitContext(
-        isClean: true,
-        modifiedFiles: const [],
+      const GitStatus? _ = null; // 占位，异步版本在 getCurrentGitContextAsync
+      return const GitContext(
+        
       );
     } catch (_) {
       return null;

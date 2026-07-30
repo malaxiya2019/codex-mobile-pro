@@ -229,7 +229,6 @@ class NetworkDetector extends Detector {
             host: host,
             ip: cached.ip ?? '(cached)',
             resolved: true,
-            durationMs: 0,
             resolverName: 'L1-cache',
           ));
           continue;
@@ -239,12 +238,6 @@ class NetworkDetector extends Detector {
       // 多层 DNS 解析
       final result = await DnsResolver.resolve(
         host,
-        options: DnsResolveOptions(
-          timeoutMs: 3000,
-          allowDoh: true,
-          allowIpHardcode: true,
-          writeCache: true,
-        ),
       );
       dnsResults.add(result);
       if (result.resolved) dnsOk++;
@@ -376,12 +369,6 @@ class NetworkDetector extends Detector {
     // ─── 多层解析 ───
     final result = await DnsResolver.resolve(
       'github.com',
-      options: DnsResolveOptions(
-        timeoutMs: 3000,
-        allowDoh: true,
-        allowIpHardcode: true,
-        writeCache: true,
-      ),
     );
     return result.resolved;
   }

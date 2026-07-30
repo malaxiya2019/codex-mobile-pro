@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../core/logger/log_service.dart';
 import '../models/git_repository.dart';
 import '../models/github_pr.dart';
-import '../../../core/logger/log_service.dart';
 
 /// GitHub API 服务
 ///

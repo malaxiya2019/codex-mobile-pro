@@ -171,11 +171,11 @@ class _PrListTile extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Text('+${pr.additions}',
-                  style: TextStyle(fontSize: 11, color: Colors.green)),
+                  style: const TextStyle(fontSize: 11, color: Colors.green)),
             ),
           if (pr.deletions > 0)
             Text('-${pr.deletions}',
-                style: TextStyle(fontSize: 11, color: Colors.red)),
+                style: const TextStyle(fontSize: 11, color: Colors.red)),
         ],
       ),
     );
@@ -183,13 +183,13 @@ class _PrListTile extends StatelessWidget {
 
   Widget _buildStateIcon() {
     if (pr.isMerged) {
-      return Icon(Icons.merge, size: 18, color: Colors.purple);
+      return const Icon(Icons.merge, size: 18, color: Colors.purple);
     }
     if (pr.isClosed) {
-      return Icon(Icons.close, size: 18, color: Colors.red);
+      return const Icon(Icons.close, size: 18, color: Colors.red);
     }
     // Open
-    return Icon(Icons.fiber_manual_record, size: 18, color: Colors.green);
+    return const Icon(Icons.fiber_manual_record, size: 18, color: Colors.green);
   }
 
   String _formatDate(DateTime date) {

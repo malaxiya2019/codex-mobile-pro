@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../services/ansi_parser.dart';
 
 /// ANSI 终端输出组件

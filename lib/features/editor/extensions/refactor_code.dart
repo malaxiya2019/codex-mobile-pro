@@ -48,7 +48,6 @@ class RefactorEngine {
           ChatMessageInput(role: 'user', content: userPrompt),
         ],
         temperature: 0.3,
-        maxTokens: 4096,
         cancelToken: _cancelToken,
       );
 
@@ -98,9 +97,9 @@ class RefactorEngine {
   String _buildUserPrompt(String code, String language) {
     return '''重构这段 $language 代码：
 
-\`\`\`$language
+```$language
 $code
-\`\`\`
+```
 
 请分析问题并给出重构后的完整代码。''';
   }
@@ -159,8 +158,9 @@ $code
         if (c == ',' || c == '}') {
           if (k.isNotEmpty && buf.isNotEmpty) {
             final v = buf.toString().trim();
-            if (v == 'null') result[k] = null;
-            else if (v == 'true') result[k] = true;
+            if (v == 'null') {
+              result[k] = null;
+            } else if (v == 'true') result[k] = true;
             else if (v == 'false') result[k] = false;
             else result[k] = v;
           }

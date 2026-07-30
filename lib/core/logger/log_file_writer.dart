@@ -104,7 +104,7 @@ class LogFileWriter {
       if (_currentFile == null) return;
     }
 
-    final content = lines.join('\n') + '\n';
+    final content = '${lines.join('\n')}\n';
     final bytes = utf8.encode(content);
 
     // 检查是否需要轮转

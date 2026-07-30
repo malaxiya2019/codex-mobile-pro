@@ -1,13 +1,13 @@
-import 'syntax_highlighter.dart';
-import 'dart_highlighter.dart';
-import 'rust_highlighter.dart';
-import 'python_highlighter.dart';
-import 'json_highlighter.dart';
-import 'yaml_highlighter.dart';
-import 'markdown_highlighter.dart';
-import 'toml_highlighter.dart';
-import 'shell_highlighter.dart';
 import '../models/editor_models.dart';
+import 'dart_highlighter.dart';
+import 'json_highlighter.dart';
+import 'markdown_highlighter.dart';
+import 'python_highlighter.dart';
+import 'rust_highlighter.dart';
+import 'shell_highlighter.dart';
+import 'syntax_highlighter.dart';
+import 'toml_highlighter.dart';
+import 'yaml_highlighter.dart';
 
 /// 语法高亮器注册表
 ///

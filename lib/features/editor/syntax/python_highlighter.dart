@@ -1,5 +1,5 @@
-import 'syntax_highlighter.dart';
 import '../models/editor_models.dart';
+import 'syntax_highlighter.dart';
 
 class PythonHighlighter extends BaseHighlighter {
   @override
@@ -58,8 +58,11 @@ class PythonHighlighter extends BaseHighlighter {
               i += 3;
               break;
             }
-            if (text[i] == '\\') i += 2;
-            else i++;
+            if (text[i] == '\\') {
+              i += 2;
+            } else {
+              i++;
+            }
           }
           if (i + 2 >= text.length) i = text.length;
         } else {

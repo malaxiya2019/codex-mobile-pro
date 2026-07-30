@@ -51,8 +51,8 @@ class IssueListNotifier extends StateNotifier<IssueListState> {
   String get _owner => _repoFullName.split('/')[0];
   String get _repo => _repoFullName.split('/')[1];
 
-  Future<void> loadIssues({String filterBy = "open"}) async {
-    state = state.copyWith(isLoading: true, error: null, filterState: filterBy);
+  Future<void> loadIssues({String filterBy = 'open'}) async {
+    state = state.copyWith(isLoading: true, filterState: filterBy);
     try {
       final issues = await _service.getIssues(_owner, _repo, state: filterBy);
       state = IssueListState(issues: issues, filterState: filterBy);
@@ -118,7 +118,7 @@ class IssueDetailNotifier extends StateNotifier<IssueDetailState> {
   String get _repo => _repoFullName.split('/')[1];
 
   Future<void> load() async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true);
     try {
       final issue = await _service.getIssue(_owner, _repo, _issueNumber);
       final comments =

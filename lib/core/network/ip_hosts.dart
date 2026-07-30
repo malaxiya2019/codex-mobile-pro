@@ -6,6 +6,7 @@
 ///
 /// 更新方式：运行 `dig +short github.com` 或 `nslookup github.com`
 /// ====================================================================
+library;
 
 /// 硬编码的域名→IP 映射
 class IpHosts {

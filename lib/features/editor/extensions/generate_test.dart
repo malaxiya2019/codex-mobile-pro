@@ -47,7 +47,6 @@ class TestGenerator {
           ChatMessageInput(role: 'user', content: userPrompt),
         ],
         temperature: 0.2,
-        maxTokens: 4096,
         cancelToken: _cancelToken,
       );
 
@@ -100,9 +99,9 @@ class TestGenerator {
 
 类名: $className
 
-\`\`\`$language
+```$language
 $code
-\`\`\`
+```
 
 Return JSON output only.''';
   }

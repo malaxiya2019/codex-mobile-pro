@@ -93,7 +93,6 @@ class WorkspaceNotifier extends StateNotifier<WorkspaceState> {
         state = WorkspaceState(
           workspaces: workspaces,
           currentWorkspaceId: validCurrentId,
-          isLoading: false,
         );
       } else {
         // 后续加载仅更新 isLoading，不影响已有状态

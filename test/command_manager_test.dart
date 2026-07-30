@@ -1,10 +1,10 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/features/terminal/services/command_manager.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('QuickCommand', () {
     test('构造正确', () {
-      final cmd = QuickCommand(
+      const cmd = QuickCommand(
         id: 'flutter-pub-get',
         name: 'flutter pub get',
         command: 'flutter pub get',
@@ -21,7 +21,7 @@ void main() {
     });
 
     test('无参数构建命令', () {
-      final cmd = QuickCommand(
+      const cmd = QuickCommand(
         id: 'test',
         name: 'test',
         command: 'flutter pub get',
@@ -33,7 +33,7 @@ void main() {
     });
 
     test('带参数构建命令', () {
-      final cmd = QuickCommand(
+      const cmd = QuickCommand(
         id: 'git-commit',
         name: 'git commit',
         command: 'git commit -m "{message}"',
@@ -49,7 +49,7 @@ void main() {
     });
 
     test('copyWith 切换收藏', () {
-      final cmd = QuickCommand(
+      const cmd = QuickCommand(
         id: 'test',
         name: 'test',
         command: 'echo hello',

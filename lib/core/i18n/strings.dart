@@ -1,4 +1,4 @@
-import "package:flutter/widgets.dart";
+import 'package:flutter/widgets.dart';
 import 'app_locale.dart';
 
 /// 应用字符串资源
@@ -20,7 +20,7 @@ class Strings {
   static Strings of(BuildContext context) {
     // 从 Provider 读取
     // 实际使用时应通过 ref.watch(localeProvider) 获取语言
-    return Strings(AppLanguage.zhCN);
+    return const Strings(AppLanguage.zhCN);
   }
 
   /// 根据语言获取字符串

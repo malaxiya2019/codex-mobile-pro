@@ -12,6 +12,7 @@
 /// final segments = parser.parse('\x1b[32mHello\x1b[0m World');
 /// // segments: [{text: 'Hello', fg: Colors.green}, {text: ' World', fg: default}]
 /// ```
+library;
 
 import 'package:flutter/material.dart';
 

@@ -174,7 +174,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
     if (sessionId == null) return;
 
     state = state.copyWith(
-      errorMessage: null,
       loadingState: ChatLoadingState.streaming,
     );
 
@@ -213,7 +212,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
     if (sessionId == null) return;
 
     state = state.copyWith(
-      errorMessage: null,
       loadingState: ChatLoadingState.streaming,
     );
 
@@ -232,7 +230,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
   /// 清除错误
   void clearError() {
     state = state.copyWith(
-      errorMessage: null,
       loadingState: ChatLoadingState.idle,
     );
   }

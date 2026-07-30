@@ -16,10 +16,7 @@ void main() {
 
     test('自定义 Shell 信息正确', () {
       const info = ShellInfo(
-        type: ShellType.systemSh,
-        shellPath: '/system/bin/sh',
         version: 'sh (Android 10)',
-        isTermuxAvailable: false,
       );
 
       expect(info.type, ShellType.systemSh);
@@ -36,8 +33,7 @@ void main() {
 
     test('const 构造函数可用', () {
       const info = ShellInfo(
-        type: ShellType.systemSh,
-        shellPath: '/system/bin/sh',
+        
       );
       expect(info, isA<ShellInfo>());
     });

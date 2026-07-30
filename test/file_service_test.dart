@@ -1,6 +1,7 @@
 import 'dart:io';
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:codex_mobile_pro/features/file/services/file_service.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late Directory tempDir;
@@ -24,7 +25,7 @@ void main() {
 
   group('FileEntry', () {
     test('文本文件检测', () {
-      final entry = FileEntry(
+      const entry = FileEntry(
         name: 'main.dart',
         path: '/test/main.dart',
         type: FileEntryType.file,
@@ -34,7 +35,7 @@ void main() {
     });
 
     test('非文本文件检测', () {
-      final entry = FileEntry(
+      const entry = FileEntry(
         name: 'image.png',
         path: '/test/image.png',
         type: FileEntryType.file,
@@ -44,7 +45,7 @@ void main() {
     });
 
     test('目录图标', () {
-      final entry = FileEntry(
+      const entry = FileEntry(
         name: 'folder',
         path: '/test/folder',
         type: FileEntryType.directory,
@@ -53,7 +54,7 @@ void main() {
     });
 
     test('未知类型图标', () {
-      final entry = FileEntry(
+      const entry = FileEntry(
         name: 'unknown.xyz',
         path: '/test/unknown.xyz',
         type: FileEntryType.file,
@@ -62,7 +63,7 @@ void main() {
     });
 
     test('YAML 文件', () {
-      final entry = FileEntry(
+      const entry = FileEntry(
         name: 'config.yaml',
         path: '/test/config.yaml',
         type: FileEntryType.file,
@@ -72,7 +73,7 @@ void main() {
     });
 
     test('Markdown 文件', () {
-      final entry = FileEntry(
+      const entry = FileEntry(
         name: 'readme.md',
         path: '/test/readme.md',
         type: FileEntryType.file,

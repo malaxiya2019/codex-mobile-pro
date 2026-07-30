@@ -1,5 +1,5 @@
-import 'syntax_highlighter.dart';
 import '../models/editor_models.dart';
+import 'syntax_highlighter.dart';
 
 class ShellHighlighter extends BaseHighlighter {
   @override
@@ -63,10 +63,14 @@ class ShellHighlighter extends BaseHighlighter {
       if (text[i] == '\$') {
         final start = i; i++;
         if (i < text.length && text[i] == '{') {
-          while (i < text.length && text[i] != '}') i++;
+          while (i < text.length && text[i] != '}') {
+            i++;
+          }
           if (i < text.length) i++;
         } else {
-          while (i < text.length && (isIdentChar(text[i]))) i++;
+          while (i < text.length && (isIdentChar(text[i]))) {
+            i++;
+          }
         }
         tokens.add(SyntaxToken(type: TokenType.variable, start: start, end: i));
         continue;
@@ -75,7 +79,9 @@ class ShellHighlighter extends BaseHighlighter {
       // 数字
       if (isDigit(text[i])) {
         final start = i; i++;
-        while (i < text.length && isDigit(text[i])) i++;
+        while (i < text.length && isDigit(text[i])) {
+          i++;
+        }
         tokens.add(SyntaxToken(type: TokenType.number, start: start, end: i));
         continue;
       }
@@ -83,7 +89,9 @@ class ShellHighlighter extends BaseHighlighter {
       // 标识符
       if (isIdentChar(text[i])) {
         final start = i;
-        while (i < text.length && isIdentChar(text[i])) i++;
+        while (i < text.length && isIdentChar(text[i])) {
+          i++;
+        }
         final word = text.substring(start, i);
 
         // 检查是否是命令（行首或管道后）
@@ -100,7 +108,9 @@ class ShellHighlighter extends BaseHighlighter {
       // 重定向操作符
       if (text[i] == '>' || text[i] == '<' || text[i] == '|' || text[i] == '&') {
         final start = i; i++;
-        while (i < text.length && (text[i] == '>' || text[i] == '<' || text[i] == '|' || text[i] == '&')) i++;
+        while (i < text.length && (text[i] == '>' || text[i] == '<' || text[i] == '|' || text[i] == '&')) {
+          i++;
+        }
         tokens.add(SyntaxToken(type: TokenType.operator, start: start, end: i));
         continue;
       }

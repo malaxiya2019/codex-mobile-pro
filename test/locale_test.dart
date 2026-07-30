@@ -1,7 +1,7 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:codex_mobile_pro/core/i18n/app_locale.dart';
 import 'package:codex_mobile_pro/core/i18n/strings.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AppLanguage', () {
@@ -61,7 +61,7 @@ void main() {
 
   group('Strings', () {
     test('中文返回中文文本', () {
-      final s = Strings(AppLanguage.zhCN);
+      const s = Strings(AppLanguage.zhCN);
       expect(s.appName, 'Codex Mobile Pro');
       expect(s.ok, '确定');
       expect(s.cancel, '取消');
@@ -69,7 +69,7 @@ void main() {
     });
 
     test('英文返回英文文本', () {
-      final s = Strings(AppLanguage.enUS);
+      const s = Strings(AppLanguage.enUS);
       expect(s.appName, 'Codex Mobile Pro');
       expect(s.ok, 'OK');
       expect(s.cancel, 'Cancel');
@@ -77,8 +77,8 @@ void main() {
     });
 
     test('所有字符串在两种语言都有定义', () {
-      final zh = Strings(AppLanguage.zhCN);
-      final en = Strings(AppLanguage.enUS);
+      const zh = Strings(AppLanguage.zhCN);
+      const en = Strings(AppLanguage.enUS);
 
       // 通用
       expect(zh.appName, isNotEmpty);

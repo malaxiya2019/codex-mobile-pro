@@ -1,6 +1,6 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/core/ai/ai_provider.dart';
 import 'package:codex_mobile_pro/core/ai/ai_provider_manager.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 /// 模拟 AI Provider（用于测试管理器）
 class MockAiProvider extends AiProvider {
@@ -148,7 +148,7 @@ void main() {
       final primary = MockAiProvider(name: 'Primary');
       final fallback = MockAiProvider(name: 'Fallback');
 
-      manager.register(fallback, priority: ProviderPriority.fallback);
+      manager.register(fallback);
       manager.register(primary, priority: ProviderPriority.primary);
 
       expect(manager.registrations.length, 2);
@@ -229,7 +229,7 @@ void main() {
       primary.setShouldFail(true); // Primary 失败
 
       manager.register(primary, priority: ProviderPriority.primary);
-      manager.register(fallback, priority: ProviderPriority.fallback);
+      manager.register(fallback);
 
       // 先设置 primary 为活动
       await manager.setActiveProvider('Primary');

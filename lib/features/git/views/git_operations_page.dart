@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/ai/ai_provider.dart';
+import '../../../core/logger/log_service.dart';
+import '../../editor/providers/editor_provider.dart';
 import '../models/git_repository.dart';
 import '../services/git_service.dart';
-import '../../../core/logger/log_service.dart';
-import '../../../core/ai/ai_provider.dart';
-import '../../editor/providers/editor_provider.dart';
 
 /// Git 操作页面
 ///
@@ -226,8 +227,8 @@ class _GitOperationsPageState extends ConsumerState<GitOperationsPage> {
     });
 
     try {
-      final home = '/storage/emulated/0';
-      final destDir = '${home}/${widget.repo.name}';
+      const home = '/storage/emulated/0';
+      final destDir = '$home/${widget.repo.name}';
 
       final result = await _gitService.clone(
         widget.repo.cloneUrl!,
@@ -328,7 +329,7 @@ class _GitOperationsPageState extends ConsumerState<GitOperationsPage> {
         return null;
       }
 
-      final systemPrompt = '''你是一个 Git Commit Message 专家。
+      const systemPrompt = '''你是一个 Git Commit Message 专家。
 根据 git diff 输出，生成规范的 Commit Message。
 
 格式：<type>(<scope>): <简短描述>
@@ -345,12 +346,12 @@ scope：影响范围
 
       final response = await aiProvider.chat(
         messages: [
-          ChatMessageInput(role: 'system', content: systemPrompt),
+          const ChatMessageInput(role: 'system', content: systemPrompt),
           ChatMessageInput(role: 'user', content: '''根据以下 git diff 生成 commit message：
 
-\`\`\`diff
-${diff.length > 8000 ? diff.substring(0, 8000) + '\n... (截断)' : diff}
-\`\`\`
+```diff
+${diff.length > 8000 ? '${diff.substring(0, 8000)}\n... (截断)' : diff}
+```
 
 Return JSON output only.'''),
         ],
@@ -502,7 +503,6 @@ class _StatusSheet extends StatelessWidget {
     final theme = Theme.of(context);
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.5,
       minChildSize: 0.3,
       maxChildSize: 0.8,
       expand: false,
@@ -554,15 +554,15 @@ class _StatusSheet extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             if (status.isClean)
-              Expanded(
+              const Expanded(
                 child: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.check_circle,
                           size: 48, color: Colors.green),
-                      const SizedBox(height: 8),
-                      const Text('工作区干净，没有未提交的变更'),
+                      SizedBox(height: 8),
+                      Text('工作区干净，没有未提交的变更'),
                     ],
                   ),
                 ),
@@ -653,7 +653,6 @@ class _BranchesSheet extends StatelessWidget {
     final theme = Theme.of(context);
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.5,
       minChildSize: 0.3,
       maxChildSize: 0.8,
       expand: false,
@@ -708,7 +707,6 @@ class _LogSheet extends StatelessWidget {
     final theme = Theme.of(context);
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.5,
       minChildSize: 0.3,
       maxChildSize: 0.8,
       expand: false,

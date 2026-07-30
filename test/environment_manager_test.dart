@@ -1,15 +1,14 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/features/deploy/services/environment_manager.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('EnvironmentDetail', () {
     test('构造正确', () {
-      final detail = EnvironmentDetail(
+      const detail = EnvironmentDetail(
         tool: 'Flutter',
         version: '3.22.0',
         path: '/usr/bin/flutter',
         detail: 'stable channel',
-        installed: true,
       );
 
       expect(detail.tool, 'Flutter');
@@ -20,7 +19,7 @@ void main() {
     });
 
     test('未安装状态', () {
-      final detail = EnvironmentDetail(
+      const detail = EnvironmentDetail(
         tool: 'Rust',
         version: '',
         installed: false,
@@ -34,7 +33,7 @@ void main() {
 
   group('FlutterEnvironment', () {
     test('构造正确', () {
-      final env = FlutterEnvironment(
+      const env = FlutterEnvironment(
         flutterVersion: '3.22.0',
         dartVersion: '3.5.0',
         sdkPath: '/opt/flutter',
@@ -50,7 +49,7 @@ void main() {
     });
 
     test('默认值', () {
-      final env = FlutterEnvironment(
+      const env = FlutterEnvironment(
         flutterVersion: '3.22.0',
         dartVersion: '3.5.0',
       );
@@ -63,7 +62,7 @@ void main() {
 
   group('RustEnvironment', () {
     test('构造正确', () {
-      final env = RustEnvironment(
+      const env = RustEnvironment(
         rustcVersion: '1.79.0',
         cargoVersion: '1.79.0',
         toolchain: 'stable-aarch64-linux-android',
@@ -79,7 +78,7 @@ void main() {
 
   group('PythonEnvironment', () {
     test('构造正确', () {
-      final env = PythonEnvironment(
+      const env = PythonEnvironment(
         pythonVersion: '3.11.5',
         pipVersion: '23.2.1',
         hasVenv: true,
@@ -95,7 +94,7 @@ void main() {
 
   group('InstallResult', () {
     test('安装成功', () {
-      final result = InstallResult(
+      const result = InstallResult(
         success: true,
         tool: 'flutter',
         output: 'Cloned to /opt/flutter',
@@ -108,7 +107,7 @@ void main() {
     });
 
     test('安装失败', () {
-      final result = InstallResult(
+      const result = InstallResult(
         success: false,
         tool: 'rust',
         errorMessage: 'curl: command not found',

@@ -5,14 +5,13 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
-import 'ring_buffer.dart';
-
 import '../../../core/logger/log_service.dart';
 import '../../../core/terminal/iterminal_backend.dart';
 import '../../../core/terminal/native_pty_backend.dart';
 import '../../../core/terminal/process_terminal_backend.dart';
 import '../../../core/termux/shell_detector.dart';
 import '../../../runtime/runtime_manager.dart';
+import 'ring_buffer.dart';
 
 /// 终端会话状态
 enum TerminalSessionStatus { running, exited, error }

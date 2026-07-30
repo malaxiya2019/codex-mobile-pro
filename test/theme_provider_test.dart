@@ -1,8 +1,8 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:codex_mobile_pro/core/theme/app_theme.dart';
+import 'package:codex_mobile_pro/core/theme/theme_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:codex_mobile_pro/core/theme/theme_provider.dart';
-import 'package:codex_mobile_pro/core/theme/app_theme.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('ThemeModeOption', () {
@@ -61,7 +61,7 @@ void main() {
     test('materialMode 映射正确', () {
       expect(const ThemeState(mode: ThemeModeOption.light).materialMode, ThemeMode.light);
       expect(const ThemeState(mode: ThemeModeOption.dark).materialMode, ThemeMode.dark);
-      expect(const ThemeState(mode: ThemeModeOption.system).materialMode, ThemeMode.system);
+      expect(const ThemeState().materialMode, ThemeMode.system);
     });
   });
 

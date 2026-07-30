@@ -1,12 +1,11 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:codex_mobile_pro/core/context/workspace_context.dart';
 import 'package:codex_mobile_pro/core/context/workspace_context_provider.dart';
 import 'package:codex_mobile_pro/features/editor/models/editor_models.dart';
 import 'package:codex_mobile_pro/features/editor/providers/editor_provider.dart';
 import 'package:codex_mobile_pro/features/workspace/workspace_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 测试用的 Mock Ref — 使用真实 ProviderContainer
 class _TestRef extends Ref<Object?> {
@@ -90,7 +89,7 @@ Future<_TestRef> createMockRef() async {
 void main() {
   group('WorkspaceContext — 数据模型', () {
     test('FileContext 创建', () {
-      final ctx = FileContext(
+      const ctx = FileContext(
         path: '/test/main.dart',
         language: 'dart',
         content: 'void main() {}',
@@ -104,10 +103,9 @@ void main() {
     });
 
     test('SelectionContext 创建', () {
-      final ctx = SelectionContext(
+      const ctx = SelectionContext(
         filePath: '/test/main.dart',
         startLine: 1,
-        startColumn: 0,
         endLine: 1,
         endColumn: 10,
         selectedText: 'void main()',
@@ -120,7 +118,7 @@ void main() {
     });
 
     test('WorkspaceStructure 创建', () {
-      final ctx = WorkspaceStructure(
+      const ctx = WorkspaceStructure(
         workspacePath: '/projects/myapp',
         files: ['lib/main.dart', 'pubspec.yaml'],
         projectInfo: {'name': 'myapp', 'template': 'Flutter'},
@@ -132,13 +130,12 @@ void main() {
     });
 
     test('GitContext 创建', () {
-      final ctx = GitContext(
+      const ctx = GitContext(
         branch: 'main',
         modifiedFiles: ['lib/main.dart'],
         diff: '--- a/lib/main.dart\n+++ b/lib/main.dart\n@@ -1 +1 @@\n-old\n+new',
         isClean: false,
         ahead: 2,
-        behind: 0,
       );
 
       expect(ctx.branch, 'main');
@@ -149,7 +146,7 @@ void main() {
     });
 
     test('GitContext 默认值为干净工作区', () {
-      final ctx = const GitContext();
+      const ctx = GitContext();
       expect(ctx.isClean, true);
       expect(ctx.branch, isNull);
       expect(ctx.modifiedFiles, isEmpty);

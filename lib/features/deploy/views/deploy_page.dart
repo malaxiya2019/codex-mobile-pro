@@ -151,7 +151,6 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                       icon: Icons.code,
                       results: status.detectionResult!.coding,
                       ref: ref,
-                      showActionButtons: true,
                     ),
 
                   const SizedBox(height: 16),
@@ -164,7 +163,6 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                       icon: Icons.auto_awesome,
                       results: status.detectionResult!.ai,
                       ref: ref,
-                      showActionButtons: true,
                     ),
 
                   const SizedBox(height: 16),
@@ -602,7 +600,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                     .installCodingRuntime();
               },
               icon: const Icon(Icons.rocket_launch),
-              label: Text('一键部署 Coding 环境'),
+              label: const Text('一键部署 Coding 环境'),
               style: FilledButton.styleFrom(
                 minimumSize: const Size(double.infinity, 48),
                 textStyle: const TextStyle(fontSize: 16),

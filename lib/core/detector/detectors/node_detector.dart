@@ -12,6 +12,7 @@ class NodeDetector extends Detector {
   String get icon => '🟢';
   @override
   DetectorCategory get category => DetectorCategory.runtime;
+  @override
   RuntimeSubCategory? get subCategory => RuntimeSubCategory.coding;
 
   @override
@@ -81,7 +82,6 @@ class NodeDetector extends Detector {
             final result = await Process.run(
               candidate,
               ['--version'],
-              runInShell: false,
             );
             if (result.exitCode == 0) {
               final version = (result.stdout as String).trim();
@@ -90,7 +90,6 @@ class NodeDetector extends Detector {
                 status: DetectionStatus.installed,
                 version: version,
                 path: candidate,
-                durationMs: 0,
                 category: category,
               );
             }

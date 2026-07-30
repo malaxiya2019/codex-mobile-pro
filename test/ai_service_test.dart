@@ -1,11 +1,11 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/core/ai/ai_client.dart';
 import 'package:codex_mobile_pro/core/ai/ai_service.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AiConfig', () {
     test('默认配置使用正确的默认值', () {
-      final config = const AiConfig();
+      const config = AiConfig();
       expect(config.baseUrl, 'http://127.0.0.1:8788/v1');
       expect(config.apiKey, 'dummy');
       expect(config.model, 'deepseek-chat');
@@ -17,7 +17,7 @@ void main() {
     });
 
     test('自定义配置正确应用', () {
-      final config = const AiConfig(
+      const config = AiConfig(
         baseUrl: 'http://custom:8080/v1',
         apiKey: 'custom-key',
         model: 'custom-model',

@@ -10,13 +10,15 @@
 ///   Layer 2: Coding Runtime（Node, Git, Python — 依赖 Termux）
 ///   Layer 3: 高级工具（Codex CLI, mimo2codex — 依赖 Node）
 /// ====================================================================
+library;
 
 import 'dart:io';
+
 import 'package:path/path.dart' as path;
 
 import '../core/detector/detection_result.dart';
-import '../core/detector/detector_service.dart';
 import '../core/detector/detector.dart';
+import '../core/detector/detector_service.dart';
 import 'runtime_environment.dart';
 
 /// 检测结果（按类别分组）
@@ -148,8 +150,6 @@ class RuntimeDetector {
       icon: '🐧',
       status: status,
       version: version,
-      category: DetectorCategory.runtime,
-      subCategory: RuntimeSubCategory.coding,
     ));
 
     return existing;

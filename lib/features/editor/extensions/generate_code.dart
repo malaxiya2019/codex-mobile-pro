@@ -63,7 +63,6 @@ class CodeGenerator {
           ChatMessageInput(role: 'user', content: userPrompt),
         ],
         temperature: 0.3,
-        maxTokens: 4096,
         cancelToken: _cancelToken,
       );
 
@@ -145,7 +144,7 @@ Rules:
 
   String? _extractDescription(String response, String code) {
     // 移除代码块
-    String clean = response.replaceAll(RegExp(r'```[\s\S]*?```'), '').trim();
+    final String clean = response.replaceAll(RegExp(r'```[\s\S]*?```'), '').trim();
     if (clean.isEmpty) return null;
     return clean;
   }
@@ -158,6 +157,8 @@ Rules:
   void removeListener(VoidCallback callback) => _listeners.remove(callback);
 
   void _notifyListeners() {
-    for (final l in List.from(_listeners)) l();
+    for (final l in List.from(_listeners)) {
+      l();
+    }
   }
 }

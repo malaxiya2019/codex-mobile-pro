@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import '../logger/log_service.dart';
 
 /// 全局错误处理状态

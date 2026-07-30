@@ -11,6 +11,7 @@ class DeepSeekKeyDetector extends Detector {
   String get icon => '🔑';
   @override
   DetectorCategory get category => DetectorCategory.runtime;
+  @override
   RuntimeSubCategory? get subCategory => RuntimeSubCategory.ai;
 
   @override

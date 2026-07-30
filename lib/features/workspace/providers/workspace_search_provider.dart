@@ -156,7 +156,6 @@ class WorkspaceSearchNotifier extends StateNotifier<WorkspaceSearchState> {
       results: [],
       totalFiles: 0,
       totalMatches: 0,
-      errorMessage: null,
     );
 
     if (config.query.isEmpty) {
@@ -174,7 +173,6 @@ class WorkspaceSearchNotifier extends StateNotifier<WorkspaceSearchState> {
         regex = RegExp(
           config.query,
           caseSensitive: config.caseSensitive,
-          multiLine: false,
         );
       }
 

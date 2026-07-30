@@ -133,7 +133,6 @@ class AiClient {
     final request = ChatCompletionRequest(
       model: config.model,
       messages: messages,
-      stream: true,
       temperature: temperature,
       maxTokens: maxTokens,
     );

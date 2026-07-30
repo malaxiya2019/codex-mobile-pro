@@ -260,7 +260,6 @@ class _TerminalExtraKeysState extends State<TerminalExtraKeys> {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: accent.withValues(alpha: 0.4),
-                width: 1,
               ),
             ),
             child: Row(

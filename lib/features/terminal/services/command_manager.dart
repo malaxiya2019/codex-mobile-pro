@@ -97,14 +97,14 @@ class CommandManager {
   void _initDefaultCommands() {
     // ── Flutter ──
     _commands.addAll([
-      QuickCommand(
+      const QuickCommand(
         id: 'flutter-pub-get',
         name: 'flutter pub get',
         command: 'flutter pub get',
         description: '获取 Flutter 依赖包',
         category: CommandCategory.flutter,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'flutter-build-apk',
         name: 'flutter build apk',
         command: 'flutter build apk --debug',
@@ -112,35 +112,35 @@ class CommandManager {
         category: CommandCategory.flutter,
         parameters: ['mode'],
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'flutter-build-release',
         name: 'flutter build release',
         command: 'flutter build apk --release',
         description: '构建 Release APK',
         category: CommandCategory.flutter,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'flutter-test',
         name: 'flutter test',
         command: 'flutter test',
         description: '运行 Flutter 测试',
         category: CommandCategory.flutter,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'flutter-run',
         name: 'flutter run',
         command: 'flutter run',
         description: '运行 Flutter 应用',
         category: CommandCategory.flutter,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'flutter-clean',
         name: 'flutter clean',
         command: 'flutter clean',
         description: '清理 Flutter 构建缓存',
         category: CommandCategory.flutter,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'flutter-analyze',
         name: 'flutter analyze',
         command: 'flutter analyze',
@@ -151,42 +151,42 @@ class CommandManager {
 
     // ── Rust ──
     _commands.addAll([
-      QuickCommand(
+      const QuickCommand(
         id: 'cargo-build',
         name: 'cargo build',
         command: 'cargo build',
         description: '编译 Rust 项目',
         category: CommandCategory.rust,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'cargo-release',
         name: 'cargo build --release',
         command: 'cargo build --release',
         description: '编译 Release 版本',
         category: CommandCategory.rust,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'cargo-test',
         name: 'cargo test',
         command: 'cargo test',
         description: '运行 Rust 测试',
         category: CommandCategory.rust,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'cargo-check',
         name: 'cargo check',
         command: 'cargo check',
         description: '检查代码但不生成二进制',
         category: CommandCategory.rust,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'cargo-run',
         name: 'cargo run',
         command: 'cargo run',
         description: '运行 Rust 项目',
         category: CommandCategory.rust,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'cargo-update',
         name: 'cargo update',
         command: 'cargo update',
@@ -197,35 +197,35 @@ class CommandManager {
 
     // ── Python ──
     _commands.addAll([
-      QuickCommand(
+      const QuickCommand(
         id: 'pip-install',
         name: 'pip install',
         command: 'pip install -r requirements.txt',
         description: '安装 Python 依赖',
         category: CommandCategory.python,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'python-run',
         name: 'python main.py',
         command: 'python3 main.py',
         description: '运行 Python 项目',
         category: CommandCategory.python,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'python-venv',
         name: '创建 venv',
         command: 'python3 -m venv venv',
         description: '创建虚拟环境',
         category: CommandCategory.python,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'python-test',
         name: 'python -m pytest',
         command: 'python3 -m pytest',
         description: '运行 Python 测试',
         category: CommandCategory.python,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'pip-freeze',
         name: 'pip freeze',
         command: 'pip freeze > requirements.txt',
@@ -236,21 +236,21 @@ class CommandManager {
 
     // ── Git ──
     _commands.addAll([
-      QuickCommand(
+      const QuickCommand(
         id: 'git-status',
         name: 'git status',
         command: 'git status',
         description: '查看仓库状态',
         category: CommandCategory.git,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'git-add',
         name: 'git add .',
         command: 'git add .',
         description: '暂存所有更改',
         category: CommandCategory.git,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'git-commit',
         name: 'git commit',
         command: 'git commit -m "{message}"',
@@ -258,7 +258,7 @@ class CommandManager {
         category: CommandCategory.git,
         parameters: ['message'],
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'git-push',
         name: 'git push',
         command: 'git push origin {branch}',
@@ -266,14 +266,14 @@ class CommandManager {
         category: CommandCategory.git,
         parameters: ['branch'],
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'git-pull',
         name: 'git pull',
         command: 'git pull',
         description: '拉取远程更新',
         category: CommandCategory.git,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'git-log',
         name: 'git log',
         command: 'git log --oneline -10',
@@ -284,42 +284,42 @@ class CommandManager {
 
     // ── 通用 ──
     _commands.addAll([
-      QuickCommand(
+      const QuickCommand(
         id: 'clear',
         name: 'clear',
         command: 'clear',
         description: '清屏',
         category: CommandCategory.general,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'ls',
         name: 'ls -la',
         command: 'ls -la',
         description: '列出目录内容',
         category: CommandCategory.general,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'pwd',
         name: 'pwd',
         command: 'pwd',
         description: '显示当前路径',
         category: CommandCategory.general,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'date',
         name: 'date',
         command: 'date',
         description: '显示当前时间',
         category: CommandCategory.general,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'df-h',
         name: 'df -h',
         command: 'df -h',
         description: '查看磁盘使用',
         category: CommandCategory.general,
       ),
-      QuickCommand(
+      const QuickCommand(
         id: 'free-h',
         name: 'free -h',
         command: 'free -h',

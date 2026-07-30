@@ -9,6 +9,7 @@
 /// 这是 Layer 0：Android 基础能力。
 /// 不检测 Termux、Node、Git 等。
 /// ====================================================================
+library;
 
 import 'dart:io';
 import '../detection_result.dart';

@@ -1,5 +1,5 @@
-import 'syntax_highlighter.dart';
 import '../models/editor_models.dart';
+import 'syntax_highlighter.dart';
 
 class DartHighlighter extends BaseHighlighter {
   @override

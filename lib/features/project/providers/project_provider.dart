@@ -1,11 +1,13 @@
 import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/project_template.dart';
 import '../services/project_generator.dart';
 import '../services/templates/flutter_template_generator.dart';
-import '../services/templates/rust_template_generator.dart';
 import '../services/templates/python_template_generator.dart';
+import '../services/templates/rust_template_generator.dart';
 
 /// 项目创建状态
 enum ProjectCreateState { idle, creating, success, error }

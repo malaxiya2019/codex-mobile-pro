@@ -1,10 +1,10 @@
-import 'package:flutter/services.dart';
-import "package:codex_mobile_pro/core/ai/ai_provider.dart";
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../extensions/inline_completion.dart';
 import '../models/editor_models.dart';
 import '../services/editor_buffer.dart';
 import '../syntax/syntax_highlighter.dart';
-import '../extensions/inline_completion.dart';
 
 /// 编辑器内容区域 — 带语法高亮和 Ghost Text 补全的代码编辑器
 class EditorContent extends StatefulWidget {
@@ -112,7 +112,7 @@ class _EditorContentState extends State<EditorContent> {
                     width: _computeContentWidth(lines, highlighter, ghostText),
                     child: ListView.builder(
                       controller: _verticalScrollController,
-                      padding: EdgeInsets.only(
+                      padding: const EdgeInsets.only(
                         top: 8,
                         left: 8,
                         right: 16,
@@ -435,7 +435,6 @@ class _EditorContentState extends State<EditorContent> {
       language: buffer.language.name,
       cursorLine: cursor.line,
       cursorColumn: cursor.column,
-      triggerKind: CompletionTriggerKind.automatic,
     );
   }
 

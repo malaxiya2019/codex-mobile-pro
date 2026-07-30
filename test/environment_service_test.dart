@@ -1,6 +1,6 @@
+import 'package:codex_mobile_pro/core/detector/environment_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:codex_mobile_pro/core/detector/environment_service.dart';
 
 void main() {
   const channel = MethodChannel('com.codexmobile.app/termux');
@@ -27,7 +27,7 @@ void main() {
 
   group('TermuxEnvironmentCheck', () {
     test('默认构造函数正确', () {
-      final check = TermuxEnvironmentCheck(
+      const check = TermuxEnvironmentCheck(
         termuxInstalled: true,
         hasTermuxHome: true,
         hasTermuxUsr: true,
@@ -46,24 +46,18 @@ void main() {
     test('isTermuxAvailable 需要 termuxInstalled', () {
       const check1 = TermuxEnvironmentCheck(
         termuxInstalled: true,
-        hasTermuxHome: false,
-        hasTermuxUsr: false,
       );
       expect(check1.isTermuxAvailable, true);
 
       const check2 = TermuxEnvironmentCheck(
-        termuxInstalled: false,
-        hasTermuxHome: false,
-        hasTermuxUsr: false,
+        
       );
       expect(check2.isTermuxAvailable, false);
     });
 
     test('const 构造函数可用', () {
       const check = TermuxEnvironmentCheck(
-        termuxInstalled: false,
-        hasTermuxHome: false,
-        hasTermuxUsr: false,
+        
       );
       expect(check, isA<TermuxEnvironmentCheck>());
     });
@@ -71,7 +65,7 @@ void main() {
 
   group('ShellCommandResult', () {
     test('成功结果正确', () {
-      final result = ShellCommandResult(
+      const result = ShellCommandResult(
         exitCode: 0,
         stdout: 'v22.0.0',
         stderr: '',
@@ -86,7 +80,7 @@ void main() {
     });
 
     test('失败结果正确', () {
-      final result = ShellCommandResult(
+      const result = ShellCommandResult(
         exitCode: 1,
         stdout: '',
         stderr: 'command not found',

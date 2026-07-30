@@ -1,7 +1,8 @@
 import 'dart:io';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:codex_mobile_pro/core/logger/log_service.dart';
+
 import 'package:codex_mobile_pro/core/logger/log_file_writer.dart';
+import 'package:codex_mobile_pro/core/logger/log_service.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('LogLevel', () {
@@ -62,7 +63,7 @@ void main() {
   });
 
   group('LogFileWriter', () {
-    final testDir = Directory.systemTemp.path + '/codex_log_test';
+    final testDir = '${Directory.systemTemp.path}/codex_log_test';
 
     setUp(() async {
       final dir = Directory(testDir);

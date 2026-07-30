@@ -1,5 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/features/workspace/workspace_model.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('WorkspaceTemplate', () {
@@ -32,7 +32,7 @@ void main() {
   });
 
   group('ProjectRef', () {
-    final now = DateTime(2026, 7, 28, 10, 0);
+    final now = DateTime(2026, 7, 28, 10);
     final project = ProjectRef(
       id: 'proj-1',
       name: 'MyApp',
@@ -66,8 +66,8 @@ void main() {
   });
 
   group('Workspace', () {
-    final now = DateTime(2026, 7, 28, 10, 0);
-    final later = DateTime(2026, 7, 28, 11, 0);
+    final now = DateTime(2026, 7, 28, 10);
+    final later = DateTime(2026, 7, 28, 11);
 
     final workspace = Workspace(
       id: 'ws-1',

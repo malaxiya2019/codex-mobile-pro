@@ -181,9 +181,9 @@ ${diagnostic.code != null ? "Error code: ${diagnostic.code}" : ""}
 Line: ${diagnostic.line + 1}, Column: ${diagnostic.column + 1}
 
 Code:
-\`\`\`$language
+```$language
 $code
-\`\`\`
+```
 
 Return JSON output only.''';
   }
@@ -283,8 +283,9 @@ Return JSON output only.''';
         if (c == ',' || c == '}') {
           if (key.isNotEmpty && buf.isNotEmpty) {
             final v = buf.toString().trim();
-            if (v == 'null') result[key] = null;
-            else if (v == 'true') result[key] = true;
+            if (v == 'null') {
+              result[key] = null;
+            } else if (v == 'true') result[key] = true;
             else if (v == 'false') result[key] = false;
             else result[key] = v;
           }
@@ -307,6 +308,8 @@ Return JSON output only.''';
   void removeListener(VoidCallback callback) => _listeners.remove(callback);
 
   void _notifyListeners() {
-    for (final l in List.from(_listeners)) l();
+    for (final l in List.from(_listeners)) {
+      l();
+    }
   }
 }

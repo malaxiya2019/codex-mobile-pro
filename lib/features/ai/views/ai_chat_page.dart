@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/ai/chat_engine.dart';
+
 import '../../../core/ai/ai_message.dart';
+import '../../../core/ai/chat_engine.dart';
 import '../providers/chat_provider.dart';
 
 class AiChatPage extends ConsumerStatefulWidget {

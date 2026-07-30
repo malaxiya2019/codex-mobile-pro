@@ -1,6 +1,6 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/features/editor/models/editor_models.dart';
 import 'package:codex_mobile_pro/features/editor/services/editor_buffer.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('EditorBuffer', () {
@@ -23,7 +23,7 @@ void main() {
     });
 
     test('插入字符', () {
-      buffer.moveCursor(const CursorPosition(line: 0, column: 0));
+      buffer.moveCursor(const CursorPosition());
       buffer.insertChar('x');
       expect(buffer.lines[0], 'xvoid main() {');
       expect(buffer.isDirty, true);
@@ -36,7 +36,7 @@ void main() {
     });
 
     test('光标边界 - 起始', () {
-      buffer.moveCursor(const CursorPosition(line: 0, column: 0));
+      buffer.moveCursor(const CursorPosition());
       buffer.moveCursorLeft();
       expect(buffer.cursor.line, 0);
       expect(buffer.cursor.column, 0);
@@ -50,13 +50,13 @@ void main() {
     });
 
     test('向上移动光标', () {
-      buffer.moveCursor(const CursorPosition(line: 2, column: 0));
+      buffer.moveCursor(const CursorPosition(line: 2));
       buffer.moveCursorUp();
       expect(buffer.cursor.line, 1);
     });
 
     test('向下移动光标', () {
-      buffer.moveCursor(const CursorPosition(line: 0, column: 0));
+      buffer.moveCursor(const CursorPosition());
       buffer.moveCursorDown();
       expect(buffer.cursor.line, 1);
     });
@@ -68,7 +68,7 @@ void main() {
     });
 
     test('行尾', () {
-      buffer.moveCursor(const CursorPosition(line: 1, column: 0));
+      buffer.moveCursor(const CursorPosition(line: 1));
       buffer.moveToLineEnd();
       expect(buffer.cursor.column, buffer.lines[1].length);
     });
@@ -81,7 +81,7 @@ void main() {
     });
 
     test('文件结尾', () {
-      buffer.moveCursor(const CursorPosition(line: 0, column: 0));
+      buffer.moveCursor(const CursorPosition());
       buffer.moveToFileEnd();
       expect(buffer.cursor.line, 2);
       expect(buffer.cursor.column, buffer.lines[2].length);
@@ -110,7 +110,7 @@ void main() {
     });
 
     test('撤销操作', () {
-      buffer.moveCursor(const CursorPosition(line: 0, column: 0));
+      buffer.moveCursor(const CursorPosition());
       buffer.insertChar('x');
       expect(buffer.lines[0], 'xvoid main() {');
       buffer.undo();
@@ -118,7 +118,7 @@ void main() {
     });
 
     test('重做操作', () {
-      buffer.moveCursor(const CursorPosition(line: 0, column: 0));
+      buffer.moveCursor(const CursorPosition());
       buffer.insertChar('x');
       buffer.undo();
       buffer.redo();

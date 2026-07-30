@@ -1,5 +1,5 @@
-import 'syntax_highlighter.dart';
 import '../models/editor_models.dart';
+import 'syntax_highlighter.dart';
 
 class JsonHighlighter extends BaseHighlighter {
   @override
@@ -42,7 +42,9 @@ class JsonHighlighter extends BaseHighlighter {
       // 关键字 true/false/null
       if (isIdentChar(text[i])) {
         final start = i;
-        while (i < text.length && isIdentChar(text[i])) i++;
+        while (i < text.length && isIdentChar(text[i])) {
+          i++;
+        }
         final word = text.substring(start, i);
         if (keywords.contains(word)) {
           tokens.add(SyntaxToken(type: TokenType.builtin, start: start, end: i));

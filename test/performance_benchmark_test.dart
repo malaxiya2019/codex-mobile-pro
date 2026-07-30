@@ -4,8 +4,8 @@
 // 在真机上运行时，结果写入 build/benchmark/ 目录
 // ──────────────────────────────────────────────────────────────
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/core/performance/performance_tracker.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late PerformanceTracker tracker;
@@ -91,7 +91,7 @@ void main() {
         buffer.writeln('这是一段普通的文本内容，用来模拟 Markdown 渲染的性能。\n');
         buffer.writeln('- 列表项 ${i}a');
         buffer.writeln('- 列表项 ${i}b');
-        buffer.writeln('');
+        buffer.writeln();
         buffer.writeln('```dart');
         buffer.writeln('void main() {');
         buffer.writeln('  print("Hello, World!");');

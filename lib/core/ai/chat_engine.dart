@@ -433,8 +433,6 @@ class ChatEngine implements IChatEngine {
       // 调用 Provider
       final result = await _providerManager.chat(
         messages: messages,
-        temperature: 0.7,
-        maxTokens: 4096,
       );
 
       final assistantMessage = ChatMessage(
@@ -517,8 +515,6 @@ class ChatEngine implements IChatEngine {
     try {
       final stream = _providerManager.streamChat(
         messages: messages,
-        temperature: 0.7,
-        maxTokens: 4096,
         cancelToken: cancelToken,
       );
 

@@ -96,12 +96,12 @@ class EditorBuffer {
     if (_cursor.column < lineLen) {
       _cursor = CursorPosition(line: _cursor.line, column: _cursor.column + 1);
     } else if (_cursor.line < _lines.length - 1) {
-      _cursor = CursorPosition(line: _cursor.line + 1, column: 0);
+      _cursor = CursorPosition(line: _cursor.line + 1);
     }
   }
 
   void moveToLineStart() {
-    _cursor = CursorPosition(line: _cursor.line, column: 0);
+    _cursor = CursorPosition(line: _cursor.line);
   }
 
   void moveToLineEnd() {
@@ -112,7 +112,7 @@ class EditorBuffer {
   }
 
   void moveToFileStart() {
-    _cursor = const CursorPosition(line: 0, column: 0);
+    _cursor = const CursorPosition();
   }
 
   void moveToFileEnd() {
@@ -245,7 +245,7 @@ class EditorBuffer {
       ));
     } else if (line > 0) {
       final prevLine = _lines[line - 1];
-      final deleted = '\n';
+      const deleted = '\n';
       _lines[line - 1] = prevLine + _lines[line];
       _lines.removeAt(line);
       _cursor = CursorPosition(line: line - 1, column: prevLine.length);
@@ -285,7 +285,7 @@ class EditorBuffer {
         oldText: deleted,
       ));
     } else if (line < _lines.length - 1) {
-      final deleted = '\n';
+      const deleted = '\n';
       _lines[line] = _lines[line] + _lines[line + 1];
       _lines.removeAt(line + 1);
 
@@ -580,9 +580,9 @@ class EditorBuffer {
 
     int count = 0;
     for (int i = 0; i < _lines.length; i++) {
-      String line = _lines[i];
-      String searchText = caseSensitive ? line : line.toLowerCase();
-      String searchQuery = caseSensitive ? query : query.toLowerCase();
+      final String line = _lines[i];
+      final String searchText = caseSensitive ? line : line.toLowerCase();
+      final String searchQuery = caseSensitive ? query : query.toLowerCase();
 
       if (searchText.contains(searchQuery)) {
         final newLine = line.replaceAll(searchQuery, replacement);

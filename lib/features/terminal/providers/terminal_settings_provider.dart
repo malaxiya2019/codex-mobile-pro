@@ -47,9 +47,9 @@ class TerminalSettings {
         'fontFamily': fontFamily,
         'themeMode': themeMode.index,
         'cursorBlink': cursorBlink,
-        'cursorColor': cursorColor.value,
-        'foregroundColor': foregroundColor.value,
-        'backgroundColor': backgroundColor.value,
+        'cursorColor': cursorColor.toARGB32(),
+        'foregroundColor': foregroundColor.toARGB32(),
+        'backgroundColor': backgroundColor.toARGB32(),
       };
 
   factory TerminalSettings.fromJson(Map<String, dynamic> json) {
@@ -89,9 +89,9 @@ class TerminalSettingsNotifier extends StateNotifier<TerminalSettings> {
     await prefs.setString('terminal_fontFamily', state.fontFamily);
     await prefs.setInt('terminal_themeMode', state.themeMode.index);
     await prefs.setBool('terminal_cursorBlink', state.cursorBlink);
-    await prefs.setInt('terminal_cursorColor', state.cursorColor.value);
-    await prefs.setInt('terminal_foregroundColor', state.foregroundColor.value);
-    await prefs.setInt('terminal_backgroundColor', state.backgroundColor.value);
+    await prefs.setInt('terminal_cursorColor', state.cursorColor.toARGB32());
+    await prefs.setInt('terminal_foregroundColor', state.foregroundColor.toARGB32());
+    await prefs.setInt('terminal_backgroundColor', state.backgroundColor.toARGB32());
   }
 
   Future<void> setFontSize(double size) async {

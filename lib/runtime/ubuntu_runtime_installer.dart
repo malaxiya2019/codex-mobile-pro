@@ -9,14 +9,15 @@
 ///
 /// 与当前 .deb 单包安装器 (RuntimeInstaller) 共存，不删除后者。
 /// ====================================================================
+library;
 
 import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
-import '../core/termux/termux_runtime_bridge.dart';
 
 import '../core/logger/log_service.dart';
+import '../core/termux/termux_runtime_bridge.dart';
 import 'artifact_manager.dart';
 import 'deploy_error.dart';
 import 'runtime_dependency.dart';
@@ -39,7 +40,7 @@ class UbuntuRuntimeInstaller {
     try {
       // 检查架构
       if (!_isSupportedArch()) {
-        return InstallResult(
+        return const InstallResult(
           tool: RuntimeTool.ubuntu,
           success: false,
           errorMessage: '当前设备架构不支持 Ubuntu Runtime（仅 arm64-v8a）',
@@ -50,7 +51,7 @@ class UbuntuRuntimeInstaller {
       // 获取 manifest
       final manifest = RuntimeManifest.forTool(RuntimeTool.ubuntu);
       if (manifest == null) {
-        return InstallResult(
+        return const InstallResult(
           tool: RuntimeTool.ubuntu,
           success: false,
           errorMessage: 'Ubuntu Runtime 清单未定义',
@@ -73,7 +74,7 @@ class UbuntuRuntimeInstaller {
       // 4. 健康检查
       final healthOk = await _healthCheck();
       if (!healthOk) {
-        return InstallResult(
+        return const InstallResult(
           tool: RuntimeTool.ubuntu,
           success: false,
           errorMessage: 'Ubuntu Runtime 健康检查失败',
@@ -82,11 +83,10 @@ class UbuntuRuntimeInstaller {
       }
 
       _report(InstallPhase.completed, 1.0, 'Ubuntu Runtime 安装完成');
-      return InstallResult(
+      return const InstallResult(
         tool: RuntimeTool.ubuntu,
         success: true,
         version: '24.04',
-        phase: InstallPhase.completed,
       );
     } on DeployError catch (e) {
       _report(InstallPhase.failed, 0, e.message);
@@ -355,7 +355,7 @@ class UbuntuRuntimeInstaller {
     // SHELL: 先用 /system/bin/sh + 自定义 PATH 来执行
     const termuxPath = '/data/data/com.termux/files/usr/bin';
     const systemPath = '/system/bin:/system/xbin:/bin:/usr/bin';
-    final customPath = '$termuxPath:$systemPath';
+    const customPath = '$termuxPath:$systemPath';
 
     final result = await Process.run(
       '/system/bin/sh',
@@ -457,7 +457,7 @@ class UbuntuRuntimeInstaller {
     // sh 始终可执行，PATH 包含 Termux 目录让 shell 能找到该二进制
     const termuxPath = '/data/data/com.termux/files/usr/bin';
     const systemPath = '/system/bin:/system/xbin:/bin:/usr/bin';
-    final customPath = '$termuxPath:$systemPath';
+    const customPath = '$termuxPath:$systemPath';
 
     // 构建 shell 命令：sh -c 'exec $binName $arg1 $arg2 ...'
     // 使用 $0, $1, $2 传递参数以避免 shell 转义问题

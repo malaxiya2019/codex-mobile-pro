@@ -51,8 +51,8 @@ class PrListNotifier extends StateNotifier<PrListState> {
   String get _owner => _repoFullName.split('/')[0];
   String get _repo => _repoFullName.split('/')[1];
 
-  Future<void> loadPrs({String filterBy = "open"}) async {
-    state = state.copyWith(isLoading: true, error: null, filterState: filterBy);
+  Future<void> loadPrs({String filterBy = 'open'}) async {
+    state = state.copyWith(isLoading: true, filterState: filterBy);
     try {
       final prs = await _service.getPullRequests(_owner, _repo, state: filterBy);
       state = PrListState(prs: prs, filterState: filterBy);
@@ -118,7 +118,7 @@ class PrDetailNotifier extends StateNotifier<PrDetailState> {
   String get _repo => _repoFullName.split('/')[1];
 
   Future<void> load() async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true);
     try {
       final pr = await _service.getPullRequest(_owner, _repo, _prNumber);
       final comments =

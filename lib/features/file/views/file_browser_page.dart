@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/i18n/app_locale.dart';
 import '../../../core/i18n/strings.dart';
-import '../services/file_service.dart';
 import '../providers/file_provider.dart';
+import '../services/file_service.dart';
 
 /// 文件浏览器页面
 class FileBrowserPage extends ConsumerStatefulWidget {

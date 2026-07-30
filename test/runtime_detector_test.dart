@@ -1,12 +1,11 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/core/detector/detection_result.dart';
-import 'package:codex_mobile_pro/core/detector/detector.dart';
 import 'package:codex_mobile_pro/runtime/runtime_detector.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('RuntimeDetectionResult', () {
     /// 创建一个模拟的检测结果
-    DetectionResult _makeResult({
+    DetectionResult makeResult({
       required String id,
       required String name,
       required DetectionStatus status,
@@ -16,15 +15,14 @@ void main() {
         name: name,
         icon: '🟢',
         status: status,
-        category: DetectorCategory.runtime,
       );
     }
 
     test('codingReady — 全部 installed 为 true', () {
       final result = RuntimeDetectionResult(
         coding: [
-          _makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
-          _makeResult(id: 'git', name: 'Git', status: DetectionStatus.installed),
+          makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
+          makeResult(id: 'git', name: 'Git', status: DetectionStatus.installed),
         ],
         all: [],
         isComplete: true,
@@ -36,8 +34,8 @@ void main() {
     test('codingReady — 有 missing 为 false', () {
       final result = RuntimeDetectionResult(
         coding: [
-          _makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
-          _makeResult(id: 'git', name: 'Git', status: DetectionStatus.missing),
+          makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
+          makeResult(id: 'git', name: 'Git', status: DetectionStatus.missing),
         ],
         all: [],
         isComplete: true,
@@ -49,8 +47,8 @@ void main() {
     test('codingReady — 全部 unsupported 为 true（无可安装项）', () {
       final result = RuntimeDetectionResult(
         coding: [
-          _makeResult(id: 'codex', name: 'Codex CLI', status: DetectionStatus.unsupported),
-          _makeResult(id: 'mimo2codex', name: 'mimo2codex', status: DetectionStatus.unsupported),
+          makeResult(id: 'codex', name: 'Codex CLI', status: DetectionStatus.unsupported),
+          makeResult(id: 'mimo2codex', name: 'mimo2codex', status: DetectionStatus.unsupported),
         ],
         all: [],
         isComplete: true,
@@ -63,8 +61,8 @@ void main() {
     test('codingReady — 混合 installed + unsupported 为 true', () {
       final result = RuntimeDetectionResult(
         coding: [
-          _makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
-          _makeResult(id: 'codex', name: 'Codex CLI', status: DetectionStatus.unsupported),
+          makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
+          makeResult(id: 'codex', name: 'Codex CLI', status: DetectionStatus.unsupported),
         ],
         all: [],
         isComplete: true,
@@ -76,9 +74,9 @@ void main() {
     test('codingReady — 混合 installed + missing + unsupported 为 false', () {
       final result = RuntimeDetectionResult(
         coding: [
-          _makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
-          _makeResult(id: 'git', name: 'Git', status: DetectionStatus.missing),
-          _makeResult(id: 'codex', name: 'Codex CLI', status: DetectionStatus.unsupported),
+          makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
+          makeResult(id: 'git', name: 'Git', status: DetectionStatus.missing),
+          makeResult(id: 'codex', name: 'Codex CLI', status: DetectionStatus.unsupported),
         ],
         all: [],
         isComplete: true,
@@ -91,9 +89,9 @@ void main() {
     test('codingInstalled 只统计 installed', () {
       final result = RuntimeDetectionResult(
         coding: [
-          _makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
-          _makeResult(id: 'git', name: 'Git', status: DetectionStatus.missing),
-          _makeResult(id: 'codex', name: 'Codex CLI', status: DetectionStatus.unsupported),
+          makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
+          makeResult(id: 'git', name: 'Git', status: DetectionStatus.missing),
+          makeResult(id: 'codex', name: 'Codex CLI', status: DetectionStatus.unsupported),
         ],
         all: [],
         isComplete: true,
@@ -107,16 +105,16 @@ void main() {
     test('summary 包含基础/编码/AI/开发信息', () {
       final result = RuntimeDetectionResult(
         basic: [
-          _makeResult(id: 'termux', name: 'Termux', status: DetectionStatus.installed),
+          makeResult(id: 'termux', name: 'Termux', status: DetectionStatus.installed),
         ],
         coding: [
-          _makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
+          makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
         ],
         ai: [
-          _makeResult(id: 'deepseek_key', name: 'DeepSeek', status: DetectionStatus.missing),
+          makeResult(id: 'deepseek_key', name: 'DeepSeek', status: DetectionStatus.missing),
         ],
         development: [
-          _makeResult(id: 'flutter', name: 'Flutter', status: DetectionStatus.missing),
+          makeResult(id: 'flutter', name: 'Flutter', status: DetectionStatus.missing),
         ],
         all: [],
         isComplete: true,

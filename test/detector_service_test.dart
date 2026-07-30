@@ -1,7 +1,7 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/core/detector/detection_result.dart';
 import 'package:codex_mobile_pro/core/detector/detector.dart';
 import 'package:codex_mobile_pro/core/detector/detector_service.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 /// 模拟检测器 — 已安装（Runtime）
 class MockInstalledRuntimeDetector extends Detector {
@@ -94,7 +94,6 @@ class MockErrorDetector extends Detector {
       id: id, name: name, icon: icon,
       status: DetectionStatus.error,
       errorMessage: '检测异常',
-      durationMs: 0,
       category: category,
     );
   }
@@ -103,12 +102,11 @@ class MockErrorDetector extends Detector {
 void main() {
   group('DetectionResult', () {
     test('installed 状态正确', () {
-      final result = DetectionResult(
+      const result = DetectionResult(
         id: 'test', name: 'Test', icon: '🧪',
         status: DetectionStatus.installed,
         version: '1.0.0',
         path: '/usr/bin/test',
-        category: DetectorCategory.runtime,
       );
       expect(result.statusIcon, '✅');
       expect(result.status, DetectionStatus.installed);
@@ -116,16 +114,15 @@ void main() {
     });
 
     test('missing 状态正确', () {
-      final result = DetectionResult(
+      const result = DetectionResult(
         id: 'test', name: 'Test', icon: '🧪',
         status: DetectionStatus.missing,
-        category: DetectorCategory.runtime,
       );
       expect(result.statusIcon, '⬜');
     });
 
     test('copyWith 工作正常', () {
-      final result = DetectionResult(
+      const result = DetectionResult(
         id: 'test', name: 'Test', icon: '🧪',
         status: DetectionStatus.missing,
         category: DetectorCategory.development,
@@ -143,12 +140,11 @@ void main() {
     });
 
     test('toString 包含版本和路径', () {
-      final result = DetectionResult(
+      const result = DetectionResult(
         id: 'git', name: 'Git', icon: '🔀',
         status: DetectionStatus.installed,
         version: '2.47.1',
         path: '/usr/bin/git',
-        category: DetectorCategory.runtime,
       );
       final str = result.toString();
       expect(str, contains('✅'));
@@ -158,47 +154,42 @@ void main() {
     });
 
     test('statusColor 返回正确颜色值', () {
-      final installed = DetectionResult(
+      const installed = DetectionResult(
         id: 't', name: 'T', icon: '🧪',
         status: DetectionStatus.installed,
-        category: DetectorCategory.runtime,
       );
-      final missing = DetectionResult(
+      const missing = DetectionResult(
         id: 't', name: 'T', icon: '🧪',
         status: DetectionStatus.missing,
-        category: DetectorCategory.runtime,
       );
       expect(installed.statusColor, 0xFF4CAF50);
       expect(missing.statusColor, 0xFFFF9800);
     });
 
     test('failed 状态正确', () {
-      final result = DetectionResult(
+      const result = DetectionResult(
         id: 'test', name: 'Test', icon: '🧪',
         status: DetectionStatus.failed,
-        category: DetectorCategory.runtime,
       );
       expect(result.statusIcon, '❌');
       expect(result.statusColor, 0xFFF44336);
     });
 
     test('blocked 状态正确', () {
-      final result = DetectionResult(
+      const result = DetectionResult(
         id: 'test', name: 'Test', icon: '🧪',
         status: DetectionStatus.blocked,
-        category: DetectorCategory.runtime,
       );
       expect(result.statusIcon, '⛔');
       expect(result.statusColor, 0xFF9E9E9E);
     });
 
     test('category 传递正确', () {
-      final runtime = DetectionResult(
+      const runtime = DetectionResult(
         id: 't', name: 'T', icon: '🧪',
         status: DetectionStatus.installed,
-        category: DetectorCategory.runtime,
       );
-      final dev = DetectionResult(
+      const dev = DetectionResult(
         id: 't', name: 'T', icon: '🧪',
         status: DetectionStatus.installed,
         category: DetectorCategory.development,
@@ -208,7 +199,7 @@ void main() {
     });
 
     test('missingHint 传递正确', () {
-      final result = DetectionResult(
+      const result = DetectionResult(
         id: 'flutter', name: 'Flutter SDK', icon: '🦋',
         status: DetectionStatus.missing,
         category: DetectorCategory.development,
@@ -276,32 +267,27 @@ void main() {
   group('DetectorService.summarize', () {
     test('正确统计 installed / missing / failed / blocked / error', () {
       final results = [
-        DetectionResult(
+        const DetectionResult(
           id: 'a', name: 'A', icon: '🧪',
           status: DetectionStatus.installed,
-          category: DetectorCategory.runtime,
         ),
-        DetectionResult(
+        const DetectionResult(
           id: 'b', name: 'B', icon: '🧪',
           status: DetectionStatus.installed,
-          category: DetectorCategory.runtime,
         ),
-        DetectionResult(
+        const DetectionResult(
           id: 'c', name: 'C', icon: '🧪',
           status: DetectionStatus.missing,
-          category: DetectorCategory.runtime,
         ),
-        DetectionResult(
+        const DetectionResult(
           id: 'd', name: 'D', icon: '🧪',
           status: DetectionStatus.failed,
-          category: DetectorCategory.runtime,
         ),
-        DetectionResult(
+        const DetectionResult(
           id: 'e', name: 'E', icon: '🧪',
           status: DetectionStatus.blocked,
-          category: DetectorCategory.runtime,
         ),
-        DetectionResult(
+        const DetectionResult(
           id: 'f', name: 'F', icon: '🧪',
           status: DetectionStatus.error,
           category: DetectorCategory.development,
@@ -327,20 +313,18 @@ void main() {
   group('DetectorService.groupByCategory', () {
     test('按类别正确分组', () {
       final results = [
-        DetectionResult(
+        const DetectionResult(
           id: 'node', name: 'Node.js', icon: '🟢',
           status: DetectionStatus.installed,
-          category: DetectorCategory.runtime,
         ),
-        DetectionResult(
+        const DetectionResult(
           id: 'flutter', name: 'Flutter SDK', icon: '🦋',
           status: DetectionStatus.missing,
           category: DetectorCategory.development,
         ),
-        DetectionResult(
+        const DetectionResult(
           id: 'git', name: 'Git', icon: '🔀',
           status: DetectionStatus.installed,
-          category: DetectorCategory.runtime,
         ),
       ];
       final grouped = DetectorService.groupByCategory(results);

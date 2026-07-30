@@ -1,6 +1,7 @@
 import 'dart:ui' show Color, FontWeight;
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:codex_mobile_pro/features/terminal/services/ansi_parser.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AnsiParser', () {
@@ -117,7 +118,7 @@ void main() {
     });
 
     test('AnsiSegment.toTextStyle 返回有效的 TextStyle', () {
-      final segment = const AnsiSegment(
+      const segment = AnsiSegment(
         text: 'Test',
         foreground: Color(0xFF00FF00),
         bold: true,

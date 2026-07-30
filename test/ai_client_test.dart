@@ -1,10 +1,11 @@
 import 'dart:convert';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:mocktail/mocktail.dart';
+
 import 'package:codex_mobile_pro/core/ai/ai_client.dart';
 import 'package:codex_mobile_pro/core/ai/ai_message.dart';
 import 'package:codex_mobile_pro/core/ai/sse_parser.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:mocktail/mocktail.dart';
 
 class MockHttpClient extends Mock implements http.Client {}
 
@@ -156,7 +157,7 @@ void main() {
 
   group('AiClient.chatStream', () {
     test('流式请求返回 SSE 事件流', () async {
-      final sseData = 
+      const sseData = 
         'data: {"choices":[{"delta":{"content":"Hel"},"index":0}]}\n\n'
         'data: {"choices":[{"delta":{"content":"lo"},"index":0}]}\n\n'
         'data: [DONE]\n\n';
@@ -234,7 +235,7 @@ void main() {
 
   group('AiClientException', () {
     test('toString 正确格式化', () {
-      final ex = AiClientException(
+      const ex = AiClientException(
         type: AiClientErrorType.api,
         message: 'API Key 无效',
         statusCode: 401,

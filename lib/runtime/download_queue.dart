@@ -7,6 +7,7 @@
 /// - Backlog 持久化（应用重启后恢复未完成下载）
 /// - 依赖检查
 /// ====================================================================
+library;
 
 import 'dart:collection';
 import 'dart:convert';
@@ -181,7 +182,7 @@ class DownloadQueueScheduler {
   final List<DownloadJob> _completedJobs = [];
 
   /// 最大并发数
-  int _maxConcurrent = 3;
+  final int _maxConcurrent = 3;
 
   /// 当前是否在处理
   bool _isProcessing = false;

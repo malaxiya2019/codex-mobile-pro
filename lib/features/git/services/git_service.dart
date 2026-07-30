@@ -270,8 +270,11 @@ class GitService {
     bool force = false,
   }) async {
     final args = ['branch'];
-    if (force) args.add('-D');
-    else args.add('-d');
+    if (force) {
+      args.add('-D');
+    } else {
+      args.add('-d');
+    }
     args.add(branchName);
     return _runGit(args, workingDirectory: workingDirectory);
   }

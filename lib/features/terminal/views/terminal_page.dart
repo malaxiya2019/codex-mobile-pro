@@ -268,7 +268,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage>
                   Expanded(
                     child: CallbackShortcuts(
                       bindings: {
-                        SingleActivator(LogicalKeyboardKey.arrowUp): () {
+                        const SingleActivator(LogicalKeyboardKey.arrowUp): () {
                           final cmd = ref
                               .read(terminalProvider.notifier)
                               .historyUp();
@@ -280,7 +280,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage>
                             );
                           }
                         },
-                        SingleActivator(LogicalKeyboardKey.arrowDown): () {
+                        const SingleActivator(LogicalKeyboardKey.arrowDown): () {
                           final cmd = ref
                               .read(terminalProvider.notifier)
                               .historyDown();

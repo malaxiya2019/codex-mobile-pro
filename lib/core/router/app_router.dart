@@ -1,19 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../features/home/views/home_page.dart';
-import '../../features/termux/views/termux_test_page.dart';
-import '../../features/deploy/views/deploy_page.dart';
+
 import '../../features/ai/views/ai_chat_page.dart';
-import '../../features/settings/views/theme_settings_page.dart';
-import '../../features/settings/views/locale_settings_page.dart';
-import '../../features/workspace/views/workspace_list_page.dart';
-import '../../features/terminal/views/terminal_page.dart';
-import '../../features/git/views/repo_list_page.dart';
-import '../../features/git/views/github_login_page.dart';
-import '../../features/git/views/pr_list_page.dart';
-import '../../features/git/views/issue_list_page.dart';
+import '../../features/deploy/views/deploy_page.dart';
 import '../../features/editor/views/editor_page.dart';
 import '../../features/file/views/file_browser_page.dart';
+import '../../features/git/views/github_login_page.dart';
+import '../../features/git/views/issue_list_page.dart';
+import '../../features/git/views/pr_list_page.dart';
+import '../../features/git/views/repo_list_page.dart';
+import '../../features/home/views/home_page.dart';
+import '../../features/settings/views/locale_settings_page.dart';
+import '../../features/settings/views/theme_settings_page.dart';
+import '../../features/terminal/views/terminal_page.dart';
+import '../../features/termux/views/termux_test_page.dart';
+import '../../features/workspace/views/workspace_list_page.dart';
 import 'route_guard.dart';
 import 'route_names.dart';
 
@@ -112,7 +113,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           // final owner = state.pathParameters['owner'] ?? '';
           // final name = state.pathParameters['name'] ?? '';
-          return RepoListPage(); // 重用仓库列表
+          return const RepoListPage(); // 重用仓库列表
         },
       ),
       GoRoute(
@@ -120,8 +121,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'repoPrList',
         builder: (context, state) {
           // final owner = state.pathParameters['owner'] ?? '';
-          final owner = state.pathParameters["owner"] ?? "";
-          final name = state.pathParameters["name"] ?? "";
+          final owner = state.pathParameters['owner'] ?? '';
+          final name = state.pathParameters['name'] ?? '';
           return PrListPage(repoFullName: '$owner/$name');
         },
       ),
@@ -130,8 +131,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'repoIssueList',
         builder: (context, state) {
           // final owner = state.pathParameters['owner'] ?? '';
-          final owner = state.pathParameters["owner"] ?? "";
-          final name = state.pathParameters["name"] ?? "";
+          final owner = state.pathParameters['owner'] ?? '';
+          final name = state.pathParameters['name'] ?? '';
           return IssueListPage(repoFullName: '$owner/$name');
         },
       ),

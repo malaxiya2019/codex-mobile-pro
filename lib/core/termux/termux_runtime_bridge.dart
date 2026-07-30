@@ -16,6 +16,7 @@
 ///     b. 共享用户方案（需 root 或相同签名）
 ///   - 本 Bridge 使用 RUN_COMMAND Intent 作为主要通信方式
 /// ====================================================================
+library;
 
 import 'dart:io';
 import 'package:flutter/services.dart';
@@ -223,7 +224,6 @@ class TermuxRuntimeBridge {
         stdout: '',
         stderr: 'Termux Runtime 不可用: ${diag.statusDescription}',
         durationMs: 0,
-        usedTermux: false,
       );
     }
 
@@ -244,7 +244,6 @@ class TermuxRuntimeBridge {
           stdout: '',
           stderr: '命令降级到系统 Shell 执行 — Termux Runtime 可能意外不可用',
           durationMs: DateTime.now().difference(start).inMilliseconds,
-          usedTermux: false,
         );
       }
 
@@ -261,7 +260,6 @@ class TermuxRuntimeBridge {
         stdout: '',
         stderr: 'Termux 执行失败: $e',
         durationMs: DateTime.now().difference(start).inMilliseconds,
-        usedTermux: false,
       );
     }
   }
@@ -298,7 +296,6 @@ class TermuxRuntimeBridge {
         stdout: '',
         stderr: 'Termux Runtime 不可用，无法安装 $packageName',
         durationMs: 0,
-        usedTermux: false,
       );
     }
 
@@ -311,12 +308,11 @@ class TermuxRuntimeBridge {
   Future<TermuxCommandResult> updatePackageList({int timeoutMs = 60000}) async {
     final diag = _lastDiagnostics ?? await diagnose();
     if (!diag.isAvailable) {
-      return TermuxCommandResult(
+      return const TermuxCommandResult(
         exitCode: -1,
         stdout: '',
         stderr: 'Termux Runtime 不可用',
         durationMs: 0,
-        usedTermux: false,
       );
     }
 

@@ -11,6 +11,7 @@
 ///   L1: 内存缓存（最快，当前会话）
 ///   L2: 文件缓存（跨会话，应用重启后加载）
 /// ====================================================================
+library;
 
 import 'dart:convert';
 import 'dart:io';
@@ -197,7 +198,7 @@ class DnsCache {
 
   /// 缓存摘要
   static String get summary {
-    return 'DNS 缓存：${validCount}个有效 / ${entryCount}个总计 | '
+    return 'DNS 缓存：$validCount个有效 / $entryCount个总计 | '
         '命中率 ${(hitRate * 100).toStringAsFixed(0)}% | '
         '文件加载 $fileLoads / 保存 $fileSaves';
   }

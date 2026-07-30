@@ -11,13 +11,14 @@ class StoragePermissionDetector extends Detector {
   String get icon => '💾';
   @override
   DetectorCategory get category => DetectorCategory.runtime;
+  @override
   RuntimeSubCategory? get subCategory => RuntimeSubCategory.basic;
 
   @override
   Future<DetectionResult> detect() async {
     final start = DateTime.now();
     try {
-      var result = await EnvironmentService.detectTool(
+      final result = await EnvironmentService.detectTool(
         'ls /sdcard/Download/ 2>/dev/null | head -5 || ls /storage/emulated/0/Download/ 2>/dev/null | head -5 || echo "no_access"',
       );
       final elapsed = DateTime.now().difference(start).inMilliseconds;

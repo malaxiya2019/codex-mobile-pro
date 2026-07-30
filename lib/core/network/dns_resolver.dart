@@ -9,6 +9,7 @@
 ///
 /// 设计参考 Firecrawl 的 cacheable-lookup + engine fallback 模式。
 /// ====================================================================
+library;
 
 import 'dart:convert';
 import 'dart:io';
@@ -48,8 +49,8 @@ class DnsResolverStats {
   String get summary {
     return 'DNS 解析统计：'
         '缓存命中 $cacheHit | '
-        '系统 DNS ${systemOk}成功/${systemFail}失败 | '
-        'DoH ${dohOk}成功/${dohFail}失败 | '
+        '系统 DNS $systemOk成功/$systemFail失败 | '
+        'DoH $dohOk成功/$dohFail失败 | '
         'IP硬编码 $ipHardcodeOk | '
         '成功率 ${success > 0 ? (success / total * 100).toStringAsFixed(0) : "N/A"}%';
   }
@@ -85,9 +86,6 @@ class DnsResolveOptions {
   );
   static const DnsResolveOptions deep = DnsResolveOptions(
     timeoutMs: 5000,
-    allowDoh: true,
-    allowIpHardcode: true,
-    writeCache: true,
   );
 }
 
@@ -123,7 +121,6 @@ class DnsResolver {
         host: host,
         ip: cached.ip,
         resolved: true,
-        durationMs: 0,
         resolverName: 'L1-cache',
       );
     }
@@ -137,7 +134,6 @@ class DnsResolver {
           host: host,
           resolved: true,
           ip: systemResult.ip,
-          ttlSeconds: 30,
         );
       }
       return systemResult;

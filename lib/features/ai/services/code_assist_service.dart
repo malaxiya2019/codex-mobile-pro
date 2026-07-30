@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/ai/chat_engine.dart';
+
 import '../../../core/ai/ai_message.dart';
 import '../../../core/ai/ai_provider_manager.dart';
+import '../../../core/ai/chat_engine.dart';
 import '../../../core/context/workspace_context_provider.dart';
 
 // ══════════════════════════════════════════════

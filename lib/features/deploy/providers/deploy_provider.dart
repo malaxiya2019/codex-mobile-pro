@@ -1,11 +1,13 @@
 import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/detector/detectors/network_detector.dart';
+
 import '../../../core/detector/detection_result.dart';
-import '../../../runtime/runtime_manager.dart';
+import '../../../core/detector/detectors/network_detector.dart';
 import '../../../runtime/runtime_dependency.dart';
 import '../../../runtime/runtime_detector.dart';
 import '../../../runtime/runtime_installer.dart';
+import '../../../runtime/runtime_manager.dart';
 
 /// 状态
 enum DeployState {
@@ -113,7 +115,7 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
   /// 检测所有
   Future<void> checkAll() async {
     state = state.copyWith(
-        state: DeployState.checking, errorMessage: null);
+        state: DeployState.checking);
 
     try {
       await RuntimeManager.instance.initialize();

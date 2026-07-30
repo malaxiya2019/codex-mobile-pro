@@ -187,7 +187,6 @@ class CodeReviewEngine implements ReviewProvider {
           ChatMessageInput(role: 'user', content: userPrompt),
         ],
         temperature: 0.2,
-        maxTokens: 4096,
         cancelToken: _cancelToken,
       );
 
@@ -280,7 +279,7 @@ Rules:
       }
     } catch (_) {}
 
-    return CodeReviewResult(
+    return const CodeReviewResult(
       hasError: true,
       errorMessage: '无法解析审查结果',
     );

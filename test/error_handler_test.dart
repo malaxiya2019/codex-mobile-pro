@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/core/error/error_handler.dart';
 import 'package:codex_mobile_pro/core/logger/log_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('GlobalErrorHandler', () {
@@ -42,7 +42,7 @@ void main() {
 
     test('getErrorSummary 处理 FormatException', () {
       final summary = GlobalErrorHandler.getErrorSummary(
-        FormatException('Invalid number', 'abc'),
+        const FormatException('Invalid number', 'abc'),
       );
       expect(summary, '数据格式错误');
     });

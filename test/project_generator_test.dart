@@ -1,9 +1,9 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/features/project/models/project_template.dart';
 import 'package:codex_mobile_pro/features/project/services/project_generator.dart';
 import 'package:codex_mobile_pro/features/project/services/templates/flutter_template_generator.dart';
-import 'package:codex_mobile_pro/features/project/services/templates/rust_template_generator.dart';
 import 'package:codex_mobile_pro/features/project/services/templates/python_template_generator.dart';
+import 'package:codex_mobile_pro/features/project/services/templates/rust_template_generator.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('ProjectGeneratorService', () {
@@ -49,7 +49,7 @@ void main() {
 
     test('不支持的模板类型返回错误结果', () async {
       final result = await service.createProject(
-        ProjectCreateConfig(
+        const ProjectCreateConfig(
           name: 'Test',
           path: '/tmp',
           type: ProjectTemplateType.flutter,

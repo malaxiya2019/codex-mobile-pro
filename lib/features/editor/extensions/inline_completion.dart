@@ -278,7 +278,6 @@ class InlineCompletionEngine {
 
       final completions = await _provider!.getInlineCompletions(
         request: request,
-        triggerKind: CompletionTriggerKind.automatic,
         cancelToken: token,
       );
 

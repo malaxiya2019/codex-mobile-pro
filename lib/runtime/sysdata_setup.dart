@@ -17,6 +17,7 @@
 ///   - 只在首次初始化 rootfs 时执行一次
 ///   - 不复制任何 GPLv3 代码（仅参考概念）
 /// ====================================================================
+library;
 
 import 'dart:io';
 
@@ -77,7 +78,7 @@ class SysDataSetup {
     // 每个核心单独一行
     for (int i = 0; i < cpuCount; i++) {
       final user = 31 + (i * 7) % 500;
-      final nice = 0;
+      const nice = 0;
       final system = 226 - (i * 15) % 200;
       final idle = 12027 + (i * 123) % 5000;
       final iowait = 82 - (i * 3) % 60;

@@ -10,6 +10,7 @@
 ///
 /// 设计参考 Firecrawl 的 engine quality scoring 机制。
 /// ====================================================================
+library;
 
 import 'dart:io';
 

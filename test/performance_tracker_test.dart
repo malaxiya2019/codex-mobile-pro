@@ -1,5 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/core/performance/performance_tracker.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('PerformanceTracker', () {

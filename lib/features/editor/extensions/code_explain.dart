@@ -1,5 +1,5 @@
 import 'dart:async';
-import "package:flutter/foundation.dart";
+import 'package:flutter/foundation.dart';
 import '../../../core/ai/ai_provider.dart';
 
 /// 代码解释结果
@@ -97,7 +97,7 @@ class CodeExplainer {
       if (_cancelToken?.isCancelled == true) {
         _state = CodeExplainState.idle;
         _notifyListeners();
-        return CodeExplanation(explanation: '');
+        return const CodeExplanation(explanation: '');
       }
 
       final explanation = _parseResponse(result);
@@ -165,9 +165,9 @@ Rules:
   String _buildUserPrompt(String code, String language) {
     return '''Explain this $language code:
 
-\`\`\`$language
+```$language
 $code
-\`\`\`
+```
 
 Return JSON output only.''';
   }

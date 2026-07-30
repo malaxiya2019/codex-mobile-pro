@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../core/i18n/app_locale.dart';
 import '../../../core/i18n/strings.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../features/workspace/workspace_provider.dart';
-import '../../workspace/views/workspace_list_page.dart';
 import '../../workspace/views/workspace_create_dialog.dart';
+import '../../workspace/views/workspace_list_page.dart';
 import '../providers/counter_provider.dart';
 
 class HomePage extends ConsumerWidget {
@@ -83,17 +84,17 @@ class HomePage extends ConsumerWidget {
                 children: [
                   _StatusHeader(),
                   const SizedBox(height: 12),
-                  _StatusRow(label: 'Material 3', value: '✅ v3.0', color: Colors.green),
+                  const _StatusRow(label: 'Material 3', value: '✅ v3.0', color: Colors.green),
                   const SizedBox(height: 8),
-                  _StatusRow(label: 'Riverpod', value: '✅ 已集成', color: Colors.green),
+                  const _StatusRow(label: 'Riverpod', value: '✅ 已集成', color: Colors.green),
                   const SizedBox(height: 8),
-                  _StatusRow(label: 'Termux 通信', value: '✅ 已验证', color: Colors.green),
+                  const _StatusRow(label: 'Termux 通信', value: '✅ 已验证', color: Colors.green),
                   const SizedBox(height: 8),
-                  _StatusRow(label: 'AI 通信', value: '✅ 已验证', color: Colors.green),
+                  const _StatusRow(label: 'AI 通信', value: '✅ 已验证', color: Colors.green),
                   const SizedBox(height: 8),
-                  _StatusRow(label: '主题系统', value: '✅ 亮/暗切换', color: Colors.green),
+                  const _StatusRow(label: '主题系统', value: '✅ 亮/暗切换', color: Colors.green),
                   const SizedBox(height: 8),
-                  _StatusRow(label: '工作区管理', value: '✅ 已集成', color: Colors.green),
+                  const _StatusRow(label: '工作区管理', value: '✅ 已集成', color: Colors.green),
                   const SizedBox(height: 8),
                   _StatusRow(label: '国际化', value: locale == AppLanguage.zhCN ? '✅ 中文' : '✅ English', color: Colors.green),
                 ],
@@ -162,48 +163,48 @@ class HomePage extends ConsumerWidget {
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 ListTile(
                   leading: const Icon(Icons.terminal),
-                  title: Text('终端'),
-                  subtitle: Text('多标签 · 命令历史 · ANSI 渲染'),
+                  title: const Text('终端'),
+                  subtitle: const Text('多标签 · 命令历史 · ANSI 渲染'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push(RouteNames.terminal),
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 ListTile(
                   leading: const Icon(Icons.edit_note),
-                  title: Text('代码编辑器'),
-                  subtitle: Text('多标签 · 语法高亮 · 查找替换'),
+                  title: const Text('代码编辑器'),
+                  subtitle: const Text('多标签 · 语法高亮 · 查找替换'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push(RouteNames.editor),
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 ListTile(
                   leading: const Icon(Icons.folder_open),
-                  title: Text('文件浏览器'),
-                  subtitle: Text('目录树 · 文件搜索 · 最近文件'),
+                  title: const Text('文件浏览器'),
+                  subtitle: const Text('目录树 · 文件搜索 · 最近文件'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push(RouteNames.fileBrowser),
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 ListTile(
                   leading: const Icon(Icons.code_rounded),
-                  title: Text('GitHub 仓库'),
-                  subtitle: Text('登录 · 仓库列表 · PR · Issues · Git 操作'),
+                  title: const Text('GitHub 仓库'),
+                  subtitle: const Text('登录 · 仓库列表 · PR · Issues · Git 操作'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push(RouteNames.repoList),
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 ListTile(
                   leading: const Icon(Icons.palette_outlined),
-                  title: Text('主题设置'),
-                  subtitle: Text('亮/暗/跟随系统 · 字体配置'),
+                  title: const Text('主题设置'),
+                  subtitle: const Text('亮/暗/跟随系统 · 字体配置'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push(RouteNames.themeSettings),
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 ListTile(
                   leading: const Icon(Icons.language),
-                  title: Text('语言设置'),
-                  subtitle: Text('中文 / English'),
+                  title: const Text('语言设置'),
+                  subtitle: const Text('中文 / English'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push(RouteNames.localeSettings),
                 ),
@@ -303,14 +304,14 @@ class HomePage extends ConsumerWidget {
             selectedIcon: const Icon(Icons.home),
             label: s.navHome,
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.terminal_outlined),
-            selectedIcon: const Icon(Icons.terminal),
+          const NavigationDestination(
+            icon: Icon(Icons.terminal_outlined),
+            selectedIcon: Icon(Icons.terminal),
             label: '终端',
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.code_rounded),
-            selectedIcon: const Icon(Icons.code_rounded),
+          const NavigationDestination(
+            icon: Icon(Icons.code_rounded),
+            selectedIcon: Icon(Icons.code_rounded),
             label: 'GitHub',
           ),
           NavigationDestination(
@@ -408,7 +409,7 @@ class _WorkspaceDashboardCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  border: Border.all(color: colorScheme.outlineVariant, style: BorderStyle.solid),
+                  border: Border.all(color: colorScheme.outlineVariant),
                   borderRadius: BorderRadius.circular(12),
                   color: colorScheme.surface,
                 ),

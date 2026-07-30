@@ -1,5 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/features/project/models/project_template.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('ProjectTemplateType', () {
@@ -87,7 +87,7 @@ void main() {
 
   group('ProjectCreateConfig', () {
     test('构造正确', () {
-      final config = ProjectCreateConfig(
+      const config = ProjectCreateConfig(
         name: 'MyApp',
         path: '/home/projects',
         type: ProjectTemplateType.flutter,
@@ -101,7 +101,7 @@ void main() {
     });
 
     test('空 options 默认空 Map', () {
-      final config = ProjectCreateConfig(
+      const config = ProjectCreateConfig(
         name: 'Test',
         path: '/tmp',
         type: ProjectTemplateType.rust,
@@ -112,7 +112,7 @@ void main() {
 
   group('ProjectCreateResult', () {
     test('成功结果', () {
-      final result = ProjectCreateResult(
+      const result = ProjectCreateResult(
         success: true,
         projectPath: '/home/projects/MyApp',
         exitCode: 0,
@@ -127,7 +127,7 @@ void main() {
     });
 
     test('失败结果', () {
-      final result = ProjectCreateResult(
+      const result = ProjectCreateResult(
         success: false,
         projectPath: '/home/projects/MyApp',
         errorMessage: 'Flutter not found',

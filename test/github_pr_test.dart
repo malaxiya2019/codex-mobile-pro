@@ -1,5 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/features/git/models/github_pr.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('PullRequest', () {

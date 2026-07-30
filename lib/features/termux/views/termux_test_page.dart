@@ -33,25 +33,25 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
   // 特殊字符测试
   final _specialCharTests = [
     // #1: 美元符号
-    _SpecialTest('\$value', r'echo $((2+2))', '4', '美元符号变量展开'),
+    const _SpecialTest('\$value', r'echo $((2+2))', '4', '美元符号变量展开'),
     // #2: 双引号嵌套
-    _SpecialTest('double_quote', r"""echo "it's \"nested\""""", null, '双引号嵌套'),
+    const _SpecialTest('double_quote', r"""echo "it's \"nested\"""'', null, '双引号嵌套'),
     // #3: 单引号
-    _SpecialTest('single_quote', r"echo 'it is safe'", null, '单引号字符串'),
+    const _SpecialTest('single_quote', r"echo 'it is safe'", null, '单引号字符串'),
     // #4: 反斜杠
-    _SpecialTest('backslash', r'echo "path\to\file"', null, '反斜杠路径'),
+    const _SpecialTest('backslash', r'echo "path\to\file"', null, '反斜杠路径'),
     // #5: 反引号（旧式命令替换）
-    _SpecialTest('backtick', r'echo `echo inner`', null, '反引号命令替换'),
+    const _SpecialTest('backtick', r'echo `echo inner`', null, '反引号命令替换'),
     // #6: 管道链
-    _SpecialTest('pipe', r'echo "hello world" | wc -w', '2', '管道输出'),
+    const _SpecialTest('pipe', r'echo "hello world" | wc -w', '2', '管道输出'),
     // #7: 混合特殊字符
-    _SpecialTest('mixed', "echo \"price=\$10 & file='test.txt'\"", null, '混合特殊字符'),
+    const _SpecialTest('mixed', "echo \"price=\$10 & file='test.txt'\"", null, '混合特殊字符'),
     // #8: 中文输出
-    _SpecialTest('chinese', r'echo "你好，世界！"', null, '中文输出编码'),
+    const _SpecialTest('chinese', r'echo "你好，世界！"', null, '中文输出编码'),
     // #9: 换行符
-    _SpecialTest('newline', r"printf 'line1\nline2\nline3'", null, '换行符输出'),
+    const _SpecialTest('newline', r"printf 'line1\nline2\nline3'", null, '换行符输出'),
     // #10: 重定向
-    _SpecialTest('redirect', r'echo "temp_data" > /data/local/tmp/codex_test.txt && cat /data/local/tmp/codex_test.txt', 'temp_data', '重定向读写'),
+    const _SpecialTest('redirect', r'echo "temp_data" > /data/local/tmp/codex_test.txt && cat /data/local/tmp/codex_test.txt', 'temp_data', '重定向读写'),
   ];
 
   // 统计

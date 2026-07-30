@@ -114,7 +114,7 @@ class SseEvent {
   }
 
   factory SseEvent.done() {
-    return SseEvent._(type: SseEventType.done, isDone: true);
+    return const SseEvent._(type: SseEventType.done, isDone: true);
   }
 
   factory SseEvent.error(String message) {

@@ -97,7 +97,6 @@ class _GitHubLoginPageState extends ConsumerState<GitHubLoginPage> {
                 ),
                 border: const OutlineInputBorder(),
               ),
-              maxLines: 1,
             ),
 
             const SizedBox(height: 12),

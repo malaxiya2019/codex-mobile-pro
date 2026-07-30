@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../models/git_repository.dart';
 import '../services/git_service.dart';
 import '../services/github_service.dart';
-import '../models/git_repository.dart';
 
 // ── 单例服务 ──
 
@@ -130,7 +131,7 @@ class RepoListNotifier extends StateNotifier<RepoListState> {
   Future<void> loadRepos({bool refresh = false}) async {
     if (state.isLoading && !refresh) return;
 
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true);
     try {
       final repos = await _service.getUserRepos();
       state = RepoListState(repos: repos);
@@ -174,7 +175,7 @@ class GitStatusNotifier extends StateNotifier<GitStatusState> {
   GitStatusNotifier(this._service, this._path) : super(const GitStatusState());
 
   Future<void> refresh() async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true);
     try {
       final status = await _service.status(_path);
       state = GitStatusState(status: status);

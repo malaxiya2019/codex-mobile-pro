@@ -3,6 +3,7 @@
 ///
 /// 定义工具间的依赖关系，用于确定安装顺序和验证依赖是否满足。
 /// ====================================================================
+library;
 
 /// 运行时工具标识
 enum RuntimeTool {
@@ -96,7 +97,6 @@ class RuntimeDependency {
           tool: RuntimeTool.ubuntu,
           displayName: 'Ubuntu Runtime',
           icon: '🐧',
-          category: RuntimeCategory.coding,
           dependencies: [RuntimeTool.curl],
           hint: 'Ubuntu 24.04 rootfs + proot，提供完整 Coding 环境',
         ),
@@ -106,35 +106,30 @@ class RuntimeDependency {
           tool: RuntimeTool.node,
           displayName: 'Node.js',
           icon: '🟢',
-          category: RuntimeCategory.coding,
           dependencies: [RuntimeTool.ubuntu],
         ),
         const RuntimeDependency(
           tool: RuntimeTool.git,
           displayName: 'Git',
           icon: '🔀',
-          category: RuntimeCategory.coding,
           dependencies: [RuntimeTool.ubuntu],
         ),
         const RuntimeDependency(
           tool: RuntimeTool.python,
           displayName: 'Python 3',
           icon: '🐍',
-          category: RuntimeCategory.coding,
           dependencies: [RuntimeTool.ubuntu],
         ),
         const RuntimeDependency(
           tool: RuntimeTool.codexCli,
           displayName: 'Codex CLI',
           icon: '🤖',
-          category: RuntimeCategory.coding,
           dependencies: [RuntimeTool.node],
         ),
         const RuntimeDependency(
           tool: RuntimeTool.mimo2codex,
           displayName: 'mimo2codex',
           icon: '🔌',
-          category: RuntimeCategory.coding,
           dependencies: [RuntimeTool.node],
         ),
 
@@ -144,7 +139,6 @@ class RuntimeDependency {
           displayName: 'DeepSeek API Key',
           icon: '🔑',
           category: RuntimeCategory.ai,
-          dependencies: [],
           hint: '用于 AI 代码补全（mimo2codex / AI Provider）',
         ),
 

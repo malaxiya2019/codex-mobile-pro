@@ -280,7 +280,7 @@ class RuntimeInstaller {
       // 1. 检查 node 文件是否存在
       final nodeFile = File(nodeBin);
       if (!nodeFile.existsSync()) {
-        return NodeHealthResult(
+        return const NodeHealthResult(
           success: false,
           error: 'Node.js 二进制文件不存在',
         );
@@ -305,7 +305,7 @@ class RuntimeInstaller {
       // 3. 检查 process.arch
       final archResult = await Process.run(
         nodeBin,
-        ['-e', "console.log(process.arch)"],
+        ['-e', 'console.log(process.arch)'],
         environment: env,
       );
 
@@ -316,7 +316,7 @@ class RuntimeInstaller {
       // 4. 检查 process.platform
       final platformResult = await Process.run(
         nodeBin,
-        ['-e', "console.log(process.platform)"],
+        ['-e', 'console.log(process.platform)'],
         environment: env,
       );
 
