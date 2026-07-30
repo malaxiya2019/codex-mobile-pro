@@ -1,11 +1,3 @@
-import 'dart:async';
-import '../core/logger/log_service.dart';
-import 'runtime_dependency.dart';
-import 'runtime_detector.dart';
-import 'runtime_environment.dart';
-import 'runtime_installer.dart';
-import 'runtime_manifest.dart';
-
 /// ====================================================================
 /// Runtime 管理器
 ///
@@ -13,7 +5,22 @@ import 'runtime_manifest.dart';
 ///
 /// 数据流：
 ///   Detector → Dependency Graph → Installer → Environment → Terminal
+///
+/// 当前支持两种 Runtime：
+///   1. 系统默认 Runtime（/system/bin/sh）— 现有
+///   2. Ubuntu Runtime（rootfs + proot）— 新增，推荐
 /// ====================================================================
+
+import 'dart:async';
+import 'dart:io';
+
+import '../core/logger/log_service.dart';
+import 'runtime_dependency.dart';
+import 'runtime_detector.dart';
+import 'runtime_environment.dart';
+import 'runtime_installer.dart';
+import 'runtime_manifest.dart';
+import 'ubuntu_runtime_installer.dart';
 
 /// 管理器状态
 enum RuntimeManagerState {
@@ -48,6 +55,7 @@ class RuntimeManager {
   RuntimeEnvironment? _environment;
   RuntimeDetector? _detector;
   RuntimeInstaller? _installer;
+  UbuntuRuntimeInstaller? _ubuntuInstaller;
   RuntimeDetectionResult? _lastDetection;
 
   /// 安装进度流
@@ -78,6 +86,7 @@ class RuntimeManager {
     await _environment!.ensureDirectories();
     _detector = RuntimeDetector();
     _installer = RuntimeInstaller(_environment!, _onInstallProgress);
+    _ubuntuInstaller = UbuntuRuntimeInstaller(_environment!, _onInstallProgress);
     _state = RuntimeManagerState.ready;
     LogService.info('RuntimeMgr', 'Runtime Manager 就绪');
   }
@@ -89,7 +98,7 @@ class RuntimeManager {
     }
 
     _state = RuntimeManagerState.detecting;
-    _lastDetection = await _detector!.detectAll();
+    _lastDetection = await _detector!.detectAll(environment: _environment);
     _state = RuntimeManagerState.ready;
 
     LogService.info('RuntimeMgr', '检测完成: ${_lastDetection!.summary}');
@@ -112,7 +121,6 @@ class RuntimeManager {
       StreamController<InstallResult> controller) async {
     _state = RuntimeManagerState.installing;
 
-    // 跟踪本轮安装中哪些工具失败/不支持
     final failedTools = <RuntimeTool>{};
     final unsupportedTools = <RuntimeTool>{};
     final blockedTools = <RuntimeTool>{};
@@ -164,7 +172,7 @@ class RuntimeManager {
         if (depBlocked) continue;
 
         // 检查是否支持安装
-        if (!RuntimeManifest.isSupported(tool)) {
+        if (!RuntimeManifest.isSupported(tool) && tool != RuntimeTool.ubuntu) {
           unsupportedTools.add(tool);
           controller.add(InstallResult(
             tool: tool,
@@ -175,8 +183,14 @@ class RuntimeManager {
           continue;
         }
 
-        // 执行安装
-        final result = await _installer!.install(tool);
+        // 执行安装 —— Ubuntu Runtime 使用专用安装器
+        InstallResult result;
+        if (tool == RuntimeTool.ubuntu) {
+          result = await _ubuntuInstaller!.install();
+        } else {
+          result = await _installer!.install(tool);
+        }
+
         if (!result.success) {
           failedTools.add(tool);
         }
@@ -194,7 +208,7 @@ class RuntimeManager {
       _state = RuntimeManagerState.ready;
       // 安装完成后重新检测
       await detectAll();
-      
+
       // 将 blocked 状态补丁到检测结果中
       if (blockedTools.isNotEmpty && _lastDetection != null) {
         _patchBlockedDetection(blockedTools, _lastDetection!);
@@ -207,12 +221,11 @@ class RuntimeManager {
     Set<RuntimeTool> blockedTools,
     RuntimeDetectionResult detection,
   ) {
-    // RuntimeTool → detector id 映射
     String toolToDetectorId(RuntimeTool t) {
       switch (t) {
         case RuntimeTool.codexCli: return 'codex';
         case RuntimeTool.mimo2codex: return 'mimo2codex';
-        default: return t.name; // node, git, python
+        default: return t.name;
       }
     }
 
@@ -234,7 +247,12 @@ class RuntimeManager {
     _state = RuntimeManagerState.installing;
 
     try {
-      final result = await _installer!.install(tool);
+      InstallResult result;
+      if (tool == RuntimeTool.ubuntu) {
+        result = await _ubuntuInstaller!.install();
+      } else {
+        result = await _installer!.install(tool);
+      }
       return result;
     } finally {
       _state = RuntimeManagerState.ready;
@@ -246,7 +264,9 @@ class RuntimeManager {
     _state = RuntimeManagerState.verifying;
 
     try {
-      final results = await _detector!.verifyCodingEnvironment();
+      final results = await _detector!.verifyCodingEnvironment(
+        environment: _environment,
+      );
       return results;
     } finally {
       _state = RuntimeManagerState.ready;
@@ -256,6 +276,8 @@ class RuntimeManager {
   /// 获取终端环境变量
   ///
   /// 供 TerminalService 调用。
+  /// 如果 Ubuntu Runtime 已安装，返回 proot 环境；
+  /// 否则返回系统默认环境。
   Map<String, String> getTerminalEnvironment() {
     if (_environment == null) {
       return {};
@@ -266,6 +288,16 @@ class RuntimeManager {
   /// 检查工具是否已安装
   Future<bool> isInstalled(RuntimeTool tool) async {
     return await _environment?.isToolInstalled(tool) ?? false;
+  }
+
+  /// 获取当前 Runtime 类型
+  RuntimeType getRuntimeType() {
+    return _environment?.getRuntimeType() ?? RuntimeType.system;
+  }
+
+  /// 检查 Ubuntu Runtime 是否已就绪
+  bool get isUbuntuReady {
+    return _environment != null && _environment!.isUbuntuInstalled();
   }
 
   /// 安装进度回调

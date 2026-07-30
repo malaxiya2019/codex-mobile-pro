@@ -16,6 +16,9 @@ enum RuntimeTool {
   mimo2codex,
   deepseekKey,
   flutterSdk,
+
+  /// Ubuntu Runtime（rootfs + proot，取代单包安装方案）
+  ubuntu,
 }
 
 /// 运行时类别
@@ -88,27 +91,37 @@ class RuntimeDependency {
           category: RuntimeCategory.basic,
         ),
 
+        // ── Ubuntu Runtime ──
+        const RuntimeDependency(
+          tool: RuntimeTool.ubuntu,
+          displayName: 'Ubuntu Runtime',
+          icon: '🐧',
+          category: RuntimeCategory.coding,
+          dependencies: [RuntimeTool.curl],
+          hint: 'Ubuntu 24.04 rootfs + proot，提供完整 Coding 环境',
+        ),
+
         // ── Coding Runtime ──
         const RuntimeDependency(
           tool: RuntimeTool.node,
           displayName: 'Node.js',
           icon: '🟢',
           category: RuntimeCategory.coding,
-          dependencies: [RuntimeTool.curl],
+          dependencies: [RuntimeTool.ubuntu],
         ),
         const RuntimeDependency(
           tool: RuntimeTool.git,
           displayName: 'Git',
           icon: '🔀',
           category: RuntimeCategory.coding,
-          dependencies: [RuntimeTool.curl],
+          dependencies: [RuntimeTool.ubuntu],
         ),
         const RuntimeDependency(
           tool: RuntimeTool.python,
           displayName: 'Python 3',
           icon: '🐍',
           category: RuntimeCategory.coding,
-          dependencies: [RuntimeTool.curl],
+          dependencies: [RuntimeTool.ubuntu],
         ),
         const RuntimeDependency(
           tool: RuntimeTool.codexCli,

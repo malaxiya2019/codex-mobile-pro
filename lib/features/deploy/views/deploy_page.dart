@@ -839,8 +839,9 @@ class _DeployPageState extends ConsumerState<DeployPage> {
   /// git/python/codex/mimo2codex 暂未实现自动安装
   bool _canInstall(String id) {
     // node 已实现完整安装流程
+    // ubuntu 已实现 rootfs + proot 安装流程
     // git/python/codex/mimo2codex 暂未实现安装
-    return id == 'node';
+    return id == 'node' || id == 'ubuntu';
   }
 
   /// 安装工具
@@ -849,6 +850,9 @@ class _DeployPageState extends ConsumerState<DeployPage> {
     switch (id) {
       case 'node':
         tool = RuntimeTool.node;
+        break;
+      case 'ubuntu':
+        tool = RuntimeTool.ubuntu;
         break;
       case 'git':
         tool = RuntimeTool.git;

@@ -4,8 +4,9 @@
 /// 定义每个 Runtime 工具需要下载的 artifact 列表，
 /// 包括下载 URL、SHA256、大小、依赖的共享库和提取方式。
 ///
-/// 数据来源：Termux package mirror (packages.termux.dev)
-/// 验证方式：SHA256 来自 Termux Packages 元数据
+/// 数据来源：
+///   - Termux package mirror (packages.termux.dev)  — .deb 包
+///   - termux/proot-distro GitHub Release             — rootfs tar.xz
 /// ====================================================================
 
 import 'runtime_dependency.dart';
@@ -17,6 +18,12 @@ enum ArtifactType {
 
   /// npm 包 (通过 node npm install)
   npm,
+
+  /// rootfs tar.xz（如 Ubuntu rootfs）
+  rootfs,
+
+  /// proot loader 二进制（通过 .deb 提取）
+  proot,
 }
 
 /// 单个下载 artifact
@@ -72,13 +79,12 @@ class RuntimeManifest {
     required this.artifacts,
   });
 
-  /// Node.js 安装清单
+  /// Node.js 安装清单（现有，标记为 deprecated）
   static const RuntimeManifest node = RuntimeManifest(
     tool: RuntimeTool.node,
     displayName: 'Node.js',
     version: '26.4.0',
     artifacts: [
-      // 主程序 (node binary)
       RuntimeArtifact(
         name: 'nodejs',
         type: ArtifactType.deb,
@@ -87,7 +93,6 @@ class RuntimeManifest {
         size: 10343796,
         includeFiles: ['usr/bin/node'],
       ),
-      // npm
       RuntimeArtifact(
         name: 'npm',
         type: ArtifactType.deb,
@@ -96,7 +101,6 @@ class RuntimeManifest {
         size: 2020684,
         includeFiles: ['usr/bin/npm', 'usr/bin/npx', 'usr/lib/node_modules/npm'],
       ),
-      // libc++ (libc++_shared.so)
       RuntimeArtifact(
         name: 'libc++',
         type: ArtifactType.deb,
@@ -105,7 +109,6 @@ class RuntimeManifest {
         size: 334828,
         includeFiles: ['usr/lib/libc++_shared.so'],
       ),
-      // OpenSSL (libcrypto.so.3, libssl.so.3)
       RuntimeArtifact(
         name: 'openssl',
         type: ArtifactType.deb,
@@ -114,7 +117,6 @@ class RuntimeManifest {
         size: 2478376,
         includeFiles: ['usr/lib/libcrypto.so.3', 'usr/lib/libssl.so.3'],
       ),
-      // ICU (libicudata.so.78, libicui18n.so.78, libicuuc.so.78)
       RuntimeArtifact(
         name: 'libicu',
         type: ArtifactType.deb,
@@ -123,7 +125,6 @@ class RuntimeManifest {
         size: 10210396,
         includeFiles: ['usr/lib/libicudata.so.78', 'usr/lib/libicui18n.so.78', 'usr/lib/libicuuc.so.78'],
       ),
-      // libsqlite
       RuntimeArtifact(
         name: 'libsqlite',
         type: ArtifactType.deb,
@@ -132,7 +133,6 @@ class RuntimeManifest {
         size: 759764,
         includeFiles: ['usr/lib/libsqlite3.so'],
       ),
-      // libffi
       RuntimeArtifact(
         name: 'libffi',
         type: ArtifactType.deb,
@@ -141,7 +141,6 @@ class RuntimeManifest {
         size: 31128,
         includeFiles: ['usr/lib/libffi.so'],
       ),
-      // c-ares
       RuntimeArtifact(
         name: 'c-ares',
         type: ArtifactType.deb,
@@ -150,7 +149,6 @@ class RuntimeManifest {
         size: 194924,
         includeFiles: ['usr/lib/libcares.so'],
       ),
-      // zlib
       RuntimeArtifact(
         name: 'zlib',
         type: ArtifactType.deb,
@@ -162,11 +160,52 @@ class RuntimeManifest {
     ],
   );
 
+  /// Ubuntu rootfs 安装清单（新 —— 取代 .deb 单包方案）
+  ///
+  /// 包含：
+  ///   1. Ubuntu 24.04 Noble ARM64 rootfs tar.xz
+  ///   2. proot 二进制 + loader（通过 proot .deb 提取）
+  static const RuntimeManifest ubuntu = RuntimeManifest(
+    tool: RuntimeTool.ubuntu,
+    displayName: 'Ubuntu Runtime',
+    version: '24.04',
+    artifacts: [
+      // ─── rootfs ───
+      RuntimeArtifact(
+        name: 'ubuntu-rootfs',
+        type: ArtifactType.rootfs,
+        url: 'https://github.com/termux/proot-distro/releases/download/v4.18.0/ubuntu-noble-aarch64-pd-v4.18.0.tar.xz',
+        sha256: '91acaa786b8e2fbba56a9fd0f8a1188cee482b5c7baeed707b29ddaa9a294daa',
+        size: 64133552,
+        targetSubDir: 'ubuntu/rootfs',
+        includeFiles: null, // 提取所有文件
+        stripComponents: 1,
+      ),
+      // ─── proot loader 包（包含 proot + loader + loader32）───
+      RuntimeArtifact(
+        name: 'proot',
+        type: ArtifactType.proot,
+        url: 'https://packages.termux.dev/apt/termux-main/pool/main/p/proot/proot_5.1.107.89_aarch64.deb',
+        sha256: '6ffdff4117c571d07aa7e6f940001f050c97adb920660c984b72d4a537b4f60a',
+        size: 95784,
+        targetSubDir: 'ubuntu/bin',
+        includeFiles: [
+          'usr/bin/proot',
+          'usr/libexec/proot/loader',
+          'usr/libexec/proot/loader32',
+        ],
+        stripComponents: 6,
+      ),
+    ],
+  );
+
   /// 获取指定工具的安装清单
   static RuntimeManifest? forTool(RuntimeTool tool) {
     switch (tool) {
       case RuntimeTool.node:
         return node;
+      case RuntimeTool.ubuntu:
+        return ubuntu;
       default:
         return null; // Git/Python 等暂未实现
     }

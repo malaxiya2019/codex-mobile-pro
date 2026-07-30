@@ -237,6 +237,7 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
         case 'python':
         case 'codex':
         case 'mimo2codex':
+        case 'ubuntu':
           coding.add(r);
           break;
         case 'deepseek_key':
