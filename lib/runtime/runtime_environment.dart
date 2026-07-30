@@ -137,7 +137,6 @@ class RuntimeEnvironment {
 
   Map<String, String> _buildUbuntuEnvironment() {
     // Ubuntu Runtime 的核心路径
-    final prootBinPath = path.join(ubuntuBinDir, 'proot');
     final rootfsPath = ubuntuRootfsDir;
 
     // PATH: 优先使用 rootfs 中的系统 bin，回退到 Android 系统 bin
