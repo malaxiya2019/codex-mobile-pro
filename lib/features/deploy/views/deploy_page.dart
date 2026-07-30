@@ -72,110 +72,131 @@ class _DeployPageState extends ConsumerState<DeployPage> {
             ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: Column(
         children: [
-          // ── 顶部状态卡片 ──
-          _buildSummaryCard(context, status),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // ── 顶部状态卡片 ──
+                _buildSummaryCard(context, status),
 
-          const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-          // ── 检测 / 安装进度 ──
-          if (status.state == DeployState.checking)
-            _buildCheckingIndicator(context, status),
+                // ── 检测 / 安装进度 ──
+                if (status.state == DeployState.checking)
+                  _buildCheckingIndicator(context, status),
 
-          if (status.state == DeployState.installing)
-            _buildInstallingIndicator(context, status),
+                if (status.state == DeployState.installing)
+                  _buildInstallingIndicator(context, status),
 
-          if (status.state == DeployState.verifying)
-            _buildVerifyingIndicator(context),
+                if (status.state == DeployState.verifying)
+                  _buildVerifyingIndicator(context),
 
-          // ── 开始检测按钮 ──
-          if (status.state == DeployState.idle ||
-              status.state == DeployState.error)
-            Center(
-              child: FilledButton.icon(
-                onPressed: () =>
-                    ref.read(deployStatusProvider.notifier).checkAll(),
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('开始检测'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(200, 48),
-                  textStyle: const TextStyle(fontSize: 16),
+                // ── 开始检测按钮 ──
+                if (status.state == DeployState.idle ||
+                    status.state == DeployState.error)
+                  Center(
+                    child: FilledButton.icon(
+                      onPressed: () =>
+                          ref.read(deployStatusProvider.notifier).checkAll(),
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('开始检测'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(200, 48),
+                        textStyle: const TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ),
+
+                // ── 检测结果（不含底部操作按钮）──
+                if (status.detectionResult != null) ...[
+                  // ⚡ 基础 Runtime
+                  if (status.detectionResult!.basic.isNotEmpty)
+                    _buildCategorySection(
+                      context: context,
+                      title: '⚡ 基础 Runtime',
+                      icon: Icons.settings,
+                      results: status.detectionResult!.basic,
+                      ref: ref,
+                      showActionButtons: false,
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // 💻 Coding Runtime
+                  if (status.detectionResult!.coding.isNotEmpty)
+                    _buildCategorySection(
+                      context: context,
+                      title: '💻 Coding Runtime',
+                      icon: Icons.code,
+                      results: status.detectionResult!.coding,
+                      ref: ref,
+                      showActionButtons: true,
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // 🤖 AI Runtime
+                  if (status.detectionResult!.ai.isNotEmpty)
+                    _buildCategorySection(
+                      context: context,
+                      title: '🤖 AI Runtime',
+                      icon: Icons.auto_awesome,
+                      results: status.detectionResult!.ai,
+                      ref: ref,
+                      showActionButtons: true,
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // 🛠 Development
+                  if (status.detectionResult!.development.isNotEmpty)
+                    _buildCategorySection(
+                      context: context,
+                      title: '🛠 Development',
+                      icon: Icons.build,
+                      results: status.detectionResult!.development,
+                      ref: ref,
+                      showActionButtons: false,
+                      showMissingAsRed: false,
+                      description: '可选 — 仅用于 Flutter 项目开发，不影响 App 基本运行',
+                    ),
+                ],
+
+                // ── 验证结果 ──
+                if (_verificationResults != null) ...[
+                  const SizedBox(height: 16),
+                  _buildVerificationResults(context, _verificationResults!),
+                ],
+
+                // ── 空状态 ──
+                if (status.detectionResult == null &&
+                    status.state == DeployState.idle)
+                  _buildEmptyState(context),
+              ],
+            ),
+          ),
+
+          // ── 固定底部操作栏 ──
+          if (status.detectionResult != null)
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                border: Border(
+                  top: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                  ),
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: _buildActionButtons(context, status),
                 ),
               ),
             ),
-
-          // ── 检测结果 ──
-          if (status.detectionResult != null) ...[
-            // ⚡ 基础 Runtime
-            if (status.detectionResult!.basic.isNotEmpty)
-              _buildCategorySection(
-                context: context,
-                title: '⚡ 基础 Runtime',
-                icon: Icons.settings,
-                results: status.detectionResult!.basic,
-                ref: ref,
-                showActionButtons: false,
-              ),
-
-            const SizedBox(height: 16),
-
-            // 💻 Coding Runtime
-            if (status.detectionResult!.coding.isNotEmpty)
-              _buildCategorySection(
-                context: context,
-                title: '💻 Coding Runtime',
-                icon: Icons.code,
-                results: status.detectionResult!.coding,
-                ref: ref,
-                showActionButtons: true,
-              ),
-
-            const SizedBox(height: 16),
-
-            // 🤖 AI Runtime
-            if (status.detectionResult!.ai.isNotEmpty)
-              _buildCategorySection(
-                context: context,
-                title: '🤖 AI Runtime',
-                icon: Icons.auto_awesome,
-                results: status.detectionResult!.ai,
-                ref: ref,
-                showActionButtons: true,
-              ),
-
-            const SizedBox(height: 16),
-
-            // 🛠 Development
-            if (status.detectionResult!.development.isNotEmpty)
-              _buildCategorySection(
-                context: context,
-                title: '🛠 Development',
-                icon: Icons.build,
-                results: status.detectionResult!.development,
-                ref: ref,
-                showActionButtons: false,
-                showMissingAsRed: false,
-                description: '可选 — 仅用于 Flutter 项目开发，不影响 App 基本运行',
-              ),
-
-            const SizedBox(height: 24),
-
-            // ── 操作按钮 ──
-            _buildActionButtons(context, status),
-          ],
-
-          // ── 验证结果 ──
-          if (_verificationResults != null) ...[
-            const SizedBox(height: 16),
-            _buildVerificationResults(context, _verificationResults!),
-          ],
-
-          // ── 空状态 ──
-          if (status.detectionResult == null &&
-              status.state == DeployState.idle)
-            _buildEmptyState(context),
         ],
       ),
     );
