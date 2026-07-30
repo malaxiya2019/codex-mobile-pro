@@ -21,6 +21,7 @@ import 'runtime_environment.dart';
 import 'runtime_installer.dart';
 import 'runtime_manifest.dart';
 import 'ubuntu_runtime_installer.dart';
+import 'download_queue.dart';
 
 /// 管理器状态
 enum RuntimeManagerState {
@@ -56,6 +57,7 @@ class RuntimeManager {
   RuntimeDetector? _detector;
   RuntimeInstaller? _installer;
   UbuntuRuntimeInstaller? _ubuntuInstaller;
+  DownloadQueueScheduler? _queue;
   RuntimeDetectionResult? _lastDetection;
 
   /// 安装进度流
@@ -87,6 +89,16 @@ class RuntimeManager {
     _detector = RuntimeDetector();
     _installer = RuntimeInstaller(_environment!, _onInstallProgress);
     _ubuntuInstaller = UbuntuRuntimeInstaller(_environment!, _onInstallProgress);
+    
+    // 初始化下载队列
+    _queue = DownloadQueueScheduler.instance;
+    final backlogDir = '${_environment!.runtimeDir}/.queue_backlog';
+    await _queue!.initialize(backlogDir: backlogDir);
+    final recovered = await _queue!.recoverBacklog();
+    if (recovered > 0) {
+      LogService.info('RuntimeMgr', '恢复 $recovered 个未完成的下载任务');
+    }
+    
     _state = RuntimeManagerState.ready;
     LogService.info('RuntimeMgr', 'Runtime Manager 就绪');
   }
@@ -288,6 +300,16 @@ class RuntimeManager {
   /// 检查工具是否已安装
   Future<bool> isInstalled(RuntimeTool tool) async {
     return await _environment?.isToolInstalled(tool) ?? false;
+  }
+
+  /// 下载队列
+  DownloadQueueScheduler get downloadQueue => _queue!;
+  
+  /// 下载队列事件流
+  Stream<DownloadProgressEvent> get downloadQueueStream {
+    final controller = StreamController<DownloadProgressEvent>.broadcast();
+    _queue?.addListener((event) => controller.add(event));
+    return controller.stream;
   }
 
   /// 获取当前 Runtime 类型
