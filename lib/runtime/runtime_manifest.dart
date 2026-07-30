@@ -186,7 +186,7 @@ class RuntimeManifest {
         name: 'proot',
         type: ArtifactType.proot,
         url: 'https://packages.termux.dev/apt/termux-main/pool/main/p/proot/proot_5.1.107.89_aarch64.deb',
-        sha256: '6ffdff4117c571d07aa7e6f940001f050c97adb920660c984b72d4a537b4f60a',
+        sha256: 'ec9fe38c50cfd49dd31fe360ffbcc3124a945dc1ea16293a8a769303dd724f46',
         size: 95784,
         targetSubDir: 'ubuntu/bin',
         includeFiles: [
