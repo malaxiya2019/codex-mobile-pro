@@ -1,0 +1,18 @@
+{
+  "name": "firecrawl-patterns",
+  "version": "1.0.0",
+  "description": "参考 Firecrawl 高性能爬虫系统架构模式来优化 codex-mobile-pro 的部署中心。涵盖多引擎 fallback 下载、DNS 缓存与网络检测优化、结构化错误处理、镜像切换与备用下载源、并发队列管理。",
+  "skill": {
+    "triggers": [
+      "部署失败",
+      "DNS 解析失败",
+      "网络不可用",
+      "安装中断",
+      "fallback",
+      "镜像切换",
+      "下载失败",
+      "多引擎",
+      "重试策略"
+    ]
+  }
+}
