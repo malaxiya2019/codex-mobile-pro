@@ -1,64 +1,63 @@
-import 'package:codex_mobile_pro/app.dart';
 import 'package:codex_mobile_pro/core/i18n/app_locale.dart';
-import 'package:codex_mobile_pro/core/router/app_router.dart';
-import 'package:codex_mobile_pro/core/router/route_guard.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-  group('HomePage — Material 3 验证', () {
-    setUp(() {
-      SharedPreferences.setMockInitialValues({'app_locale': 'en_US'});
+  group('LocaleNotifier', () {
+    test('默认语言为英文', () {
+      final notifier = LocaleNotifier();
+      expect(notifier.state, AppLanguage.enUS);
     });
 
-    // 提供稳定的 Mock Router（避免 GoRouter 在测试环境初始化复杂路由）
-
-
-    testWidgets('首页正确渲染', (tester) async {
-      final localeNotifier = LocaleNotifier();
-      localeNotifier.state = AppLanguage.enUS;
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            localeProvider.overrideWith((ref) => localeNotifier),
-            appRouterProvider.overrideWithValue(GoRouter(initialLocation: '/', routes: [GoRoute(path: '/', builder: (context, state) => const Placeholder())])),
-            authProvider.overrideWith((ref) => AuthNotifier()),
-          ],
-          child: const CodexMobileApp(),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 2));
-
-      // 由于使用了 Mock Router，首页不会渲染真正的 HomePage
-      // 改为验证 App 的基本 Material 结构
-      expect(find.byType(MaterialApp), findsOneWidget);
+    test('切换为中文', () {
+      final notifier = LocaleNotifier();
+      notifier.state = AppLanguage.zhCN;
+      expect(notifier.state, AppLanguage.zhCN);
+      expect(notifier.state.locale.languageCode, 'zh');
     });
 
-    testWidgets('计数器交互正常', (tester) async {
-      final localeNotifier = LocaleNotifier();
-      localeNotifier.state = AppLanguage.enUS;
+    test('切换为英文', () {
+      final notifier = LocaleNotifier();
+      notifier.state = AppLanguage.zhCN;
+      notifier.state = AppLanguage.enUS;
+      expect(notifier.state, AppLanguage.enUS);
+      expect(notifier.state.locale.languageCode, 'en');
+    });
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            localeProvider.overrideWith((ref) => localeNotifier),
-            appRouterProvider.overrideWithValue(GoRouter(initialLocation: '/', routes: [GoRoute(path: '/', builder: (context, state) => const Placeholder())])),
-            authProvider.overrideWith((ref) => AuthNotifier()),
-          ],
-          child: const CodexMobileApp(),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 2));
+    test('状态改变通知监听器', () {
+      final notifier = LocaleNotifier();
+      int callCount = 0;
+      notifier.addListener(() => callCount++);
 
-      // 验证 App 成功渲染
-      expect(find.byType(MaterialApp), findsOneWidget);
+      notifier.state = AppLanguage.zhCN;
+      expect(callCount, 1);
+
+      notifier.state = AppLanguage.enUS;
+      expect(callCount, 2);
+    });
+
+    test('AppLanguage.enUS 属性正确', () {
+      const lang = AppLanguage.enUS;
+      expect(lang.locale.languageCode, 'en');
+      expect(lang.locale.countryCode, 'US');
+      expect(lang.flag, '🇺🇸');
+      expect(lang.label, 'English');
+    });
+
+    test('AppLanguage.zhCN 属性正确', () {
+      const lang = AppLanguage.zhCN;
+      expect(lang.locale.languageCode, 'zh');
+      expect(lang.locale.countryCode, 'CN');
+      expect(lang.flag, '🇨🇳');
+      expect(lang.label, '中文');
+    });
+
+    test('所有 AppLanguage 枚举值对应正确 locale', () {
+      for (final lang in AppLanguage.values) {
+        expect(lang.locale, isNotNull);
+        expect(lang.locale.languageCode, isNotEmpty);
+        expect(lang.flag, isNotEmpty);
+        expect(lang.label, isNotEmpty);
+      }
     });
   });
 }

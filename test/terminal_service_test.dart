@@ -1,9 +1,8 @@
 import 'package:codex_mobile_pro/core/termux/shell_detector.dart';
-import 'package:codex_mobile_pro/features/terminal/services/terminal_service.dart';
+import 'package:codex_mobile_pro/features/terminal/services/terminal_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
   group('ShellInfo', () {
     test('Android 系统 Shell 描述正确', () {
       const info = ShellInfo();

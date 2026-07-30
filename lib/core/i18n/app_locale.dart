@@ -4,14 +4,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// 支持的语言
 enum AppLanguage {
-  zhCN('zh', 'CN', '简体中文'),
-  enUS('en', 'US', 'English');
+  zhCN('zh', 'CN', '简体中文', '🇨🇳', '中文'),
+  enUS('en', 'US', 'English', '🇺🇸', 'English');
 
   final String languageCode;
   final String countryCode;
   final String displayName;
+  final String flag;
+  final String label;
 
-  const AppLanguage(this.languageCode, this.countryCode, this.displayName);
+  const AppLanguage(
+    this.languageCode,
+    this.countryCode,
+    this.displayName,
+    this.flag,
+    this.label,
+  );
 
   Locale get locale => Locale(languageCode, countryCode);
 
