@@ -272,8 +272,8 @@ class UbuntuRuntimeInstaller {
     // ─── 解析系统工具路径 ───
     // Flutter App 进程的 PATH 不包含 Termux 目录，必须显式指定完整路径
     // 否则 Process.start('xz') 会报 Permission denied
-    final xzBin = _findSystemBinary('xz');
-    final tarBin = _findSystemBinary('tar');
+    final xzBin = await _ensureToolInstalled('xz');
+    final tarBin = await _ensureToolInstalled('tar');
     final findBin = _findSystemBinary('find');
 
     // ─── 流式解压：xz -> pipe -> tar ───
@@ -312,6 +312,63 @@ class UbuntuRuntimeInstaller {
   }
 
 
+
+
+  /// 确保系统工具已安装，缺失时自动通过 Termux 安装
+  Future<String> _ensureToolInstalled(String name) async {
+    final binPath = _findSystemBinary(name);
+
+    // 已找到（完整路径且文件存在）
+    if (binPath.contains('/') && File(binPath).existsSync()) {
+      return binPath;
+    }
+
+    // 只有裸名 → 不存在 → 尝试安装
+    LogService.info('UbuntuInstaller', '系统工具 $name 未找到，尝试自动安装...');
+
+    final termuxPkg = '/data/data/com.termux/files/usr/bin/pkg';
+    if (!File(termuxPkg).existsSync()) {
+      throw DeployError(
+        code: DeployErrorCode.toolInstallationFailed,
+        message: '缺少 $name，且 Termux 包管理器不可用',
+      );
+    }
+
+    _report(InstallPhase.extracting, 0.25, '安装系统工具 $name...');
+
+    final result = await Process.run(
+      '/system/bin/sh',
+      <String>[
+        '-c',
+        'PATH=/data/data/com.termux/files/usr/bin:\$PATH pkg install $name -y',
+      ],
+    );
+
+    if (result.exitCode != 0) {
+      throw DeployError(
+        code: DeployErrorCode.toolInstallationFailed,
+        message: '安装 $name 失败: ${(result.stderr as String).trim().replaceAll(RegExp(r'\n'), '; ')}',
+      );
+    }
+
+    // 安装后再次检查
+    final installedPath = '/data/data/com.termux/files/usr/bin/$name';
+    if (File(installedPath).existsSync()) {
+      LogService.info('UbuntuInstaller', '$name 安装成功');
+      return installedPath;
+    }
+
+    // 可能在其它路径，让 _findSystemBinary 再做一次完整的查找
+    final retryPath = _findSystemBinary(name);
+    if (retryPath.contains('/') && File(retryPath).existsSync()) {
+      return retryPath;
+    }
+
+    throw DeployError(
+      code: DeployErrorCode.toolInstallationFailed,
+      message: '安装 $name 完成但二进制仍不可用',
+    );
+  }
 
   /// 架构检查
   static bool _isSupportedArch() {

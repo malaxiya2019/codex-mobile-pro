@@ -37,6 +37,7 @@ enum DeployErrorCode {
   // ─── 依赖层 ───
   archNotSupported,
   dependencyMissing,
+  toolInstallationFailed,
   versionMismatch,
 
   // ─── 未知 ───
@@ -154,6 +155,8 @@ class DeployErrorSuggestions {
         '当前设备架构暂不支持。该 Runtime 仅支持 arm64-v8a / aarch64',
     DeployErrorCode.dependencyMissing:
         '缺少依赖。请先安装所需依赖后重试',
+    DeployErrorCode.toolInstallationFailed:
+        '系统工具安装失败。将通过 Termux 自动安装缺失工具，请确保网络连接正常',
     DeployErrorCode.versionMismatch:
         '版本不匹配。将尝试安装兼容版本',
     DeployErrorCode.unknown:
