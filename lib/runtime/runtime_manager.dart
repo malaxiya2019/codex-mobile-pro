@@ -12,7 +12,6 @@
 /// ====================================================================
 
 import 'dart:async';
-import 'dart:io';
 
 import '../core/logger/log_service.dart';
 import '../core/detector/detection_result.dart';
