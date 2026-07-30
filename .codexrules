@@ -1,0 +1,18 @@
+# Codex 行为规则 — codex-mobile-pro
+
+## 启动协议
+每次对话开始时，优先读取以下文件作为上下文：
+- `../Obsidian-Vault/System/Assistant/context.md`
+- `../Obsidian-Vault/System/Assistant/preferences.md`
+
+## 记忆更新
+工作产出重要结论或任务状态变更时，自动更新：
+- `../Obsidian-Vault/System/Assistant/context.md` — 项目状态
+- `../Obsidian-Vault/System/Assistant/preferences.md` — 偏好变更
+
+## 项目约束
+- 优先复用已有架构，不重复造轮子
+- 所有环境变量由 RuntimeEnvironment 统一构建
+- 安装必须真实验证，禁止假安装
+- 不改 /system 系统目录
+- 不改 Terminal / PTY 架构
