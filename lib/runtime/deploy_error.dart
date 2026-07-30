@@ -139,7 +139,7 @@ class DeployErrorSuggestions {
     DeployErrorCode.sha256Mismatch:
         '文件校验失败，下载文件可能已损坏。将自动切换下载源重试',
     DeployErrorCode.allSourcesExhausted:
-        '所有下载源均不可用。请检查网络连接，或等待一段时间后重试',
+        '所有下载源均不可用。常见原因：① DNS 解析失败（将在后台自动尝试 DoH 加密DNS解析）② 运营商屏蔽（可切换 Wi-Fi/移动数据）③ 镜像源失效（将自动降级为 IP 直连模式）。请确保网络正常后重试',
     DeployErrorCode.extractionFailed:
         '解压失败。可能的原因是下载文件损坏，将自动重新下载',
     DeployErrorCode.permissionDenied:

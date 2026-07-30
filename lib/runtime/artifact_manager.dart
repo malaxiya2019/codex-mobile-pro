@@ -2,9 +2,11 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:path/path.dart' as path;
+import '../core/network/dns_cache.dart';
+import '../core/network/dns_resolver.dart';
 import '../core/network/ip_hosts.dart';
-import 'runtime_manifest.dart';
 import 'deploy_error.dart';
+import 'runtime_manifest.dart';
 
 /// ====================================================================
 /// Artifact 管理器
@@ -171,7 +173,7 @@ class ArtifactManager {
 
         // ─── DNS 故障时切 IP 直连 ───────────────────────────────
         if (attempt > 1 && dnsFailed) {
-          final ipUrl = _tryIpDirect(currentUrl);
+          final ipUrl = await _tryIpResolveAsync(currentUrl);
           if (ipUrl != null) {
             currentUrl = ipUrl;
           }
@@ -258,7 +260,7 @@ class ArtifactManager {
   /// 尝试将 URL 域名替换为 IP
   ///
   /// 优先使用 DnsResolver（多层 fallback），其次使用 IpHosts 硬编码。
-  static String? _tryIpDirect(String url) {
+  static Future<String?> _tryIpResolveAsync(String url) async {
     try {
       final uri = Uri.parse(url);
       final host = uri.host;
@@ -266,8 +268,22 @@ class ArtifactManager {
       // 已经是 IP，跳过
       if (RegExp(r'^\d+\.\d+\.\d+\.\d+$').hasMatch(host)) return null;
 
-      // 优先走 DNS 解析器（缓存 → 系统DNS → DoH → 硬编码）
-      // 注意：同步方法里无法 await，这里只查硬编码和已有缓存
+      // L1: 查 DNS 缓存（同步，最快）
+      final cached = DnsCache.get(host);
+      if (cached != null && cached.resolved && cached.ip != null) {
+        return url.replaceFirst(host, cached.ip!);
+      }
+
+      // L2: 走 DnsResolver 完整链路（缓存 → ping → DoH → IP硬编码）
+      final result = await DnsResolver.resolve(
+        host,
+        options: DnsResolveOptions.deep,
+      );
+      if (result.resolved && result.ip != null) {
+        return url.replaceFirst(host, result.ip!);
+      }
+
+      // L3: 兜底 — IpHosts 硬编码
       final ips = IpHosts.ipsFor(host);
       if (ips.isNotEmpty) {
         return url.replaceFirst(host, ips.first);
