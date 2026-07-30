@@ -13,7 +13,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart' show sha256;
 import 'package:path/path.dart' as path;
 
@@ -331,7 +330,10 @@ class UbuntuRuntimeInstaller {
     }
   }
 
-  /// 解压 tar.xz 到目标目录
+  /// 解压 tar.xz 到目标目录（流式解压，避免 OOM）
+  ///
+  /// 使用系统命令 xz + tar 管道流式处理，不将解压数据完全加载到内存。
+  /// 之前在 Dart 中用 archive 包全部解压到内存导致移动端 OOM 闪退。
   Future<void> _extractTarXz({
     required String tarPath,
     required String targetDir,
@@ -340,59 +342,36 @@ class UbuntuRuntimeInstaller {
   }) async {
     await Directory(targetDir).create(recursive: true);
 
-    final bytes = await File(tarPath).readAsBytes();
+    // ─── 流式解压：xz -> pipe -> tar ───
+    // 使用 Process.start 管道直连 xz -> tar，不经过 Dart 内存缓冲区
+    // 避免将 300MB+ 解压数据全部加载到内存中导致 OOM
+    final xzProcess = await Process.start('xz', ['-d', '-c', tarPath]);
+    final tarProcess = await Process.start(
+      'tar', ['x', '-C', targetDir, '--strip-components', '$stripComponents'],
+    );
 
-    // 解压 xz
-    List<int> tarBytes;
-    if (tarPath.endsWith('.xz')) {
-      tarBytes = XZDecoder().decodeBytes(bytes);
-    } else if (tarPath.endsWith('.gz')) {
-      tarBytes = GZipDecoder().decodeBytes(bytes);
-    } else {
-      tarBytes = bytes;
+    // 管道：xz stdout → tar stdin（流式传输，不经过 Dart 代码）
+    await xzProcess.stdout.pipe(tarProcess.stdin);
+    await xzProcess.stderr.drain(); // 释放 stderr 缓冲区
+
+    final xzExit = await xzProcess.exitCode;
+    final tarExit = await tarProcess.exitCode;
+
+    if (xzExit != 0 || tarExit != 0) {
+      throw InstallException(
+        InstallErrorCode.extractionFailed,
+        'rootfs 解压失败 (xz=$xzExit, tar=$tarExit)',
+      );
     }
 
-    // 解压 tar
-    final decoder = TarDecoder();
-    final archive = decoder.decodeBytes(tarBytes);
+    // 统计解压后的文件数
+    final countResult = await Process.run(
+      'find', ['$targetDir', '-type', 'f'],
+      runInShell: true,
+    );
+    final totalFiles = (countResult.stdout as String).split('\n').where((l) => l.isNotEmpty).length;
 
-    int extracted = 0;
-    final total = archive.length;
-
-    for (final entry in archive) {
-      if (entry.isFile) {
-        final strippedPath = _stripPathComponents(entry.name, stripComponents);
-        if (strippedPath == null || strippedPath.isEmpty) continue;
-
-        final destPath = path.join(targetDir, strippedPath);
-        final destDir = path.dirname(destPath);
-        await Directory(destDir).create(recursive: true);
-
-        await File(destPath).writeAsBytes(entry.content as List<int>);
-
-        // 设置执行权限
-        if ((entry.mode & 0x40) != 0) {
-          try {
-            await Process.run('chmod', ['+x', destPath]);
-          } catch (_) {}
-        }
-
-        extracted++;
-        if (extracted % 1000 == 0) {
-          onProgress(extracted, total);
-        }
-      }
-    }
-
-    onProgress(total, total);
-  }
-
-  /// 去掉路径的前 N 个组件
-  static String? _stripPathComponents(String filePath, int count) {
-    final parts = path.split(filePath);
-    final cleaned = parts.where((p) => p.isNotEmpty && p != '.').toList();
-    if (cleaned.length <= count) return null;
-    return path.joinAll(cleaned.sublist(count));
+    onProgress(totalFiles, totalFiles);
   }
 
   /// 计算 SHA256
