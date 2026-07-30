@@ -26,7 +26,7 @@ void main() {
     test('状态改变通知监听器', () {
       final notifier = LocaleNotifier();
       int callCount = 0;
-      notifier.addListener(() => callCount++);
+      notifier.addListener((_) => callCount++);
 
       notifier.state = AppLanguage.zhCN;
       expect(callCount, 1);
