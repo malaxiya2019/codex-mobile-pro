@@ -301,13 +301,17 @@ class UbuntuRuntimeInstaller {
       );
     }
 
-    // 统计解压后的文件数
-    final countResult = await Process.run(
-      findBin, [targetDir, '-type', 'f'],
-      runInShell: true,
-    );
-    final totalFiles = (countResult.stdout as String).split('\n').where((l) => l.isNotEmpty).length;
-
+    // 统计解压后的文件数（纯UI反馈，失败不阻断）
+    int totalFiles = 0;
+    try {
+      final countResult = await Process.run(
+        findBin, [targetDir, '-type', 'f'],
+        runInShell: true,
+      );
+      totalFiles = (countResult.stdout as String).split('\n').where((l) => l.isNotEmpty).length;
+    } catch (_) {
+      LogService.info('UbuntuInstaller', 'find 不可用，跳过文件计数');
+    }
     onProgress(totalFiles, totalFiles);
   }
 
@@ -323,42 +327,67 @@ class UbuntuRuntimeInstaller {
       return binPath;
     }
 
-    // 只有裸名 → 不存在 → 尝试安装
+    // 只有裸名 → 不存在 → 尝试通过 Termux 安装
     LogService.info('UbuntuInstaller', '系统工具 $name 未找到，尝试自动安装...');
 
-    final termuxPkg = '/data/data/com.termux/files/usr/bin/pkg';
+    // 检查 Termux 包管理器是否可用
+    const termuxPkg = '/data/data/com.termux/files/usr/bin/pkg';
     if (!File(termuxPkg).existsSync()) {
       throw DeployError(
         code: DeployErrorCode.toolInstallationFailed,
-        message: '缺少 $name，且 Termux 包管理器不可用',
+        message: '缺少系统工具 $name，且 Termux 包管理器不可用',
       );
     }
 
     _report(InstallPhase.extracting, 0.25, '安装系统工具 $name...');
 
+    // 通过 shell 执行 pkg install（Termux 的 pkg 是 bash 脚本）
+    // SHELL: 先用 /system/bin/sh + 自定义 PATH 来执行
+    const termuxPath = '/data/data/com.termux/files/usr/bin';
+    const systemPath = '/system/bin:/system/xbin:/bin:/usr/bin';
+    final customPath = '$termuxPath:$systemPath';
+
     final result = await Process.run(
       '/system/bin/sh',
-      <String>[
-        '-c',
-        'PATH=/data/data/com.termux/files/usr/bin:\$PATH pkg install $name -y',
-      ],
+      <String>['-c', 'pkg install $name -y'],
+      environment: {'PATH': customPath},
     );
 
     if (result.exitCode != 0) {
-      throw DeployError(
-        code: DeployErrorCode.toolInstallationFailed,
-        message: '安装 $name 失败: ${(result.stderr as String).trim().replaceAll(RegExp(r'\n'), '; ')}',
-      );
+      final stderr = (result.stderr as String).trim().replaceAll(RegExp(r'\n'), '; ');
+      // pkg 可能因为 SELinux 签名/版本问题不可用 → 直接尝试 apt
+      LogService.warn('UbuntuInstaller', 'pkg install $name 失败 ($result.exitCode), 尝试 apt...');
+
+      // 尝试直接用 apt（apt 是 ELF 二进制，比 pkg 脚本更容易被执行）
+      const termuxApt = '/data/data/com.termux/files/usr/bin/apt';
+      if (File(termuxApt).existsSync()) {
+        final aptResult = await Process.run(
+          '/system/bin/sh',
+          <String>['-c', 'apt install $name -y 2>/dev/null || apt install $name -y --allow-unauthenticated'],
+          environment: {'PATH': customPath},
+        );
+        if (aptResult.exitCode != 0) {
+          throw DeployError(
+            code: DeployErrorCode.toolInstallationFailed,
+            message: '安装 $name 失败 (pkg=$result.exitCode, apt=$aptResult.exitCode): $stderr',
+          );
+        }
+      } else {
+        throw DeployError(
+          code: DeployErrorCode.toolInstallationFailed,
+          message: '安装 $name 失败 (pkg=$result.exitCode): $stderr',
+        );
+      }
     }
 
     // 安装后再次检查
     final installedPath = '/data/data/com.termux/files/usr/bin/$name';
     if (File(installedPath).existsSync()) {
-      LogService.info('UbuntuInstaller', '$name 安装成功');
+      LogService.info('UbuntuInstaller', '$name 安装成功 ($installedPath)');
       return installedPath;
     }
 
-    // 可能在其它路径，让 _findSystemBinary 再做一次完整的查找
+    // 让 _findSystemBinary 再做一次完整查找
     final retryPath = _findSystemBinary(name);
     if (retryPath.contains('/') && File(retryPath).existsSync()) {
       return retryPath;
@@ -366,7 +395,7 @@ class UbuntuRuntimeInstaller {
 
     throw DeployError(
       code: DeployErrorCode.toolInstallationFailed,
-      message: '安装 $name 完成但二进制仍不可用',
+      message: '安装 $name 完成但无法定位二进制文件',
     );
   }
 
