@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/detector/detectors/network_detector.dart';
 import '../../../core/detector/detection_result.dart';
 import '../../../runtime/runtime_manager.dart';
 import '../../../runtime/runtime_dependency.dart';
@@ -70,6 +71,27 @@ class DeployStatus {
 
   /// 是否有安装中的进度
   bool get isInstalling => state == DeployState.installing;
+
+  /// 网络是否正常（用于安装前预检）
+  bool get networkOk {
+    if (detectionResult == null) return true;
+    final networkResult = detectionResult!.basic
+        .where((r) => r.id == 'network')
+        .firstOrNull;
+    if (networkResult == null) return true;
+    return networkResult.status == DetectionStatus.installed;
+  }
+
+  /// 网络错误建议
+  String? get networkSuggestion {
+    if (detectionResult == null) return null;
+    final networkResult = detectionResult!.basic
+        .where((r) => r.id == 'network')
+        .firstOrNull;
+    if (networkResult == null) return null;
+    if (networkResult.status == DetectionStatus.installed) return null;
+    return networkResult.missingHint;
+  }
 }
 
 /// 部署中心 Provider
@@ -137,12 +159,29 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
 
   /// 一键部署 Coding Runtime
   Future<void> installCodingRuntime() async {
+    final mgr = RuntimeManager.instance;
+
+    // ─── 安装前网络预检 ───
+    final networkOk = await NetworkDetector.quickCheck();
+    if (!networkOk) {
+      // 网络有问题，执行完整检测获取详细诊断
+      state = state.copyWith(state: DeployState.checking);
+      await checkAll();
+
+      final suggestion = state.networkSuggestion;
+      state = state.copyWith(
+        state: DeployState.error,
+        errorMessage: suggestion != null
+            ? '❌ 网络不可用\n$suggestion'
+            : '❌ 网络不可用\n请检查网络连接后重试',
+      );
+      return;
+    }
+
     state = state.copyWith(
       state: DeployState.installing,
       installResults: {},
     );
-
-    final mgr = RuntimeManager.instance;
 
     // 订阅进度
     _progressSub?.cancel();
@@ -169,11 +208,27 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
 
   /// 安装单个工具
   Future<void> installTool(RuntimeTool tool) async {
+    final mgr = RuntimeManager.instance;
+
+    // ─── 安装前网络预检 ───
+    final networkOk = await NetworkDetector.quickCheck();
+    if (!networkOk) {
+      state = state.copyWith(state: DeployState.checking);
+      await checkAll();
+
+      final suggestion = state.networkSuggestion;
+      state = state.copyWith(
+        state: DeployState.error,
+        errorMessage: suggestion != null
+            ? '❌ 网络不可用\n$suggestion'
+            : '❌ 网络不可用\n请检查网络连接后重试',
+      );
+      return;
+    }
+
     state = state.copyWith(
       state: DeployState.installing,
     );
-
-    final mgr = RuntimeManager.instance;
 
     _progressSub?.cancel();
     _progressSub = mgr.progressStream.listen((progress) {
@@ -230,6 +285,7 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
         case 'termux':
         case 'curl':
         case 'storage':
+        case 'network':
           basic.add(r);
           break;
         case 'node':

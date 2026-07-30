@@ -10,6 +10,7 @@ import 'detectors/codex_detector.dart';
 import 'detectors/mimo2codex_detector.dart';
 import 'detectors/deepseek_key_detector.dart';
 import 'detectors/storage_permission_detector.dart';
+import 'detectors/network_detector.dart';
 
 /// 环境检测编排服务
 ///
@@ -32,6 +33,7 @@ class DetectorService {
       Mimo2codexDetector(),
       DeepSeekKeyDetector(),
       StoragePermissionDetector(),
+      NetworkDetector(),
     ]);
   }
 

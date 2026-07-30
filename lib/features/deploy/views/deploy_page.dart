@@ -83,6 +83,12 @@ class _DeployPageState extends ConsumerState<DeployPage> {
 
                 const SizedBox(height: 16),
 
+                // ── 网络状态警告（DNS 失败时显示） ──
+                if (status.detectionResult != null && !status.networkOk)
+                  _buildNetworkWarning(context, status),
+
+                const SizedBox(height: 8),
+
                 // ── 检测 / 安装进度 ──
                 if (status.state == DeployState.checking)
                   _buildCheckingIndicator(context, status),
@@ -325,10 +331,12 @@ class _DeployPageState extends ConsumerState<DeployPage> {
       title = '检测中';
       subtitle = '请稍候...';
     } else if (status.state == DeployState.error) {
-      cardColor = Colors.red;
-      iconData = Icons.error;
-      title = '检测出错';
-      subtitle = status.errorMessage ?? '';
+      final errMsg = status.errorMessage ?? '';
+      final isNetworkError = errMsg.contains('网络不可用') || errMsg.contains('DNS');
+      cardColor = isNetworkError ? Colors.red : Colors.orange;
+      iconData = isNetworkError ? Icons.wifi_off : Icons.error;
+      title = isNetworkError ? '📡 网络连接失败' : '检测出错';
+      subtitle = errMsg;
     } else {
       cardColor = colorScheme.primary;
       iconData = Icons.info_outline;
@@ -378,6 +386,72 @@ class _DeployPageState extends ConsumerState<DeployPage> {
   // ════════════════════════════════════════════════════════════════
   // 检测进度
   // ════════════════════════════════════════════════════════════════
+
+  /// 网络错误警告卡片
+  Widget _buildNetworkWarning(BuildContext context, DeployStatus status) {
+    final theme = Theme.of(context);
+    final suggestion = status.networkSuggestion ?? '请检查网络连接后重试';
+
+    return Card(
+      elevation: 0,
+      color: Colors.red.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.wifi_off, color: Colors.red.shade700, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '📡 网络连接异常',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red.shade800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                suggestion,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  height: 1.6,
+                  color: Colors.red.shade900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  ref.read(deployStatusProvider.notifier).checkAll();
+                },
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('重新检测网络'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red.shade700,
+                  side: BorderSide(color: Colors.red.shade300),
+                  minimumSize: const Size(double.infinity, 40),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildCheckingIndicator(
       BuildContext context, DeployStatus status) {
