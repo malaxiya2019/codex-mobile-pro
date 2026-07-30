@@ -310,8 +310,8 @@ void main() {
     });
   });
 
-  group('DetectorService.groupByCategory', () {
-    test('按类别正确分组', () {
+  group('DetectorService.groupBySubCategory', () {
+    test('按子类别正确分组', () {
       final results = [
         const DetectionResult(
           id: 'node', name: 'Node.js', icon: '🟢',
@@ -321,21 +321,22 @@ void main() {
           id: 'flutter', name: 'Flutter SDK', icon: '🦋',
           status: DetectionStatus.missing,
           category: DetectorCategory.development,
+          subCategory: RuntimeSubCategory.development,
         ),
         const DetectionResult(
           id: 'git', name: 'Git', icon: '🔀',
           status: DetectionStatus.installed,
         ),
       ];
-      final grouped = DetectorService.groupByCategory(results);
-      expect(grouped[DetectorCategory.runtime]!.length, 2);
-      expect(grouped[DetectorCategory.development]!.length, 1);
+      final grouped = DetectorService.groupBySubCategory(results);
+      expect(grouped[RuntimeSubCategory.coding]!.length, 2);
+      expect(grouped[RuntimeSubCategory.development]!.length, 1);
     });
 
     test('空列表分组', () {
-      final grouped = DetectorService.groupByCategory([]);
-      expect(grouped[DetectorCategory.runtime], isEmpty);
-      expect(grouped[DetectorCategory.development], isEmpty);
+      final grouped = DetectorService.groupBySubCategory([]);
+      expect(grouped[RuntimeSubCategory.coding], isEmpty);
+      expect(grouped[RuntimeSubCategory.development], isEmpty);
     });
   });
 }
