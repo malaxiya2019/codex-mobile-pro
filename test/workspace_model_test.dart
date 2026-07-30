@@ -32,7 +32,7 @@ void main() {
   });
 
   group('ProjectRef', () {
-    final now = DateTime(2026, 7, 28, 10, 0, 0);
+    final now = DateTime(2026, 7, 28, 10, 0);
     final project = ProjectRef(
       id: 'proj-1',
       name: 'MyApp',
@@ -66,8 +66,8 @@ void main() {
   });
 
   group('Workspace', () {
-    final now = DateTime(2026, 7, 28, 10, 0, 0);
-    final later = DateTime(2026, 7, 28, 11, 0, 0);
+    final now = DateTime(2026, 7, 28, 10, 0);
+    final later = DateTime(2026, 7, 28, 11, 0);
 
     final workspace = Workspace(
       id: 'ws-1',
