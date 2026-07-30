@@ -366,7 +366,7 @@ class UbuntuRuntimeInstaller {
     // 构建 shell 命令：sh -c 'exec $binName $arg1 $arg2 ...'
     // 使用 $0, $1, $2 传递参数以避免 shell 转义问题
     final binName = binPath.split('/').last;
-    final shellArgs = <String>['-c', 'exec $0 "$@"', binName, ...args];
+    final shellArgs = <String>['-c', 'exec \$0 "\$@"', binName, ...args];
 
     return await Process.start(
       '/system/bin/sh',
