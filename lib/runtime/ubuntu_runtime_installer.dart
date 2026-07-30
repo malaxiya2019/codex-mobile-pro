@@ -279,8 +279,11 @@ class UbuntuRuntimeInstaller {
     // ─── 流式解压：xz -> pipe -> tar ───
     // 使用 Process.start 管道直连 xz -> tar，不经过 Dart 内存缓冲区
     // 避免将 300MB+ 解压数据全部加载到内存中导致 OOM
-    final xzProcess = await Process.start(xzBin, ['-d', '-c', tarPath]);
-    final tarProcess = await Process.start(
+    // 使用 shell + 自定义 PATH 执行 xz（SELinux 下 App 无法直接执行 Termux 的二进制）
+    final xzProcess = await _startBinary(
+      xzBin, ['-d', '-c', tarPath],
+    );
+    final tarProcess = await _startBinary(
       tarBin, ['x', '-C', targetDir, '--strip-components', '$stripComponents'],
     );
 
@@ -334,37 +337,69 @@ class UbuntuRuntimeInstaller {
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
-  static String _findSystemBinary(String name) {
-    // Termux 安装目录
-    const termuxPrefix = '/data/data/com.termux/files/usr';
-    // 备用前缀
-    const altPrefix = '/data/data/com.termux/files/home/.local';
-
-    final candidates = [
-      '$termuxPrefix/bin/$name',
-      '/system/xbin/$name',
-      '/system/bin/$name',
-      '/bin/$name',
-      '/usr/bin/$name',
-      '$altPrefix/bin/$name',
-    ];
-
-    for (final path in candidates) {
-      if (File(path).existsSync()) return path;
-    }
-
-    // 回退：让系统查找
-    return name;
-  }
-}
-
-  /// ─── 系统工具路径解析 ───────────────────────────────────────
+  /// 查找系统二进制文件
   ///
   /// Android App 进程的 PATH 仅包含 /system/bin:/system/xbin，
   /// 不包含 Termux 的 /data/data/com.termux/files/usr/bin。
-  /// 此方法在已知位置按优先级查找工具二进制，返回完整路径。
+  /// 此方法按安全优先级查找：
+  ///   1. 系统目录（/system/bin, /system/xbin）— App 有执行权限
+  ///   2. Termux 目录 — 需通过 shell + 自定义 PATH 执行
   ///
-  /// 查找顺序：
-  ///   1. Termux 的 usr/bin（xz/tar/find 等核心工具）
-  ///   2. 系统 bin 目录
+  /// 返回值永远是裸名，实际路径通过 shell 环境变量注入解决。
+  /// 启动一个二进制进程（处理 Termux 路径权限问题）
+  ///
+  /// Android SELinux 阻止 App 进程直接执行 /data/data/com.termux/ 下的二进制。
+  /// 如果二进制在 Termux 目录，通过 /system/bin/sh 启动并注入 PATH 环境变量，
+  /// 使 shell 能找到 Termux 的二进制文件。
+  static Future<Process> _startBinary(String binPath, List<String> args) async {
+    // 如果二进制在系统目录，直接执行（不需要 shell 包装）
+    if (binPath.startsWith('/system/') || binPath.startsWith('/bin/') || binPath.startsWith('/usr/')) {
+      return await Process.start(binPath, args);
+    }
 
+    // 二进制在 Termux 或其它非标准目录 → 通过 shell + 自定义 PATH 启动
+    // sh 始终可执行，PATH 包含 Termux 目录让 shell 能找到该二进制
+    const termuxPath = '/data/data/com.termux/files/usr/bin';
+    const systemPath = '/system/bin:/system/xbin:/bin:/usr/bin';
+    final customPath = '$termuxPath:$systemPath';
+
+    // 构建 shell 命令：sh -c 'exec $binName $arg1 $arg2 ...'
+    // 使用 $0, $1, $2 传递参数以避免 shell 转义问题
+    final binName = binPath.split('/').last;
+    final shellArgs = <String>['-c', 'exec $0 "$@"', binName, ...args];
+
+    return await Process.start(
+      '/system/bin/sh',
+      shellArgs,
+      environment: {'PATH': customPath},
+    );
+  }
+
+  static String _findSystemBinary(String name) {
+    // 优先检查系统目录（App 进程可直接执行）
+    const systemPaths = [
+      '/system/bin',
+      '/system/xbin',
+      '/bin',
+      '/usr/bin',
+    ];
+    for (final dir in systemPaths) {
+      final fullPath = '$dir/$name';
+      if (File(fullPath).existsSync()) return fullPath;
+    }
+
+    // Termux 目录 — 需要 shell + 自定义 PATH
+    // 直接返回裸名，调用方通过 shell 环境变量 PATH 注入解决
+    const termuxPaths = [
+      '/data/data/com.termux/files/usr/bin',
+      '/data/data/com.termux/files/home/.local/bin',
+    ];
+    for (final dir in termuxPaths) {
+      final fullPath = '$dir/$name';
+      if (File(fullPath).existsSync()) return fullPath;
+    }
+
+    // 回退：让 shell 去 PATH 查找
+    return name;
+  }
+}
