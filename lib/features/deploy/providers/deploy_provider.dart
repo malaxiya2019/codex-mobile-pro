@@ -274,44 +274,8 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
   }
 
   RuntimeDetectionResult _groupResults(List<DetectionResult> results) {
-    // Reuse RuntimeDetector's grouping
-        final basic = <DetectionResult>[];
-    final coding = <DetectionResult>[];
-    final ai = <DetectionResult>[];
-    final development = <DetectionResult>[];
-
-    for (final r in results) {
-      switch (r.id) {
-        case 'termux':
-        case 'curl':
-        case 'storage':
-        case 'network':
-          basic.add(r);
-          break;
-        case 'node':
-        case 'git':
-        case 'python':
-        case 'codex':
-        case 'mimo2codex':
-        case 'ubuntu':
-          coding.add(r);
-          break;
-        case 'deepseek_key':
-          ai.add(r);
-          break;
-        case 'flutter':
-          development.add(r);
-          break;
-      }
-    }
-
-    return RuntimeDetectionResult(
-      basic: basic,
-      coding: coding,
-      ai: ai,
-      development: development,
-      all: results,
-      isComplete: true,
-    );
+    // 使用 RuntimeDetector 的统一分组逻辑
+    final detector = RuntimeDetector();
+    return detector.reGroupResults(results);
   }
 }

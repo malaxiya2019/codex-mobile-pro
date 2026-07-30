@@ -121,9 +121,22 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                   if (status.detectionResult!.basic.isNotEmpty)
                     _buildCategorySection(
                       context: context,
-                      title: '⚡ 基础 Runtime',
+                      title: '⚡ Android 基础环境',
                       icon: Icons.settings,
                       results: status.detectionResult!.basic,
+                      ref: ref,
+                      showActionButtons: false,
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // 📦 Termux Runtime
+                  if (status.detectionResult!.termux.isNotEmpty)
+                    _buildCategorySection(
+                      context: context,
+                      title: '📦 Termux Runtime',
+                      icon: Icons.terminal,
+                      results: status.detectionResult!.termux,
                       ref: ref,
                       showActionButtons: false,
                     ),

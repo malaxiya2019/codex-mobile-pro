@@ -23,6 +23,7 @@ class DetectionResult {
   final String? errorMessage;
   final int durationMs;
   final DetectorCategory category;
+  final RuntimeSubCategory subCategory;
   final String? missingHint;
 
   const DetectionResult({
@@ -35,6 +36,7 @@ class DetectionResult {
     this.errorMessage,
     this.durationMs = 0,
     this.category = DetectorCategory.runtime,
+    this.subCategory = RuntimeSubCategory.coding,
     this.missingHint,
   });
 
@@ -45,6 +47,7 @@ class DetectionResult {
     String? errorMessage,
     int? durationMs,
     DetectorCategory? category,
+    RuntimeSubCategory? subCategory,
     String? missingHint,
   }) {
     return DetectionResult(
@@ -57,6 +60,7 @@ class DetectionResult {
       errorMessage: errorMessage ?? this.errorMessage,
       durationMs: durationMs ?? this.durationMs,
       category: category ?? this.category,
+      subCategory: subCategory ?? this.subCategory,
       missingHint: missingHint ?? this.missingHint,
     );
   }

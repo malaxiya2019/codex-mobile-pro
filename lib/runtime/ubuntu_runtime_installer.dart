@@ -14,6 +14,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
+import '../core/termux/termux_runtime_bridge.dart';
 
 import '../core/logger/log_service.dart';
 import 'artifact_manager.dart';

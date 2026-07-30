@@ -3,6 +3,12 @@
 ///
 /// 封装现有的 DetectorService，增加按 RuntimeCategory 分组和
 /// 与 RuntimeEnvironment 集成的能力。
+///
+/// 分层架构（2025-07重构）：
+///   Layer 0: Android 系统环境（shell, curl, 存储 — /system/bin/ 路径）
+///   Layer 1: Termux Runtime（Termux 包 + Prefix + 包管理器）
+///   Layer 2: Coding Runtime（Node, Git, Python — 依赖 Termux）
+///   Layer 3: 高级工具（Codex CLI, mimo2codex — 依赖 Node）
 /// ====================================================================
 
 import 'dart:io';
@@ -11,13 +17,14 @@ import 'package:path/path.dart' as path;
 import '../core/detector/detection_result.dart';
 import '../core/detector/detector_service.dart';
 import '../core/detector/detector.dart';
-import 'runtime_dependency.dart';
 import 'runtime_environment.dart';
 
 /// 检测结果（按类别分组）
 class RuntimeDetectionResult {
-  final List<DetectionResult> basic;
-  final List<DetectionResult> coding;
+  final List<DetectionResult> basic;       // Layer 0: Android 系统
+  final List<DetectionResult> termux;      // Layer 1: Termux Runtime
+  final List<DetectionResult> coding;      // Layer 2: Coding Runtime
+  final List<DetectionResult> advanced;    // Layer 3: 高级工具
   final List<DetectionResult> ai;
   final List<DetectionResult> development;
   final List<DetectionResult> all;
@@ -25,14 +32,16 @@ class RuntimeDetectionResult {
 
   const RuntimeDetectionResult({
     this.basic = const [],
+    this.termux = const [],
     this.coding = const [],
+    this.advanced = const [],
     this.ai = const [],
     this.development = const [],
     this.all = const [],
     this.isComplete = false,
   });
 
-  /// Coding Runtime 统计
+  /// Coding Runtime 统计（Layer 2 + Layer 3）
   int get codingInstalled =>
       coding.where((r) => r.status == DetectionStatus.installed).length;
   int get codingTotal => coding.length;
@@ -50,6 +59,10 @@ class RuntimeDetectionResult {
     if (basic.isNotEmpty) {
       final i = basic.where((r) => r.status == DetectionStatus.installed).length;
       parts.add('基础 ✅$i/${basic.length}');
+    }
+    if (termux.isNotEmpty) {
+      final i = termux.where((r) => r.status == DetectionStatus.installed).length;
+      parts.add('Termux ✅$i/${termux.length}');
     }
     if (coding.isNotEmpty) {
       parts.add('编码 ✅$codingInstalled/$codingTotal');
@@ -136,6 +149,7 @@ class RuntimeDetector {
       status: status,
       version: version,
       category: DetectorCategory.runtime,
+      subCategory: RuntimeSubCategory.coding,
     ));
 
     return existing;
@@ -149,23 +163,31 @@ class RuntimeDetector {
   /// 将检测结果按 RuntimeCategory 分组
   RuntimeDetectionResult reGroupResults(List<DetectionResult> results) {
     final basic = <DetectionResult>[];
+    final termux = <DetectionResult>[];
     final coding = <DetectionResult>[];
+    final advanced = <DetectionResult>[];
     final ai = <DetectionResult>[];
     final development = <DetectionResult>[];
 
     for (final r in results) {
-      final category = _mapToRuntimeCategory(r.id);
-      switch (category) {
-        case RuntimeCategory.basic:
+      switch (r.subCategory) {
+        case RuntimeSubCategory.basic:
           basic.add(r);
           break;
-        case RuntimeCategory.coding:
-          coding.add(r);
+        case RuntimeSubCategory.coding:
+          // 进一步区分 Termux vs Coding vs Advanced
+          if (r.id == 'termux') {
+            termux.add(r);
+          } else if (r.id == 'node' || r.id == 'git' || r.id == 'python' || r.id == 'ubuntu') {
+            coding.add(r);
+          } else {
+            advanced.add(r);
+          }
           break;
-        case RuntimeCategory.ai:
+        case RuntimeSubCategory.ai:
           ai.add(r);
           break;
-        case RuntimeCategory.development:
+        case RuntimeSubCategory.development:
           development.add(r);
           break;
       }
@@ -173,35 +195,14 @@ class RuntimeDetector {
 
     return RuntimeDetectionResult(
       basic: basic,
+      termux: termux,
       coding: coding,
+      advanced: advanced,
       ai: ai,
       development: development,
       all: results,
       isComplete: true,
     );
-  }
-
-  /// 将检测器 id 映射到 Runtime 类别
-  static RuntimeCategory _mapToRuntimeCategory(String detectorId) {
-    switch (detectorId) {
-      case 'termux':
-      case 'curl':
-      case 'storage':
-        return RuntimeCategory.basic;
-      case 'ubuntu':
-      case 'node':
-      case 'git':
-      case 'python':
-      case 'codex':
-      case 'mimo2codex':
-        return RuntimeCategory.coding;
-      case 'deepseek_key':
-        return RuntimeCategory.ai;
-      case 'flutter':
-        return RuntimeCategory.development;
-      default:
-        return RuntimeCategory.basic;
-    }
   }
 
   /// 验证 Coding 环境
