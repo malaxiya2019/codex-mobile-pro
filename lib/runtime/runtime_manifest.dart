@@ -54,7 +54,7 @@ class RuntimeArtifact {
     required this.size,
     this.targetSubDir = '',
     this.includeFiles,
-    this.stripComponents = 5,
+    this.stripComponents = 6,
   });
 }
 

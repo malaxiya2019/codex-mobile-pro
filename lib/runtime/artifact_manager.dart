@@ -133,7 +133,7 @@ class ArtifactManager {
     required String debPath,
     required String targetDir,
     List<String>? includeFiles,
-    int stripComponents = 5,
+    int stripComponents = 6,
   }) async {
     final debBytes = await File(debPath).readAsBytes();
 
@@ -278,7 +278,7 @@ class ArtifactManager {
     required List<int> tarBytes,
     required String targetDir,
     List<String>? includeFiles,
-    int stripComponents = 5,
+    int stripComponents = 6,
   }) {
     final decoder = TarDecoder();
     final archive = decoder.decodeBytes(tarBytes);
