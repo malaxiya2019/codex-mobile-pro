@@ -356,7 +356,7 @@ class UbuntuRuntimeInstaller {
     if (result.exitCode != 0) {
       final stderr = (result.stderr as String).trim().replaceAll(RegExp(r'\n'), '; ');
       // pkg 可能因为 SELinux 签名/版本问题不可用 → 直接尝试 apt
-      LogService.warn('UbuntuInstaller', 'pkg install $name 失败 ($result.exitCode), 尝试 apt...');
+      LogService.warning('UbuntuInstaller', 'pkg install $name 失败 ($result.exitCode), 尝试 apt...');
 
       // 尝试直接用 apt（apt 是 ELF 二进制，比 pkg 脚本更容易被执行）
       const termuxApt = '/data/data/com.termux/files/usr/bin/apt';
