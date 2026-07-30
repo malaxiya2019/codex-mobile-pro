@@ -3,9 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('LocaleNotifier', () {
-    test('默认语言为英文', () {
+    test('默认语言为中文', () {
       final notifier = LocaleNotifier();
-      expect(notifier.state, AppLanguage.enUS);
+      expect(notifier.state, AppLanguage.zhCN);
     });
 
     test('切换为中文', () {
