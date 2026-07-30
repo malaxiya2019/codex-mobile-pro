@@ -112,6 +112,11 @@ class RuntimeManager {
       StreamController<InstallResult> controller) async {
     _state = RuntimeManagerState.installing;
 
+    // 跟踪本轮安装中哪些工具失败/不支持
+    final failedTools = <RuntimeTool>{};
+    final unsupportedTools = <RuntimeTool>{};
+    final blockedTools = <RuntimeTool>{};
+
     try {
       final order = RuntimeDependency.installOrder();
       LogService.info('RuntimeMgr', '一键部署顺序: ${order.map((t) => t.name).join(" → ")}');
@@ -130,37 +135,51 @@ class RuntimeManager {
           continue;
         }
 
+        // 检查依赖是否已在本次安装中失败
+        bool depBlocked = false;
+        for (final d in dep.dependencies) {
+          if (failedTools.contains(d)) {
+            blockedTools.add(tool);
+            controller.add(InstallResult(
+              tool: tool,
+              success: false,
+              errorMessage: '⛔ 依赖 ${d.name} 安装失败，跳过',
+              phase: InstallPhase.blocked,
+            ));
+            depBlocked = true;
+            break;
+          }
+          if (unsupportedTools.contains(d)) {
+            blockedTools.add(tool);
+            controller.add(InstallResult(
+              tool: tool,
+              success: false,
+              errorMessage: '⏭ 依赖 ${d.name} 暂不支持安装，跳过',
+              phase: InstallPhase.blocked,
+            ));
+            depBlocked = true;
+            break;
+          }
+        }
+        if (depBlocked) continue;
+
         // 检查是否支持安装
         if (!RuntimeManifest.isSupported(tool)) {
+          unsupportedTools.add(tool);
           controller.add(InstallResult(
             tool: tool,
             success: false,
             errorMessage: '暂不支持自动安装',
             phase: InstallPhase.failed,
           ));
-          continue;  // 跳过，不中断整个部署
+          continue;
         }
 
-        // 检查依赖
-        if (dep.dependencies.isNotEmpty) {
-          bool depMissing = false;
-          for (final d in dep.dependencies) {
-            if (!await _environment!.isToolInstalled(d)) {
-              controller.add(InstallResult(
-                tool: tool,
-                success: false,
-                errorMessage: '⛔ 需要先安装 ${d.name}',
-                phase: InstallPhase.failed,
-              ));
-              depMissing = true;
-              break;
-            }
-          }
-          if (depMissing) continue;  // 跳过，不中断
-        }
-
-        // 安装
+        // 执行安装
         final result = await _installer!.install(tool);
+        if (!result.success) {
+          failedTools.add(tool);
+        }
         controller.add(result);
       }
     } catch (e) {
@@ -175,7 +194,39 @@ class RuntimeManager {
       _state = RuntimeManagerState.ready;
       // 安装完成后重新检测
       await detectAll();
+      
+      // 将 blocked 状态补丁到检测结果中
+      if (blockedTools.isNotEmpty && _lastDetection != null) {
+        _patchBlockedDetection(blockedTools, _lastDetection!);
+      }
     }
+  }
+
+  /// 将 blocked 状态覆盖到检测结果中
+  void _patchBlockedDetection(
+    Set<RuntimeTool> blockedTools,
+    RuntimeDetectionResult detection,
+  ) {
+    // RuntimeTool → detector id 映射
+    String toolToDetectorId(RuntimeTool t) {
+      switch (t) {
+        case RuntimeTool.codexCli: return 'codex';
+        case RuntimeTool.mimo2codex: return 'mimo2codex';
+        default: return t.name; // node, git, python
+      }
+    }
+
+    final patched = detection.all.map((r) {
+      final tool = RuntimeTool.values.where(
+        (t) => toolToDetectorId(t) == r.id,
+      );
+      if (tool.isNotEmpty && blockedTools.contains(tool.first)) {
+        return r.copyWith(status: DetectionStatus.blocked);
+      }
+      return r;
+    }).toList();
+
+    _lastDetection = _detector!.reGroupResults(patched);
   }
 
   /// 安装单个工具

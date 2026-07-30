@@ -29,6 +29,7 @@ enum InstallPhase {
   verifying,
   completed,
   failed,
+  blocked,
 }
 
 /// 安装结果

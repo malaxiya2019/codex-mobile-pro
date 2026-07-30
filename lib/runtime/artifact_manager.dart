@@ -82,6 +82,29 @@ class ArtifactManager {
   }
 
   /// 下载文件带进度和 SHA256 验证
+  /// 最大重试次数
+  static const int _maxRetries = 3;
+
+  /// 重试延迟基数（秒）
+  static const int _retryBaseDelaySeconds = 2;
+
+  /// 需要自动重试的网络错误关键词
+  static const _retryableErrors = [
+    'Connection closed',
+    'connection reset',
+    'Connection reset',
+    'Connection refused',
+    'Connection timed out',
+    'SocketException',
+    'HandshakeException',
+    'timeout',
+    'Timeout',
+    'EOF',
+    'broken pipe',
+    'network is unreachable',
+    'Network is unreachable',
+  ];
+
   static Future<void> _downloadFile({
     required String url,
     required String destPath,
@@ -89,7 +112,56 @@ class ArtifactManager {
     required String expectedSha256,
     required void Function(int downloaded, int total) onProgress,
   }) async {
-    // 使用 HttpClient 以获得进度回调
+    // 使用 .part 临时文件，下载完成后再重命名
+    final partPath = '$destPath.part';
+
+    int attempt = 0;
+    while (true) {
+      attempt++;
+      try {
+        await _doDownloadFile(
+          url: url,
+          destPath: destPath,
+          partPath: partPath,
+          expectedSize: expectedSize,
+          expectedSha256: expectedSha256,
+          onProgress: onProgress,
+        );
+        return; // 成功
+      } catch (e) {
+        // 清理临时文件
+        try { await File(partPath).delete(); } catch (_) {}
+        try { await File(destPath).delete(); } catch (_) {}
+
+        if (attempt >= _maxRetries) {
+          // 已达最大重试次数
+          rethrow;
+        }
+
+        final errMsg = e.toString();
+        final isRetryable = _retryableErrors.any((kw) => errMsg.contains(kw));
+
+        if (!isRetryable) {
+          // 非网络错误（如 SHA256 不匹配）不重试
+          rethrow;
+        }
+
+        // 指数退避：2s, 4s, 8s
+        final delay = Duration(seconds: _retryBaseDelaySeconds << (attempt - 1));
+        await Future.delayed(delay);
+      }
+    }
+  }
+
+  /// 实际下载（单次，无重试）
+  static Future<void> _doDownloadFile({
+    required String url,
+    required String destPath,
+    required String partPath,
+    required int expectedSize,
+    required String expectedSha256,
+    required void Function(int downloaded, int total) onProgress,
+  }) async {
     final client = HttpClient();
     try {
       final request = await client.getUrl(Uri.parse(url));
@@ -101,7 +173,8 @@ class ArtifactManager {
         );
       }
 
-      final file = File(destPath);
+      // 先写入 .part 文件
+      final file = File(partPath);
       final sink = file.openWrite();
 
       int bytesDownloaded = 0;
@@ -121,6 +194,9 @@ class ArtifactManager {
           '文件大小不匹配: 期望 $expectedSize, 实际 $actualSize',
         );
       }
+
+      // 下载完成，从 .part 重命名为正式文件
+      await file.rename(destPath);
     } finally {
       client.close();
     }

@@ -85,7 +85,7 @@ class RuntimeDetector {
   /// 执行所有检测并按类别分组
   Future<RuntimeDetectionResult> detectAll() async {
     final allResults = await _service.detectAll();
-    return _groupResults(allResults);
+    return reGroupResults(allResults);
   }
 
   /// 重新检测单个工具
@@ -94,7 +94,7 @@ class RuntimeDetector {
   }
 
   /// 将检测结果按 RuntimeCategory 分组
-  RuntimeDetectionResult _groupResults(List<DetectionResult> results) {
+  RuntimeDetectionResult reGroupResults(List<DetectionResult> results) {
     final basic = <DetectionResult>[];
     final coding = <DetectionResult>[];
     final ai = <DetectionResult>[];
