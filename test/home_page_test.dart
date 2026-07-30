@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('HomePage — Material 3 验证', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({'app_locale': 'en_US'});
