@@ -5,6 +5,7 @@ import 'package:path/path.dart' as path;
 
 import '../core/logger/log_service.dart';
 import 'artifact_manager.dart';
+import 'deploy_error.dart';
 import 'runtime_dependency.dart';
 import 'runtime_environment.dart';
 import 'runtime_manifest.dart';
@@ -58,7 +59,7 @@ typedef InstallProgressCallback = void Function(
 );
 
 /// 详细安装错误码
-enum InstallErrorCode {
+enum InstallErrorCode { // @deprecated 改用 DeployErrorCode
   none,
   archNotSupported,
   downloadFailed,
@@ -72,7 +73,7 @@ enum InstallErrorCode {
 }
 
 /// 带错误码的安装异常
-class InstallException implements Exception {
+class InstallException implements Exception { // @deprecated 改用 DeployError
   final InstallErrorCode code;
   final String message;
   final String? detail;
@@ -98,9 +99,9 @@ class RuntimeInstaller {
       // 检查架构支持
       if (!ArtifactManager.isSupportedArchitecture()) {
         final arch = ArtifactManager.getArchitectureName();
-        throw InstallException(
-          InstallErrorCode.archNotSupported,
-          '当前设备架构 ($arch) 暂不支持',
+        throw DeployError(
+          code: DeployErrorCode.archNotSupported,
+          message: '当前设备架构 ($arch) 暂不支持',
           detail: 'Node.js Runtime 仅支持 arm64-v8a / aarch64',
         );
       }
@@ -127,7 +128,7 @@ class RuntimeInstaller {
             phase: InstallPhase.failed,
           );
       }
-    } on InstallException catch (e) {
+    } on DeployError catch (e) {
       _report(tool, InstallPhase.failed, 0, e.message);
       return InstallResult(
         tool: tool,

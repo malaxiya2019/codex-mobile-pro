@@ -13,14 +13,14 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:crypto/crypto.dart' show sha256;
 import 'package:path/path.dart' as path;
 
 import '../core/logger/log_service.dart';
 import 'artifact_manager.dart';
+import 'deploy_error.dart';
 import 'runtime_dependency.dart';
 import 'runtime_environment.dart';
-import 'runtime_installer.dart'; // 复用 InstallPhase, InstallResult, InstallErrorCode
+import 'runtime_installer.dart'; // 复用 InstallPhase, InstallResult
 import 'runtime_manifest.dart';
 import 'sysdata_setup.dart';
 
@@ -87,7 +87,7 @@ class UbuntuRuntimeInstaller {
         version: '24.04',
         phase: InstallPhase.completed,
       );
-    } on InstallException catch (e) {
+    } on DeployError catch (e) {
       _report(InstallPhase.failed, 0, e.message);
       return InstallResult(
         tool: RuntimeTool.ubuntu,
@@ -231,6 +231,8 @@ class UbuntuRuntimeInstaller {
   }
 
   /// 下载 artifact 文件（不通过 .deb）
+  ///
+  /// 带 IP 直连 fallback：标准重试失败后自动切 IP 直连。
   Future<String> _downloadArtifact({
     required RuntimeArtifact artifact,
     required void Function(int downloaded, int total) onProgress,
@@ -242,92 +244,17 @@ class UbuntuRuntimeInstaller {
         ? '.tar.xz'
         : '.tar.gz';
     final destPath = path.join(cacheDir, '${artifact.name}$ext');
-    final partPath = '$destPath.part';
 
-    // 带重试的下载
-    int attempt = 0;
-    const maxRetries = 3;
-    while (true) {
-      attempt++;
-      try {
-        await _doDownload(
-          url: artifact.url,
-          destPath: destPath,
-          partPath: partPath,
-          expectedSize: artifact.size,
-          onProgress: onProgress,
-        );
-        break;
-      } catch (e) {
-        try { await File(partPath).delete(); } catch (_) {}
-        if (attempt >= maxRetries) rethrow;
-        final delay = Duration(seconds: 2 << (attempt - 1));
-        await Future.delayed(delay);
-      }
-    }
-
-    // SHA256 验证
-    onProgress(artifact.size, artifact.size);
-    final actualSha256 = await _computeSha256(destPath);
-    if (actualSha256 != artifact.sha256) {
-      await File(destPath).delete();
-      throw InstallException(
-        InstallErrorCode.sha256Mismatch,
-        '${artifact.name} SHA256 校验失败\n'
-        '期望: ${artifact.sha256}\n'
-        '实际: $actualSha256',
-      );
-    }
+    // 使用 ArtifactManager 的多镜像 fallback 下载
+    await ArtifactManager.downloadFile(
+      artifact: artifact,
+      destPath: destPath,
+      expectedSize: artifact.size,
+      expectedSha256: artifact.sha256,
+      onProgress: onProgress,
+    );
 
     return destPath;
-  }
-
-  Future<void> _doDownload({
-    required String url,
-    required String destPath,
-    required String partPath,
-    required int expectedSize,
-    required void Function(int, int) onProgress,
-  }) async {
-    final client = HttpClient();
-    try {
-      final request = await client.getUrl(Uri.parse(url));
-      final response = await request.close();
-
-      if (response.statusCode != 200) {
-        throw InstallException(
-          InstallErrorCode.downloadFailed,
-          '下载失败: HTTP ${response.statusCode} — $url',
-        );
-      }
-
-      final file = File(partPath);
-      final sink = file.openWrite();
-      int bytesDownloaded = 0;
-
-      await for (final chunk in response) {
-        sink.add(chunk);
-        bytesDownloaded += chunk.length;
-        onProgress(bytesDownloaded, expectedSize);
-      }
-
-      await sink.flush();
-      await sink.close();
-
-      // 验证大小
-      final actualSize = await file.length();
-      if (actualSize != expectedSize) {
-        await file.delete();
-        throw InstallException(
-          InstallErrorCode.downloadFailed,
-          '文件大小不匹配: 期望 $expectedSize, 实际 $actualSize',
-        );
-      }
-
-      await file.rename(destPath);
-    } finally {
-      client.close();
-    }
   }
 
   /// 解压 tar.xz 到目标目录（流式解压，避免 OOM）
@@ -342,12 +269,19 @@ class UbuntuRuntimeInstaller {
   }) async {
     await Directory(targetDir).create(recursive: true);
 
+    // ─── 解析系统工具路径 ───
+    // Flutter App 进程的 PATH 不包含 Termux 目录，必须显式指定完整路径
+    // 否则 Process.start('xz') 会报 Permission denied
+    final xzBin = _findSystemBinary('xz');
+    final tarBin = _findSystemBinary('tar');
+    final findBin = _findSystemBinary('find');
+
     // ─── 流式解压：xz -> pipe -> tar ───
     // 使用 Process.start 管道直连 xz -> tar，不经过 Dart 内存缓冲区
     // 避免将 300MB+ 解压数据全部加载到内存中导致 OOM
-    final xzProcess = await Process.start('xz', ['-d', '-c', tarPath]);
+    final xzProcess = await Process.start(xzBin, ['-d', '-c', tarPath]);
     final tarProcess = await Process.start(
-      'tar', ['x', '-C', targetDir, '--strip-components', '$stripComponents'],
+      tarBin, ['x', '-C', targetDir, '--strip-components', '$stripComponents'],
     );
 
     // 管道：xz stdout → tar stdin（流式传输，不经过 Dart 代码）
@@ -358,15 +292,15 @@ class UbuntuRuntimeInstaller {
     final tarExit = await tarProcess.exitCode;
 
     if (xzExit != 0 || tarExit != 0) {
-      throw InstallException(
-        InstallErrorCode.extractionFailed,
-        'rootfs 解压失败 (xz=$xzExit, tar=$tarExit)',
+      throw DeployError(
+        code: DeployErrorCode.extractionFailed,
+        message: 'rootfs 解压失败 (xz=$xzExit, tar=$tarExit)',
       );
     }
 
     // 统计解压后的文件数
     final countResult = await Process.run(
-      'find', ['$targetDir', '-type', 'f'],
+      findBin, [targetDir, '-type', 'f'],
       runInShell: true,
     );
     final totalFiles = (countResult.stdout as String).split('\n').where((l) => l.isNotEmpty).length;
@@ -374,11 +308,7 @@ class UbuntuRuntimeInstaller {
     onProgress(totalFiles, totalFiles);
   }
 
-  /// 计算 SHA256
-  static Future<String> _computeSha256(String filePath) async {
-    final bytes = await File(filePath).readAsBytes();
-    return sha256.convert(bytes).toString();
-  }
+
 
   /// 架构检查
   static bool _isSupportedArch() {
@@ -404,16 +334,37 @@ class UbuntuRuntimeInstaller {
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
+  static String _findSystemBinary(String name) {
+    // Termux 安装目录
+    const termuxPrefix = '/data/data/com.termux/files/usr';
+    // 备用前缀
+    const altPrefix = '/data/data/com.termux/files/home/.local';
+
+    final candidates = [
+      '$termuxPrefix/bin/$name',
+      '/system/xbin/$name',
+      '/system/bin/$name',
+      '/bin/$name',
+      '/usr/bin/$name',
+      '$altPrefix/bin/$name',
+    ];
+
+    for (final path in candidates) {
+      if (File(path).existsSync()) return path;
+    }
+
+    // 回退：让系统查找
+    return name;
+  }
 }
 
-/// 带错误码的安装异常（复用现有定义）
-class InstallException implements Exception {
-  final InstallErrorCode code;
-  final String message;
-  final String? detail;
+  /// ─── 系统工具路径解析 ───────────────────────────────────────
+  ///
+  /// Android App 进程的 PATH 仅包含 /system/bin:/system/xbin，
+  /// 不包含 Termux 的 /data/data/com.termux/files/usr/bin。
+  /// 此方法在已知位置按优先级查找工具二进制，返回完整路径。
+  ///
+  /// 查找顺序：
+  ///   1. Termux 的 usr/bin（xz/tar/find 等核心工具）
+  ///   2. 系统 bin 目录
 
-  const InstallException(this.code, this.message, {this.detail});
-
-  @override
-  String toString() => 'InstallException[$code]: $message';
-}

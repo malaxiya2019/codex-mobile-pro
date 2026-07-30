@@ -3,26 +3,82 @@
 //
 // 检测 DNS 解析和 HTTP 连通性，在安装前预判网络是否可用。
 // 使用系统命令而非 dart:io HttpClient 以避免缓存/复用问题。
+//
+// 整合了多层 DNS 解析器 (DnsResolver) 作为 fallback:
+//   L1 内存缓存 → 系统 DNS → DNS-over-HTTPS → IP 硬编码
+//
+// 含增强型 DNS 缓存 (DnsCache)，跨会话持久化。
 // ====================================================================
 
 import 'dart:io';
 
+import '../../network/dns_cache.dart';
+import '../../network/dns_resolver.dart';
+import '../../network/network_profiler.dart';
 import '../detection_result.dart';
 import '../detector.dart';
 
-/// DNS 解析结果
-class DnsResult {
-  final String host;
-  final bool resolved;
-  final String? ip;
-  final int durationMs;
+/// 网络检测结果汇总
+class NetworkCheckResult {
+  final bool dnsWorking;
+  final bool internetReachable;
+  final bool ipDirectWorking; // IP 直连是否可用（DNS 无关）
+  final List<DnsResolution> dnsResults;
+  final List<HttpConnectResult> httpResults;
+  final String? dnsServer;
+  final String? localIp;
+  final NetworkQuality quality;
 
-  const DnsResult({
-    required this.host,
-    required this.resolved,
-    this.ip,
-    this.durationMs = 0,
+  const NetworkCheckResult({
+    required this.dnsWorking,
+    required this.internetReachable,
+    this.ipDirectWorking = false,
+    this.dnsResults = const [],
+    this.httpResults = const [],
+    this.dnsServer,
+    this.localIp,
+    this.quality = NetworkQuality.unknown,
   });
+
+  /// 用户友好的摘要
+  String get summary {
+    if (ipDirectWorking && !dnsWorking) return '网络可达但 DNS 解析失败';
+    if (dnsWorking && internetReachable) return '网络正常';
+    if (!dnsWorking) return 'DNS 解析失败';
+    if (!internetReachable) return '网络不可达';
+    return '网络异常';
+  }
+
+  /// 可操作的建议（更详细）
+  String get suggestion {
+    if (dnsWorking && internetReachable) return '';
+
+    final buf = StringBuffer();
+
+    if (!dnsWorking) {
+      if (ipDirectWorking) {
+        buf.writeln('⚠️ DNS 解析失败，但 IP 直连可用。');
+        buf.writeln('部署中心已自动启用 IP 直连模式，可继续下载。');
+        buf.writeln('如遇下载慢，建议：');
+      } else {
+        buf.writeln('❌ 域名解析和 IP 直连均不可用。');
+        buf.writeln('建议：');
+      }
+
+      buf.writeln('① 切换 Wi-Fi ↔ 移动数据');
+      buf.writeln('② 开关飞行模式后重试');
+      buf.writeln('③ 配置公共 DNS：8.8.8.8 / 1.1.1.1');
+      buf.writeln('④ 检查 VPN/代理是否正确设置');
+    } else if (!internetReachable) {
+      buf.writeln('❌ 网络不可达。');
+      buf.writeln('建议：');
+      buf.writeln('① 检查网络连接是否正常');
+      buf.writeln('② 检查是否需要登录 WiFi 门户');
+      buf.writeln('③ 尝试开启/关闭 VPN');
+    }
+
+    return buf.toString();
+  }
 }
 
 /// HTTP 连通性结果
@@ -40,48 +96,6 @@ class HttpConnectResult {
     this.durationMs = 0,
     this.error,
   });
-}
-
-/// 网络检测结果汇总
-class NetworkCheckResult {
-  final bool dnsWorking;
-  final bool internetReachable;
-  final List<DnsResult> dnsResults;
-  final List<HttpConnectResult> httpResults;
-  final String? dnsServer;
-  final String? localIp;
-
-  const NetworkCheckResult({
-    required this.dnsWorking,
-    required this.internetReachable,
-    this.dnsResults = const [],
-    this.httpResults = const [],
-    this.dnsServer,
-    this.localIp,
-  });
-
-  /// 用户友好的摘要
-  String get summary {
-    if (dnsWorking && internetReachable) return '网络正常';
-    if (!dnsWorking) return 'DNS 解析失败';
-    if (!internetReachable) return '网络不可达';
-    return '网络异常';
-  }
-
-  /// 可操作的建议
-  String get suggestion {
-    if (dnsWorking && internetReachable) return '';
-    if (!dnsWorking) {
-      return 'DNS 解析失败，建议：\n'
-          '① 切换 Wi-Fi ↔ 移动数据\n'
-          '② 开关飞行模式后重试\n'
-          '③ 配置公共 DNS：8.8.8.8 / 1.1.1.1';
-    }
-    if (!internetReachable) {
-      return '网络不可达，建议检查网络连接后重试';
-    }
-    return '请检查网络连接';
-  }
 }
 
 /// 网络检测器
@@ -104,11 +118,10 @@ class NetworkDetector extends Detector {
     'api.github.com',
   ];
 
-  /// HTTP 检测目标
+  /// HTTP 检测目标（DNS 正常时用）
   static const _httpTargets = [
     'https://github.com',
     'https://packages.termux.dev',
-    'https://1.1.1.1', // 通过 IP 直连验证网络（绕过 DNS）
   ];
 
   @override
@@ -133,6 +146,21 @@ class NetworkDetector extends Detector {
           path: checkResult.localIp,
           durationMs: elapsed,
           category: category,
+        );
+      }
+
+      // DNS 失败但 IP 直连可用 → warning 但不阻止安装
+      if (!checkResult.dnsWorking && checkResult.ipDirectWorking) {
+        return DetectionResult(
+          id: id,
+          name: name,
+          icon: icon,
+          status: DetectionStatus.installed,
+          version: 'IP 直连模式',
+          path: checkResult.localIp,
+          durationMs: elapsed,
+          category: category,
+          missingHint: 'DNS 故障，已启用 IP 直连，下载可能变慢',
         );
       }
 
@@ -177,95 +205,77 @@ class NetworkDetector extends Detector {
 
   /// 执行完整的网络检查
   static Future<NetworkCheckResult> _checkNetwork() async {
-    final dnsResults = <DnsResult>[];
+    final dnsResults = <DnsResolution>[];
     final httpResults = <HttpConnectResult>[];
     int dnsOk = 0;
 
-    // 1. 获取 DNS 服务器
-    final dnsServer = await _getDnsServer();
+    // ─── 0. IP 直连检测（独立于 DNS） ──────────────────────────
+    final ipDirectOk = await _checkHttpDirect('https://1.1.1.1');
 
-    // 2. 获取本地 IP
-    final localIp = await _getLocalIp();
+    // ─── 1. 获取 DNS 服务器 ──────────────────────────────────────
+    final dnsServer = await DnsResolver.getSystemDnsServer();
 
-    // 3. DNS 解析测试
+    // ─── 2. 获取本地 IP ──────────────────────────────────────────
+    final localIp = await NetworkProfiler.profile().then((p) => p.localIp);
+
+    // ─── 3. DNS 解析测试（多层 fallback） ────────────────────────
     for (final host in _dnsTargets) {
-      final result = await _resolveDns(host);
+      // 先走缓存
+      if (DnsCache.isHostCached(host)) {
+        final cached = DnsCache.get(host);
+        if (cached != null) {
+          dnsOk++;
+          dnsResults.add(DnsResolution(
+            host: host,
+            ip: cached.ip ?? '(cached)',
+            resolved: true,
+            durationMs: 0,
+            resolverName: 'L1-cache',
+          ));
+          continue;
+        }
+      }
+
+      // 多层 DNS 解析
+      final result = await DnsResolver.resolve(
+        host,
+        options: DnsResolveOptions(
+          timeoutMs: 3000,
+          allowDoh: true,
+          allowIpHardcode: true,
+          writeCache: true,
+        ),
+      );
       dnsResults.add(result);
       if (result.resolved) dnsOk++;
     }
 
     final dnsWorking = dnsOk >= 1; // 至少一个域名能解析
 
-    // 4. HTTP 连通性测试（只有 DNS 正常时才测）
+    // ─── 4. HTTP 连通性测试 ──────────────────────────────────────
     int httpOk = 0;
-    if (dnsWorking) {
-      for (final url in _httpTargets) {
-        // 跳过 IP 直连的 HTTP 检测，减少延迟
-        if (url.contains('1.1.1.1')) continue;
-
-        final result = await _checkHttp(url);
-        httpResults.add(result);
-        if (result.reachable) httpOk++;
-      }
+    for (final url in _httpTargets) {
+      final result = await _checkHttp(url);
+      httpResults.add(result);
+      if (result.reachable) httpOk++;
     }
 
-    final internetReachable = dnsWorking && httpOk >= 1;
+    // 网络可达性：DNS 解析成功 ≥1 且 HTTP 成功 ≥1，或者 IP 直连成功
+    final internetReachable = (dnsWorking && httpOk >= 1) || ipDirectOk;
 
-    // 5. 尝试 IP 直连测试（即使 DNS 挂了）
-    if (!dnsWorking) {
-      final ipResult = await _checkHttp('https://1.1.1.1');
-      httpResults.add(ipResult);
-    }
+    // 获取网络质量
+    final quality = await _estimateNetworkQuality(ipDirectOk);
 
     return NetworkCheckResult(
       dnsWorking: dnsWorking,
       internetReachable: internetReachable,
+      ipDirectWorking: ipDirectOk,
       dnsResults: dnsResults,
       httpResults: httpResults,
       dnsServer: dnsServer,
       localIp: localIp,
+      quality: quality,
     );
-  }
-
-  /// DNS 解析测试 — 使用系统 ping
-  static Future<DnsResult> _resolveDns(String host) async {
-    final start = DateTime.now();
-
-    try {
-      final result = await Process.run(
-        'ping',
-        ['-c', '1', '-W', '3', host],
-        runInShell: true,
-      );
-
-      final elapsed = DateTime.now().difference(start).inMilliseconds;
-
-      if (result.exitCode == 0) {
-        // 从输出中提取 IP
-        final stdout = result.stdout as String;
-        final ipMatch = RegExp(r'PING\s+\S+\s+\(([^)]+)\)').firstMatch(stdout);
-        final ip = ipMatch?.group(1);
-
-        return DnsResult(
-          host: host,
-          resolved: true,
-          ip: ip,
-          durationMs: elapsed,
-        );
-      }
-
-      return DnsResult(
-        host: host,
-        resolved: false,
-        durationMs: elapsed,
-      );
-    } catch (e) {
-      return DnsResult(
-        host: host,
-        resolved: false,
-        durationMs: DateTime.now().difference(start).inMilliseconds,
-      );
-    }
   }
 
   /// HTTP 连通性测试 — 使用系统 cURL
@@ -283,11 +293,8 @@ class NetworkDetector extends Detector {
       final codeStr = (result.stdout as String).trim();
       final code = int.tryParse(codeStr);
 
-      // HTTP 2xx/3xx 算成功
       final reachable = result.exitCode == 0 &&
-          code != null &&
-          code >= 200 &&
-          code < 400;
+          code != null && code >= 200 && code < 400;
 
       return HttpConnectResult(
         url: url,
@@ -305,79 +312,82 @@ class NetworkDetector extends Detector {
     }
   }
 
-  /// 获取系统 DNS 服务器
-  static Future<String?> _getDnsServer() async {
+  /// IP 直连 HTTP 检测（绕过 DNS，用 IP 直接访问）
+  static Future<bool> _checkHttpDirect(String url) async {
     try {
       final result = await Process.run(
-        'getprop',
-        ['net.dns1'],
+        'curl',
+        ['-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '3', url],
         runInShell: true,
       );
-      if (result.exitCode == 0) {
-        final dns = (result.stdout as String).trim();
-        if (dns.isNotEmpty) return dns;
-      }
-    } catch (_) {}
-
-    try {
-      final result = await Process.run(
-        'getprop',
-        ['net.dns2'],
-        runInShell: true,
-      );
-      if (result.exitCode == 0) {
-        final dns = (result.stdout as String).trim();
-        if (dns.isNotEmpty) return dns;
-      }
-    } catch (_) {}
-
-    return null;
-  }
-
-  /// 获取本地 IP
-  static Future<String?> _getLocalIp() async {
-    try {
-      final result = await Process.run(
-        'ip',
-        ['route', 'show', 'default'],
-        runInShell: true,
-      );
-      if (result.exitCode == 0) {
-        final stdout = result.stdout as String;
-        final devMatch = RegExp(r'dev\s+(\S+)').firstMatch(stdout);
-        if (devMatch != null) {
-          final dev = devMatch.group(1)!;
-          final ipResult = await Process.run(
-            'ip',
-            ['addr', 'show', dev],
-            runInShell: true,
-          );
-          if (ipResult.exitCode == 0) {
-            final ipMatch = RegExp(r'inet\s+(\d+\.\d+\.\d+\.\d+)')
-                .firstMatch(ipResult.stdout as String);
-            return ipMatch?.group(1);
-          }
-        }
-      }
-    } catch (_) {}
-
-    return null;
-  }
-
-  /// 执行快速网络检查（用于安装前预检）
-  ///
-  /// 返回 true 表示网络可用，false 表示不可用。
-  /// 比完整 detect() 更快，只检查 DNS。
-  static Future<bool> quickCheck() async {
-    try {
-      final result = await Process.run(
-        'ping',
-        ['-c', '1', '-W', '3', 'github.com'],
-        runInShell: true,
-      );
-      return result.exitCode == 0;
+      if (result.exitCode != 0) return false;
+      final codeStr = (result.stdout as String).trim();
+      final code = int.tryParse(codeStr);
+      return code != null && code >= 200 && code < 400;
     } catch (_) {
       return false;
     }
+  }
+
+  /// 估算网络质量
+  static Future<NetworkQuality> _estimateNetworkQuality(bool ipDirectOk) async {
+    if (!ipDirectOk) return NetworkQuality.poor;
+
+    // ping 两个 DNS 服务器测延迟
+    int totalLatency = 0;
+    int samples = 0;
+
+    for (final target in ['1.1.1.1', '8.8.8.8']) {
+      try {
+        final start = DateTime.now();
+        final result = await Process.run(
+          'ping', ['-c', '1', '-W', '2', target],
+          runInShell: true,
+        );
+        if (result.exitCode == 0) {
+          totalLatency += DateTime.now().difference(start).inMilliseconds;
+          samples++;
+        }
+      } catch (_) {}
+    }
+
+    if (samples == 0) return NetworkQuality.unknown;
+
+    final avgLatency = totalLatency ~/ samples;
+    if (avgLatency < 100) return NetworkQuality.excellent;
+    if (avgLatency < 300) return NetworkQuality.good;
+    if (avgLatency < 800) return NetworkQuality.fair;
+    return NetworkQuality.poor;
+  }
+
+  /// 获取当前系统 DNS 服务器（兼容旧接口）
+  static Future<String?> _getDnsServer() {
+    return DnsResolver.getSystemDnsServer();
+  }
+
+  /// 快速网络检查（用于安装前预检）
+  ///
+  /// 返回 true 表示网络可用，false 表示不可用。
+  /// 使用多层 DNS 解析器，优先缓存。
+  static Future<bool> quickCheck() async {
+    // ─── 先查缓存 ───
+    if (DnsCache.isHostCached('github.com')) return true;
+
+    // ─── 多层解析 ───
+    final result = await DnsResolver.resolve(
+      'github.com',
+      options: DnsResolveOptions(
+        timeoutMs: 3000,
+        allowDoh: true,
+        allowIpHardcode: true,
+        writeCache: true,
+      ),
+    );
+    return result.resolved;
+  }
+
+  /// 深度网络检查（尝试所有方式）
+  static Future<NetworkCheckResult> deepCheck() async {
+    return await _checkNetwork();
   }
 }
