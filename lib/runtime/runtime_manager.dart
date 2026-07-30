@@ -15,6 +15,7 @@ import 'dart:async';
 import 'dart:io';
 
 import '../core/logger/log_service.dart';
+import '../core/detector/detection_result.dart';
 import 'runtime_dependency.dart';
 import 'runtime_detector.dart';
 import 'runtime_environment.dart';

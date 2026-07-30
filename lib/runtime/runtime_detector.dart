@@ -10,6 +10,7 @@ import 'package:path/path.dart' as path;
 
 import '../core/detector/detection_result.dart';
 import '../core/detector/detector_service.dart';
+import '../core/detector/detector.dart';
 import 'runtime_dependency.dart';
 import 'runtime_environment.dart';
 
