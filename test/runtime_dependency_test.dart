@@ -40,6 +40,7 @@ void main() {
           case RuntimeTool.node:
           case RuntimeTool.git:
           case RuntimeTool.python:
+          case RuntimeTool.ubuntu:
           case RuntimeTool.codexCli:
           case RuntimeTool.mimo2codex:
             expect(dep.category, RuntimeCategory.coding,
@@ -57,9 +58,9 @@ void main() {
       }
     });
 
-    test('Node.js 依赖 curl', () {
+    test('Node.js 依赖 Ubuntu', () {
       final dep = RuntimeDependency.forTool(RuntimeTool.node);
-      expect(dep!.dependencies, contains(RuntimeTool.curl));
+      expect(dep!.dependencies, contains(RuntimeTool.ubuntu));
     });
 
     test('Codex CLI 依赖 Node.js', () {
