@@ -333,6 +333,15 @@ class UbuntuRuntimeInstaller {
     // 检查 Termux 包管理器是否可用
     const termuxPkg = '/data/data/com.termux/files/usr/bin/pkg';
     if (!File(termuxPkg).existsSync()) {
+      // 特殊处理 xz：尝试通过 App 自带的 BusyBox (unxz) 回退
+      if (name == 'xz') {
+        final cacheDir = path.join(_env.ubuntuDir, '.cache');
+        final wrapper = await _tryBusyBoxXz(cacheDir);
+        if (wrapper != null) {
+          LogService.info('UbuntuInstaller', '使用 BusyBox unxz 代替 xz');
+          return wrapper;
+        }
+      }
       throw DeployError(
         code: DeployErrorCode.toolInstallationFailed,
         message: '缺少系统工具 $name，且 Termux 包管理器不可用',
@@ -488,4 +497,49 @@ class UbuntuRuntimeInstaller {
     // 回退：让 shell 去 PATH 查找
     return name;
   }
+  // ─── BusyBox 回退 ─────────────────────────────────────────────
+
+  /// 查找 App 自带的 BusyBox（由 Kotlin PtyPlugin 解压到 files/bin/）
+  static String? _findBusyBox() {
+    // App 原生数据目录（getFilesDir），与 getApplicationDocumentsDirectory 不同
+    const busyboxPaths = [
+      '/data/data/com.codexmobile.app/files/bin/busybox',
+      '/data/user/0/com.codexmobile.app/files/bin/busybox',
+      '/data/data/com.codexmobile.app/app_flutter/runtime/bin/busybox',
+    ];
+    for (final path in busyboxPaths) {
+      if (File(path).existsSync()) return path;
+    }
+    return null;
+  }
+
+  /// 创建 xz 包装脚本（调用 BusyBox 的 unxz applet）
+  ///
+  /// 在 [cacheDir] 下生成一个轻量 shell 脚本，行为同 `xz` 命令行工具。
+  /// 这样 _extractTarXz 的管道代码无需修改。
+  static Future<String> _createXzWrapper(String cacheDir, String busyboxPath) async {
+    final wrapperPath = '$cacheDir/xz';
+    // 脚本：exec busybox unxz "$@" （参数透传，保持与 xz 兼容）
+    final script = '#!/system/bin/sh\nexec "$BUSYBOX" unxz "\$@"\n';
+    final wrapperFile = File(wrapperPath);
+    // 如果已存在且指向同路径，跳过
+    if (wrapperFile.existsSync()) {
+      final content = wrapperFile.readAsStringSync();
+      if (content.contains(busyboxPath)) return wrapperPath;
+    }
+    await wrapperFile.writeAsString(script.replaceFirst('BUSYBOX', busyboxPath));
+    // 设置可执行权限
+    await Process.run('/system/bin/chmod', ['+x', wrapperPath]);
+    LogService.info('UbuntuInstaller', '创建 xz 包装器 (→ $busyboxPath unxz)');
+    return wrapperPath;
+  }
+
+  /// 尝试通过 BusyBox 解决 xz 缺失
+  static Future<String?> _tryBusyBoxXz(String cacheDir) async {
+    final busybox = _findBusyBox();
+    if (busybox == null) return null;
+    // BusyBox 有 unxz applet，可以直接创建包装器
+    return await _createXzWrapper(cacheDir, busybox);
+  }
+
 }
