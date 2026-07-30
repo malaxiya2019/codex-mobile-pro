@@ -14,6 +14,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
+import 'package:archive/archive.dart';
 import 'package:path/path.dart' as path;
 
 import '../core/logger/log_service.dart';
@@ -261,6 +262,7 @@ class UbuntuRuntimeInstaller {
   ///
   /// 使用系统命令 xz + tar 管道流式处理，不将解压数据完全加载到内存。
   /// 之前在 Dart 中用 archive 包全部解压到内存导致移动端 OOM 闪退。
+  /// 解压 tar.xz 到目标目录（纯 Dart 实现，不依赖外部命令）
   Future<void> _extractTarXz({
     required String tarPath,
     required String targetDir,
@@ -269,143 +271,49 @@ class UbuntuRuntimeInstaller {
   }) async {
     await Directory(targetDir).create(recursive: true);
 
-    // ─── 解析系统工具路径 ───
-    // Flutter App 进程的 PATH 不包含 Termux 目录，必须显式指定完整路径
-    // 否则 Process.start('xz') 会报 Permission denied
-    final xzBin = await _ensureToolInstalled('xz');
-    final tarBin = await _ensureToolInstalled('tar');
-    final findBin = _findSystemBinary('find');
+    // 1. 读取压缩文件
+    final compressedBytes = await File(tarPath).readAsBytes();
 
-    // ─── 流式解压：xz -> pipe -> tar ───
-    // 使用 Process.start 管道直连 xz -> tar，不经过 Dart 内存缓冲区
-    // 避免将 300MB+ 解压数据全部加载到内存中导致 OOM
-    // 使用 shell + 自定义 PATH 执行 xz（SELinux 下 App 无法直接执行 Termux 的二进制）
-    final xzProcess = await _startBinary(
-      xzBin, ['-d', '-c', tarPath],
-    );
-    final tarProcess = await _startBinary(
-      tarBin, ['x', '-C', targetDir, '--strip-components', '$stripComponents'],
-    );
+    // 2. XZ 解压缩（纯 Dart，archive 包）
+    final tarBytes = XZDecoder().decodeBytes(compressedBytes);
 
-    // 管道：xz stdout → tar stdin（流式传输，不经过 Dart 代码）
-    await xzProcess.stdout.pipe(tarProcess.stdin);
-    await xzProcess.stderr.drain(); // 释放 stderr 缓冲区
+    // 3. 解包 tar
+    final decoder = TarDecoder();
+    final archive = decoder.decodeBytes(tarBytes);
 
-    final xzExit = await xzProcess.exitCode;
-    final tarExit = await tarProcess.exitCode;
+    // 4. 提取文件到目标目录
+    int extracted = 0;
+    for (final entry in archive) {
+      if (entry.isFile) {
+        final strippedPath = _stripPathComponents(entry.name, stripComponents);
+        if (strippedPath == null || strippedPath.isEmpty) continue;
 
-    if (xzExit != 0 || tarExit != 0) {
-      throw DeployError(
-        code: DeployErrorCode.extractionFailed,
-        message: 'rootfs 解压失败 (xz=$xzExit, tar=$tarExit)',
-      );
+        final destPath = path.join(targetDir, strippedPath);
+        final destDir = path.dirname(destPath);
+
+        await Directory(destDir).create(recursive: true);
+        await File(destPath).writeAsBytes(entry.content as List<int>);
+
+        // 保留可执行权限
+        if ((entry.mode & 0x40) != 0) {
+          try {
+            await Process.run('chmod', ['+x', destPath]);
+          } catch (_) {}
+        }
+
+        extracted++;
+        onProgress(extracted, archive.length);
+      }
     }
 
-    // 统计解压后的文件数（纯UI反馈，失败不阻断）
-    int totalFiles = 0;
-    try {
-      final countResult = await Process.run(
-        findBin, [targetDir, '-type', 'f'],
-        runInShell: true,
-      );
-      totalFiles = (countResult.stdout as String).split('\n').where((l) => l.isNotEmpty).length;
-    } catch (_) {
-      LogService.info('UbuntuInstaller', 'find 不可用，跳过文件计数');
-    }
-    onProgress(totalFiles, totalFiles);
+    onProgress(archive.length, archive.length);
   }
 
-
-
-
-  /// 确保系统工具已安装，缺失时自动通过 Termux 安装
-  Future<String> _ensureToolInstalled(String name) async {
-    final binPath = _findSystemBinary(name);
-
-    // 已找到（完整路径且文件存在）
-    if (binPath.contains('/') && File(binPath).existsSync()) {
-      return binPath;
-    }
-
-    // 只有裸名 → 不存在 → 尝试通过 Termux 安装
-    LogService.info('UbuntuInstaller', '系统工具 $name 未找到，尝试自动安装...');
-
-    // 检查 Termux 包管理器是否可用
-    const termuxPkg = '/data/data/com.termux/files/usr/bin/pkg';
-    if (!File(termuxPkg).existsSync()) {
-      // 特殊处理 xz：尝试通过 App 自带的 BusyBox (unxz) 回退
-      if (name == 'xz') {
-        final cacheDir = path.join(_env.ubuntuDir, '.cache');
-        final wrapper = await _tryBusyBoxXz(cacheDir);
-        if (wrapper != null) {
-          LogService.info('UbuntuInstaller', '使用 BusyBox unxz 代替 xz');
-          return wrapper;
-        }
-      }
-      throw DeployError(
-        code: DeployErrorCode.toolInstallationFailed,
-        message: '缺少系统工具 $name，且 Termux 包管理器不可用',
-      );
-    }
-
-    _report(InstallPhase.extracting, 0.25, '安装系统工具 $name...');
-
-    // 通过 shell 执行 pkg install（Termux 的 pkg 是 bash 脚本）
-    // SHELL: 先用 /system/bin/sh + 自定义 PATH 来执行
-    const termuxPath = '/data/data/com.termux/files/usr/bin';
-    const systemPath = '/system/bin:/system/xbin:/bin:/usr/bin';
-    const customPath = '$termuxPath:$systemPath';
-
-    final result = await Process.run(
-      '/system/bin/sh',
-      <String>['-c', 'pkg install $name -y'],
-      environment: {'PATH': customPath},
-    );
-
-    if (result.exitCode != 0) {
-      final stderr = (result.stderr as String).trim().replaceAll(RegExp(r'\n'), '; ');
-      // pkg 可能因为 SELinux 签名/版本问题不可用 → 直接尝试 apt
-      LogService.warning('UbuntuInstaller', 'pkg install $name 失败 ($result.exitCode), 尝试 apt...');
-
-      // 尝试直接用 apt（apt 是 ELF 二进制，比 pkg 脚本更容易被执行）
-      const termuxApt = '/data/data/com.termux/files/usr/bin/apt';
-      if (File(termuxApt).existsSync()) {
-        final aptResult = await Process.run(
-          '/system/bin/sh',
-          <String>['-c', 'apt install $name -y 2>/dev/null || apt install $name -y --allow-unauthenticated'],
-          environment: {'PATH': customPath},
-        );
-        if (aptResult.exitCode != 0) {
-          throw DeployError(
-            code: DeployErrorCode.toolInstallationFailed,
-            message: '安装 $name 失败 (pkg=$result.exitCode, apt=$aptResult.exitCode): $stderr',
-          );
-        }
-      } else {
-        throw DeployError(
-          code: DeployErrorCode.toolInstallationFailed,
-          message: '安装 $name 失败 (pkg=$result.exitCode): $stderr',
-        );
-      }
-    }
-
-    // 安装后再次检查
-    final installedPath = '/data/data/com.termux/files/usr/bin/$name';
-    if (File(installedPath).existsSync()) {
-      LogService.info('UbuntuInstaller', '$name 安装成功 ($installedPath)');
-      return installedPath;
-    }
-
-    // 让 _findSystemBinary 再做一次完整查找
-    final retryPath = _findSystemBinary(name);
-    if (retryPath.contains('/') && File(retryPath).existsSync()) {
-      return retryPath;
-    }
-
-    throw DeployError(
-      code: DeployErrorCode.toolInstallationFailed,
-      message: '安装 $name 完成但无法定位二进制文件',
-    );
+  /// 去除路径前 N 个组件（tar --strip-components 的 Dart 实现）
+  static String? _stripPathComponents(String filePath, int count) {
+    final parts = filePath.split('/').where((p) => p.isNotEmpty).toList();
+    if (parts.length <= count) return null;
+    return parts.skip(count).join('/');
   }
 
   /// 架构检查
@@ -446,100 +354,11 @@ class UbuntuRuntimeInstaller {
   /// Android SELinux 阻止 App 进程直接执行 /data/data/com.termux/ 下的二进制。
   /// 如果二进制在 Termux 目录，通过 /system/bin/sh 启动并注入 PATH 环境变量，
   /// 使 shell 能找到 Termux 的二进制文件。
-  static Future<Process> _startBinary(String binPath, List<String> args) async {
-    // 如果二进制在系统目录，直接执行（不需要 shell 包装）
-    if (binPath.startsWith('/system/') || binPath.startsWith('/bin/') || binPath.startsWith('/usr/')) {
-      return await Process.start(binPath, args);
-    }
-
-    // 二进制在 Termux 或其它非标准目录 → 通过 shell + 自定义 PATH 启动
-    // sh 始终可执行，PATH 包含 Termux 目录让 shell 能找到该二进制
-    const termuxPath = '/data/data/com.termux/files/usr/bin';
-    const systemPath = '/system/bin:/system/xbin:/bin:/usr/bin';
-    const customPath = '$termuxPath:$systemPath';
-
-    // 构建 shell 命令：sh -c 'exec $binName $arg1 $arg2 ...'
-    // 使用 $0, $1, $2 传递参数以避免 shell 转义问题
-    final binName = binPath.split('/').last;
-    final shellArgs = <String>['-c', 'exec \$0 "\$@"', binName, ...args];
-
-    return await Process.start(
-      '/system/bin/sh',
-      shellArgs,
-      environment: {'PATH': customPath},
-    );
-  }
-
-  static String _findSystemBinary(String name) {
-    // 优先检查系统目录（App 进程可直接执行）
-    const systemPaths = [
-      '/system/bin',
-      '/system/xbin',
-      '/bin',
-      '/usr/bin',
-    ];
-    for (final dir in systemPaths) {
-      final fullPath = '$dir/$name';
-      if (File(fullPath).existsSync()) return fullPath;
-    }
-
-    // Termux 目录 — 需要 shell + 自定义 PATH
-    // 直接返回裸名，调用方通过 shell 环境变量 PATH 注入解决
-    const termuxPaths = [
-      '/data/data/com.termux/files/usr/bin',
-      '/data/data/com.termux/files/home/.local/bin',
-    ];
-    for (final dir in termuxPaths) {
-      final fullPath = '$dir/$name';
-      if (File(fullPath).existsSync()) return fullPath;
-    }
-
-    // 回退：让 shell 去 PATH 查找
-    return name;
-  }
   // ─── BusyBox 回退 ─────────────────────────────────────────────
 
   /// 查找 App 自带的 BusyBox（由 Kotlin PtyPlugin 解压到 files/bin/）
-  static String? _findBusyBox() {
-    // App 原生数据目录（getFilesDir），与 getApplicationDocumentsDirectory 不同
-    const busyboxPaths = [
-      '/data/data/com.codexmobile.app/files/bin/busybox',
-      '/data/user/0/com.codexmobile.app/files/bin/busybox',
-      '/data/data/com.codexmobile.app/app_flutter/runtime/bin/busybox',
-    ];
-    for (final path in busyboxPaths) {
-      if (File(path).existsSync()) return path;
-    }
-    return null;
-  }
-
   /// 创建 xz 包装脚本（调用 BusyBox 的 unxz applet）
   ///
   /// 在 [cacheDir] 下生成一个轻量 shell 脚本，行为同 `xz` 命令行工具。
   /// 这样 _extractTarXz 的管道代码无需修改。
-  static Future<String> _createXzWrapper(String cacheDir, String busyboxPath) async {
-    final wrapperPath = '$cacheDir/xz';
-    // 脚本：exec busybox unxz "$@" （参数透传，保持与 xz 兼容）
-    final script = '#!/system/bin/sh\nexec "$busyboxPath" unxz "\$@"\n';
-    final wrapperFile = File(wrapperPath);
-    // 如果已存在且指向同路径，跳过
-    if (wrapperFile.existsSync()) {
-      final content = wrapperFile.readAsStringSync();
-      if (content.contains(busyboxPath)) return wrapperPath;
-    }
-    await wrapperFile.writeAsString(script);
-    // 设置可执行权限
-    await Process.run('/system/bin/chmod', ['+x', wrapperPath]);
-    LogService.info('UbuntuInstaller', '创建 xz 包装器 (→ $busyboxPath unxz)');
-    return wrapperPath;
-  }
-
   /// 尝试通过 BusyBox 解决 xz 缺失
-  static Future<String?> _tryBusyBoxXz(String cacheDir) async {
-    final busybox = _findBusyBox();
-    if (busybox == null) return null;
-    // BusyBox 有 unxz applet，可以直接创建包装器
-    return await _createXzWrapper(cacheDir, busybox);
-  }
-
-}
