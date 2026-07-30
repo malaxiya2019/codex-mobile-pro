@@ -17,7 +17,6 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 
 import '../core/logger/log_service.dart';
-import '../core/termux/termux_runtime_bridge.dart';
 import 'artifact_manager.dart';
 import 'deploy_error.dart';
 import 'runtime_dependency.dart';
@@ -521,14 +520,14 @@ class UbuntuRuntimeInstaller {
   static Future<String> _createXzWrapper(String cacheDir, String busyboxPath) async {
     final wrapperPath = '$cacheDir/xz';
     // 脚本：exec busybox unxz "$@" （参数透传，保持与 xz 兼容）
-    final script = '#!/system/bin/sh\nexec "$BUSYBOX" unxz "\$@"\n';
+    final script = '#!/system/bin/sh\nexec "$busyboxPath" unxz "\$@"\n';
     final wrapperFile = File(wrapperPath);
     // 如果已存在且指向同路径，跳过
     if (wrapperFile.existsSync()) {
       final content = wrapperFile.readAsStringSync();
       if (content.contains(busyboxPath)) return wrapperPath;
     }
-    await wrapperFile.writeAsString(script.replaceFirst('BUSYBOX', busyboxPath));
+    await wrapperFile.writeAsString(script);
     // 设置可执行权限
     await Process.run('/system/bin/chmod', ['+x', wrapperPath]);
     LogService.info('UbuntuInstaller', '创建 xz 包装器 (→ $busyboxPath unxz)');
