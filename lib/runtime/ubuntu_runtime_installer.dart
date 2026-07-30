@@ -371,7 +371,7 @@ class UbuntuRuntimeInstaller {
         await File(destPath).writeAsBytes(entry.content as List<int>);
 
         // 设置执行权限
-        if ((entry.mode & 0o100) != 0) {
+        if ((entry.mode & 0x40) != 0) {
           try {
             await Process.run('chmod', ['+x', destPath]);
           } catch (_) {}
