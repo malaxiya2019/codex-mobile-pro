@@ -9,6 +9,16 @@
 /// 当前支持两种 Runtime：
 ///   1. 系统默认 Runtime（/system/bin/sh）— 现有
 ///   2. Ubuntu Runtime（rootfs + proot）— 新增，推荐
+///
+/// Provider Orchestration（Phase 2 新增）：
+///   1. registerProvider(IRuntimeProvider)
+///   2. discoverProviders() → `List<ProviderInfo>`
+///   3. getCapability(CapabilityType) → RuntimeCapability?
+///   4. getProvidersForCapability(CapabilityType) → `List<IRuntimeProvider>`
+///   5. resolveFallbackProvider(CapabilityType) → IRuntimeProvider?
+///   6. status → ProviderStatus 聚合
+///
+/// 所有现有功能保持兼容。
 /// ====================================================================
 library;
 
@@ -17,6 +27,12 @@ import 'dart:async';
 import '../core/detector/detection_result.dart';
 import '../core/logger/log_service.dart';
 import 'download_queue.dart';
+import 'provider/android_runtime_provider.dart';
+// Phase 2: Provider 导入
+import 'provider/runtime_capability.dart';
+import 'provider/runtime_provider.dart' hide InstallResult, VerificationResult;
+import 'provider/termux_provider.dart';
+import 'provider/ubuntu_runtime_provider.dart';
 import 'runtime_dependency.dart';
 import 'runtime_detector.dart';
 import 'runtime_environment.dart';
@@ -61,7 +77,16 @@ class RuntimeManager {
   DownloadQueueScheduler? _queue;
   RuntimeDetectionResult? _lastDetection;
 
-  /// 安装进度流
+  // ─── Phase 2: Provider Orchestration ─────────────────────────
+
+  /// 已注册的 Provider
+  final List<IRuntimeProvider> _providers = [];
+
+  /// Provider 信息缓存（由 discoverProviders() 更新）
+  List<ProviderInfo>? _cachedProviderInfos;
+
+  // ─── 安装进度流 ──────────────────────────────────────────────
+
   final StreamController<InstallProgress> _progressController =
       StreamController<InstallProgress>.broadcast();
   Stream<InstallProgress> get progressStream => _progressController.stream;
@@ -75,7 +100,14 @@ class RuntimeManager {
   /// 环境
   RuntimeEnvironment? get environment => _environment;
 
-  RuntimeManager._();
+  RuntimeManager._() {
+    // Phase 2: 注册默认 Provider（按优先级排序）
+    _providers.addAll([
+      AndroidRuntimeProvider(),
+      TermuxRuntimeProvider(),
+      UbuntuRuntimeProvider(),
+    ]);
+  }
 
   static RuntimeManager get instance {
     _instance ??= RuntimeManager._();
@@ -339,4 +371,122 @@ class RuntimeManager {
     _progressController.close();
     _instance = null;
   }
+
+  // ═══════════════════════════════════════════════════════════════
+  // Phase 2: Provider Orchestration API
+  // ═══════════════════════════════════════════════════════════════
+
+  /// 注册 Provider
+  ///
+  /// 按优先级排序：
+  ///   android → termux → ubuntu
+  void registerProvider(IRuntimeProvider provider) {
+    // 如果同 id 已存在，替换
+    final existingIndex = _providers.indexWhere((p) => p.id == provider.id);
+    if (existingIndex >= 0) {
+      _providers[existingIndex] = provider;
+    } else {
+      _providers.add(provider);
+    }
+    // 重置缓存
+    _cachedProviderInfos = null;
+  }
+
+  /// 发现所有 Provider
+  ///
+  /// 对每个 Provider 调用 detect()，返回完整的 Provider 信息列表。
+  Future<List<ProviderInfo>> discoverProviders() async {
+    final results = <ProviderInfo>[];
+
+    for (final provider in _providers) {
+      try {
+        final info = await provider.detect();
+        results.add(info);
+      } catch (e) {
+        LogService.error('RuntimeMgr', 'Provider ${provider.id} 检测失败: $e');
+        results.add(ProviderInfo(
+          type: provider.type,
+          status: ProviderStatus.error,
+          description: '检测异常: $e',
+        ));
+      }
+    }
+
+    _cachedProviderInfos = results;
+    return results;
+  }
+
+  /// 获取指定类型的 Capability
+  ///
+  /// 按 Provider 优先级查找：
+  ///   1. android
+  ///   2. termux
+  ///   3. ubuntu（experimental）
+  /// 返回第一个可用的 Capability。
+  Future<RuntimeCapability?> getCapability(CapabilityType type) async {
+    // 先尝试缓存
+    final providersWithCap = getProvidersForCapability(type);
+    if (providersWithCap.isEmpty) return null;
+
+    // 查找可用（healthy 或 degraded）
+    for (final provider in providersWithCap) {
+      final caps = provider.capabilities.where((c) => c.type == type);
+      for (final cap in caps) {
+        if (cap.available) return cap;
+      }
+    }
+
+    // 没有可用 → 返回第一个不可用的（附带原因）
+    for (final provider in providersWithCap) {
+      final caps = provider.capabilities.where((c) => c.type == type);
+      if (caps.isNotEmpty) return caps.first;
+    }
+
+    return null;
+  }
+
+  /// 获取能提供指定 Capability 的 Provider 列表
+  ///
+  /// 按优先级排序：android → termux → ubuntu
+  List<IRuntimeProvider> getProvidersForCapability(CapabilityType type) {
+    return _providers.where((p) {
+      return p.capabilities.any((c) => c.type == type);
+    }).toList();
+  }
+
+  /// 解析 fallback Provider
+  ///
+  /// 查找能提供指定 Capability 的最高优先级可用 Provider。
+  Future<IRuntimeProvider?> resolveFallbackProvider(
+    CapabilityType type,
+  ) async {
+    for (final provider in _providers) {
+      final caps = provider.capabilities.where(
+        (c) => c.type == type && c.available,
+      );
+      if (caps.isNotEmpty) {
+        return provider;
+      }
+    }
+
+    // 缓存中没有 → 重新 detect
+    for (final provider in _providers) {
+      try {
+        final info = await provider.detect();
+        final hasCap = info.capabilities.any(
+          (c) => c.type == type && c.available,
+        );
+        if (hasCap) return provider;
+      } catch (_) {}
+    }
+
+    return null;
+  }
+
+  /// 获取已注册的 Provider 列表
+  List<IRuntimeProvider> get registeredProviders =>
+      List.unmodifiable(_providers);
+
+  /// 获取 Provider 信息缓存
+  List<ProviderInfo>? get cachedProviderInfos => _cachedProviderInfos;
 }
