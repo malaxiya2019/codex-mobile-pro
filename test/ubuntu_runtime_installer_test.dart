@@ -43,6 +43,11 @@ String systemTool(String name) {
 /// 创建「伪 busybox」脚本（xzcat/tar 委托给系统工具）
 File createFakeBusybox(Directory tmp, {bool executable = true}) {
   final script = File('${tmp.path}/fake-busybox');
+  // 同一测试内多次调用时，旧文件可能被 chmod 000（无写权限），
+  // 直接覆盖写会抛 PathAccessException，先删除重建。
+  if (script.existsSync()) {
+    script.deleteSync();
+  }
   script.writeAsStringSync('#!/bin/sh\n'
       'case "\$1" in\n'
       '  xzcat) shift; exec xz -dc "\$@" ;;\n'
@@ -58,8 +63,13 @@ File createFakeBusybox(Directory tmp, {bool executable = true}) {
   return script;
 }
 
-/// 生成一个含顶层 `ubuntu/` 前缀的最小 tar.xz（模拟 proot-distro rootfs）
-File createTinyRootfsTarXz(Directory cacheDir) {
+/// 生成一个含顶层 `ubuntu/` 前缀的最小 tar.xz（模拟 proot-distro rootfs）。
+///
+/// [systemXz] 为 true 时用系统 xz 生成（真实镜像格式，系统 xz 可解压）；
+/// 否则回退 dart archive XZEncoder（仅用于 EACCES/ENOENT 等不需要
+/// 成功解压的用例）。archive 3.6.1 的 XZEncoder 输出与系统 xz 不兼容
+/// （系统 xz 报 "Compressed data is corrupt"），不能用于正常解压用例。
+File createTinyRootfsTarXz(Directory cacheDir, {required bool systemXz}) {
   final archive = Archive();
   archive.addFile(ArchiveFile('ubuntu/etc/os-release', 0,
       utf8.encode('PRETTY_NAME="Ubuntu 24.04 (noble)"\n')));
@@ -67,6 +77,15 @@ File createTinyRootfsTarXz(Directory cacheDir) {
       'ubuntu/usr/bin/bash', 0, utf8.encode('#!/bin/sh\necho fake-bash\n')));
   archive.addFile(ArchiveFile('ubuntu/bin/true', 0, utf8.encode('')));
   final tarBytes = TarEncoder().encode(archive);
+  if (systemXz) {
+    final tarFile = File('${cacheDir.path}/ubuntu-rootfs.tar');
+    tarFile.writeAsBytesSync(tarBytes, flush: true);
+    final r = Process.runSync('xz', ['-f', tarFile.path]);
+    if (r.exitCode == 0) {
+      // xz -f 生成 ubuntu-rootfs.tar.xz 并删除原 tar 文件
+      return File('${cacheDir.path}/ubuntu-rootfs.tar.xz');
+    }
+  }
   final xzBytes = XZEncoder().encode(tarBytes);
   final file = File('${cacheDir.path}/ubuntu-rootfs.tar.xz');
   file.writeAsBytesSync(xzBytes, flush: true);
@@ -147,7 +166,7 @@ void main() {
       final env = RuntimeEnvironment.forTest('${tmp.path}/app');
       final cacheDir = Directory('${env.ubuntuDir}/.cache')
         ..createSync(recursive: true);
-      final rootfs = createTinyRootfsTarXz(cacheDir);
+      final rootfs = createTinyRootfsTarXz(cacheDir, systemXz: true);
 
       final targetDir = '${tmp.path}/rootfs-out';
       final tarBytes = TarEncoder().encode(
@@ -209,7 +228,7 @@ void main() {
       final env = RuntimeEnvironment.forTest('${tmp.path}/app');
       final cacheDir = Directory('${env.ubuntuDir}/.cache')
         ..createSync(recursive: true);
-      final rootfs = createTinyRootfsTarXz(cacheDir);
+      final rootfs = createTinyRootfsTarXz(cacheDir, systemXz: true);
       Process.runSync('chmod', ['000', rootfs.path]);
 
       final installer = newInstaller(
@@ -255,7 +274,7 @@ void main() {
       final env = RuntimeEnvironment.forTest('${tmp.path}/app');
       final cacheDir = Directory('${env.ubuntuDir}/.cache')
         ..createSync(recursive: true);
-      final rootfs = createTinyRootfsTarXz(cacheDir);
+      final rootfs = createTinyRootfsTarXz(cacheDir, systemXz: false);
       // 伪 busybox 存在但无执行位 → Process.start 抛 EACCES
       final broken = createFakeBusybox(tmp, executable: false);
 
@@ -277,7 +296,7 @@ void main() {
       final env = RuntimeEnvironment.forTest('${tmp.path}/app');
       final cacheDir = Directory('${env.ubuntuDir}/.cache')
         ..createSync(recursive: true);
-      final rootfs = createTinyRootfsTarXz(cacheDir);
+      final rootfs = createTinyRootfsTarXz(cacheDir, systemXz: false);
 
       final installer =
           newInstaller(env, busyboxOverride: '${tmp.path}/no-busybox');
@@ -314,7 +333,7 @@ void main() {
       final env = RuntimeEnvironment.forTest('${tmp.path}/app');
       final cacheDir = Directory('${env.ubuntuDir}/.cache')
         ..createSync(recursive: true);
-      final rootfs = createTinyRootfsTarXz(cacheDir);
+      final rootfs = createTinyRootfsTarXz(cacheDir, systemXz: true);
       final targetDir = '${tmp.path}/rootfs-out';
 
       // 第一次：坏 busybox → 结构化失败（模拟「重新初始化前」状态）
