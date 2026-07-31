@@ -22,12 +22,19 @@
 ///      执行文件删除重建，不再静默复用旧版本遗留文件。
 ///   3. 返回前强制验证可执行位，不满足则返回 null（调用方给出结构化
 ///      错误，而不是裸抛 ProcessException）。
+///   4. execve 冒烟验证：stat 权限位正确 ≠ 内核允许执行。安装/复用
+///      后真实执行 `busybox true`，noexec mount、SELinux denial、
+///      损坏 ELF（Exec format error）都会在此步暴露。
+///   5. asset 解压后 SHA-256 校验（与期望 digest 比对，防止写入截断/
+///      损坏的二进制被当作可用工具）。
 /// ====================================================================
 library;
 
 import 'dart:io';
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:meta/meta.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/logger/log_service.dart';
@@ -62,33 +69,19 @@ class NativeBusybox {
       final binDir = Directory('${supportDir.path}/bin');
       final busyboxFile = File('${binDir.path}/busybox');
 
-      // ─── 复用已有文件：必须同时满足「存在 + 可执行 + 大小合理」─
+      // ─── 复用已有文件：必须通过完整可用性验证（含 execve 冒烟）─
       if (busyboxFile.existsSync()) {
-        final stat = await busyboxFile.stat();
-        final executable = (stat.mode & 0x40) != 0;
-        final sizeOk = stat.size >= _minPlausibleSize;
-
-        if (executable && sizeOk) {
-          LogService.info(
-            'Busybox',
-            '复用已安装的 busybox: ${busyboxFile.path} '
-                '(${stat.size} bytes, mode=${stat.mode.toRadixString(8)})',
-          );
-          return busyboxFile.path;
+        final reused = await verifyUsable(busyboxFile);
+        if (reused != null) {
+          LogService.info('Busybox', '复用已安装的 busybox: ${busyboxFile.path}');
+          return reused;
         }
-
-        // 存在但不可执行 / 疑似损坏 → 删除重建
+        // 存在但不可执行 / 损坏 / 冒烟失败 → 删除重建
         LogService.warning(
           'Busybox',
-          '已存在但不可复用，删除重建: ${busyboxFile.path} '
-              '(mode=${stat.mode.toRadixString(8)}, size=${stat.size}, '
-              'executable=$executable, sizeOk=$sizeOk)',
+          '已存在但不可复用，删除重建: ${busyboxFile.path}',
         );
-        try {
-          await busyboxFile.delete();
-        } catch (e) {
-          LogService.warning('Busybox', '删除不可复用的 busybox 失败: $e');
-        }
+        await _deleteBestEffort(busyboxFile);
       }
 
       // ─── 从 Flutter asset 解压 ────────────────────────────────
@@ -98,6 +91,16 @@ class NativeBusybox {
         data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
         flush: true,
       );
+
+      // ─── 内容完整性校验（SHA-256）────────────────────────────
+      if (!await verifySha256(busyboxFile)) {
+        LogService.error(
+          'Busybox',
+          'asset 解压后 SHA-256 不匹配，删除: ${busyboxFile.path}',
+        );
+        await _deleteBestEffort(busyboxFile);
+        return null;
+      }
 
       // ─── 设置可执行权限（chmod +x），必须验证结果 ─────────────
       final chmodOk = await _makeExecutable(busyboxFile.path);
@@ -109,11 +112,12 @@ class NativeBusybox {
         return null;
       }
 
-      // ─── 最终强制验证 ─────────────────────────────────────────
-      if (!await _isExecutable(busyboxFile)) {
+      // ─── 最终强制验证（权限位 + execve 冒烟）─────────────────
+      final verified = await verifyUsable(busyboxFile);
+      if (verified == null) {
         LogService.error(
           'Busybox',
-          '解压后仍不可执行: ${busyboxFile.path}',
+          '解压后 execve 冒烟失败: ${busyboxFile.path}',
         );
         return null;
       }
@@ -123,10 +127,84 @@ class NativeBusybox {
         'busybox 就绪: ${busyboxFile.path} '
             '(${await busyboxFile.length()} bytes)',
       );
-      return busyboxFile.path;
+      return verified;
     } catch (e) {
       LogService.error('Busybox', '安装 busybox 失败: $e');
       return null;
+    }
+  }
+
+  /// 完整可用性验证：存在 + 大小合理 + 可执行位 + 真实 execve 冒烟。
+  ///
+  /// 冒烟执行 `busybox true`：
+  ///   - 无执行位 / SELinux denial / noexec mount → ProcessException
+  ///     (EACCES)；
+  ///   - 损坏 ELF / 非 ELF 文件 → ProcessException (Exec format error,
+  ///     ENOEXEC)；
+  ///   - 截断二进制 → 非零退出或异常。
+  /// 全部通过返回路径，否则返回 null（调用方删除重建或报结构化错误）。
+  @visibleForTesting
+  static Future<String?> verifyUsable(
+    File f, {
+    int minSize = _minPlausibleSize,
+  }) async {
+    try {
+      if (!await f.exists()) return null;
+      final stat = await f.stat();
+      final sizeOk = stat.size >= minSize;
+      final execBit = (stat.mode & 0x40) != 0;
+      if (!sizeOk || !execBit) {
+        LogService.warning(
+          'Busybox',
+          '不可复用: sizeOk=$sizeOk execBit=$execBit '
+              '${f.path} (${stat.size}B mode=${stat.mode.toRadixString(8)})',
+        );
+        return null;
+      }
+
+      // 真实 execve：stat 权限位正确 ≠ 内核允许执行
+      final smoke = await Process.run(f.path, ['true']);
+      if (smoke.exitCode != 0) {
+        LogService.warning(
+          'Busybox',
+          '冒烟执行失败(exit=${smoke.exitCode}): ${f.path}\n'
+              'stderr=${smoke.stderr}',
+        );
+        return null;
+      }
+      return f.path;
+    } catch (e) {
+      // ProcessException：EACCES / ENOENT / Exec format error 等
+      LogService.warning('Busybox', '冒烟执行异常: ${f.path} → $e');
+      return null;
+    }
+  }
+
+  /// 计算文件的 SHA-256（十六进制小写）
+  ///
+  /// 同时被 [verifySha256] 与测试复用。
+  @visibleForTesting
+  static Future<String> sha256Of(File f) async {
+    final bytes = await f.readAsBytes();
+    return sha256.convert(bytes).toString();
+  }
+
+  /// SHA-256 内容校验（与 [expected] 或内置 [expectedSha256] 比对）
+  static Future<bool> verifySha256(File f, {String? expected}) async {
+    try {
+      final digest = await sha256Of(f);
+      return digest == (expected ?? expectedSha256);
+    } catch (e) {
+      LogService.warning('Busybox', 'SHA-256 校验失败: $e');
+      return false;
+    }
+  }
+
+  static Future<void> _deleteBestEffort(File f) async {
+    try {
+      await f.delete();
+    } catch (e) {
+      LogService.warning('Busybox', '删除文件失败(忽略): ${f.path} → $e');
     }
   }
 
@@ -158,16 +236,5 @@ class NativeBusybox {
       }
     }
     return false;
-  }
-
-  /// 检查文件是否可执行
-  static Future<bool> _isExecutable(File f) async {
-    try {
-      final stat = await f.stat();
-      // Unix 权限：owner execute bit (0x40)
-      return (stat.mode & 0x40) != 0;
-    } catch (_) {
-      return false;
-    }
   }
 }
