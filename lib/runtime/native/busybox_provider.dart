@@ -56,8 +56,9 @@ class NativeBusybox {
         data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
         flush: true,
       );
+      // chmod +x 已设置可执行位（不调用 File.setExecutable：
+      // 该方法在部分 Flutter 构建环境中未定义，且 Android 上 chmod 等效）
       await Process.run('chmod', ['+x', busyboxFile.path]);
-      await busyboxFile.setExecutable(true, false);
 
       return busyboxFile.path;
     } catch (e) {
