@@ -14,9 +14,16 @@
 ///   1. registerProvider(IRuntimeProvider)
 ///   2. discoverProviders() → `List<ProviderInfo>`
 ///   3. getCapability(CapabilityType) → RuntimeCapability?
-///   4. getProvidersForCapability(CapabilityType) → `List<IRuntimeProvider>`
-///   5. resolveFallbackProvider(CapabilityType) → IRuntimeProvider?
-///   6. status → ProviderStatus 聚合
+///   4. getCapabilities() → `List<RuntimeCapability>`
+///   5. getProvidersForCapability(CapabilityType) → `List<IRuntimeProvider>`
+///   6. resolveFallbackProvider(CapabilityType) → IRuntimeProvider?
+///   7. hasCapability(CapabilityType) → bool
+///   8. status → ProviderStatus 聚合
+///
+/// Capability Resolver（Phase 4 新增）：
+///   1. getCapability(type) — 使用 Resolver 执行运行时验证
+///   2. refreshCapability(type) — 强制刷新
+///   3. invalidateCapability(type) — 失效缓存
 ///
 /// 所有现有功能保持兼容。
 /// ====================================================================
@@ -39,6 +46,8 @@ import 'runtime_environment.dart';
 import 'runtime_installer.dart';
 import 'runtime_manifest.dart';
 import 'ubuntu_runtime_installer.dart';
+import 'capability/capability_resolver.dart';
+import 'capability/provider_enhancer.dart';
 
 /// 管理器状态
 enum RuntimeManagerState {
@@ -75,6 +84,10 @@ class RuntimeManager {
   RuntimeInstaller? _installer;
   UbuntuRuntimeInstaller? _ubuntuInstaller;
   DownloadQueueScheduler? _queue;
+
+  // ─── Phase 4: Capability Resolver ───────────────────────────
+  CapabilityResolver? _resolver;
+  ProviderCapabilityEnhancer? _enhancer;
   RuntimeDetectionResult? _lastDetection;
 
   // ─── Phase 2: Provider Orchestration ─────────────────────────
@@ -125,6 +138,10 @@ class RuntimeManager {
     
     // 初始化下载队列
     _queue = DownloadQueueScheduler.instance;
+    
+    // Phase 4: 初始化 Capability Resolver
+    _resolver = CapabilityResolver();
+    _enhancer = ProviderCapabilityEnhancer(resolver: _resolver);
     final backlogDir = '${_environment!.runtimeDir}/.queue_backlog';
     await _queue!.initialize(backlogDir: backlogDir);
     final recovered = await _queue!.recoverBacklog();
@@ -418,31 +435,58 @@ class RuntimeManager {
 
   /// 获取指定类型的 Capability
   ///
+  /// 使用 CapabilityResolver 执行运行时验证（如果可用），
+  /// 否则回退到 Provider 静态声明。
+  ///
   /// 按 Provider 优先级查找：
   ///   1. android
   ///   2. termux
   ///   3. ubuntu（experimental）
-  /// 返回第一个可用的 Capability。
   Future<RuntimeCapability?> getCapability(CapabilityType type) async {
-    // 先尝试缓存
+    if (_resolver == null || _enhancer == null) {
+      return _getCapabilityLegacy(type);
+    }
+
+    // 使用 Enhancer 进行运行时验证
     final providersWithCap = getProvidersForCapability(type);
     if (providersWithCap.isEmpty) return null;
 
-    // 查找可用（healthy 或 degraded）
     for (final provider in providersWithCap) {
-      final caps = provider.capabilities.where((c) => c.type == type);
-      for (final cap in caps) {
-        if (cap.available) return cap;
+      try {
+        final enhanced = await _enhancer!.enhanceCapability(provider, type);
+        if (enhanced != null && enhanced.available) return enhanced;
+      } catch (_) {
+        // Enhancer 失败时使用 Provider 静态声明
+        continue;
       }
     }
 
-    // 没有可用 → 返回第一个不可用的（附带原因）
-    for (final provider in providersWithCap) {
-      final caps = provider.capabilities.where((c) => c.type == type);
-      if (caps.isNotEmpty) return caps.first;
+    // 没有可用 → 返回第一个不可用的
+    return _getCapabilityLegacy(type);
+  }
+
+  /// 获取所有 Capability（去重）
+  ///
+  /// 从所有 Provider 收集 Capability，按 Provider 优先级
+  /// 返回去重后的列表。
+  List<RuntimeCapability> getCapabilities() {
+    final seen = <CapabilityType>{};
+    final result = <RuntimeCapability>[];
+
+    for (final provider in _providers) {
+      for (final cap in provider.capabilities) {
+        if (seen.add(cap.type)) {
+          result.add(cap);
+        }
+      }
     }
 
-    return null;
+    return result;
+  }
+
+  /// 检查是否具有指定 Capability
+  bool hasCapability(CapabilityType type) {
+    return getProvidersForCapability(type).isNotEmpty;
   }
 
   /// 获取能提供指定 Capability 的 Provider 列表
@@ -454,12 +498,11 @@ class RuntimeManager {
     }).toList();
   }
 
-  /// 解析 fallback Provider
+  /// 查找最佳 Provider
   ///
-  /// 查找能提供指定 Capability 的最高优先级可用 Provider。
-  Future<IRuntimeProvider?> resolveFallbackProvider(
-    CapabilityType type,
-  ) async {
+  /// 返回能提供指定 Capability 的最高优先级可用 Provider。
+  Future<IRuntimeProvider?> findProviderFor(CapabilityType type) async {
+    // 先检查已缓存的可用 Capability
     for (final provider in _providers) {
       final caps = provider.capabilities.where(
         (c) => c.type == type && c.available,
@@ -469,7 +512,7 @@ class RuntimeManager {
       }
     }
 
-    // 缓存中没有 → 重新 detect
+    // 缓存中没有可用 → 重新 detect
     for (final provider in _providers) {
       try {
         final info = await provider.detect();
@@ -483,10 +526,70 @@ class RuntimeManager {
     return null;
   }
 
+  /// 解析 fallback Provider（旧名，转发到 findProviderFor）
+  @Deprecated('Use findProviderFor instead')
+  Future<IRuntimeProvider?> resolveFallbackProvider(CapabilityType type) {
+    return findProviderFor(type);
+  }
+
+  /// ─── Capability Resolver 操作 ───────────────────────────────
+
+  /// 强制刷新指定 Capability
+  Future<RuntimeCapability?> refreshCapability(
+    CapabilityType type,
+  ) async {
+    if (_resolver == null) return null;
+
+    for (final provider in _providers) {
+      if (provider.capabilities.any((c) => c.type == type)) {
+        try {
+          return await _resolver!.refresh(type, provider);
+        } catch (_) {
+          continue;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// 失效指定 Capability 缓存
+  void invalidateCapability(CapabilityType type) {
+    _resolver?.invalidate(type);
+  }
+
+  /// 失效所有 Capability 缓存
+  void invalidateAllCapabilities() {
+    _resolver?.invalidateAll();
+  }
+
   /// 获取已注册的 Provider 列表
   List<IRuntimeProvider> get registeredProviders =>
       List.unmodifiable(_providers);
 
   /// 获取 Provider 信息缓存
   List<ProviderInfo>? get cachedProviderInfos => _cachedProviderInfos;
+
+  /// ─── 私有方法 ───────────────────────────────────────────────
+
+  /// 回退方法：使用 Provider 静态声明获取 Capability
+  Future<RuntimeCapability?> _getCapabilityLegacy(CapabilityType type) async {
+    final providersWithCap = getProvidersForCapability(type);
+    if (providersWithCap.isEmpty) return null;
+
+    // 查找可用
+    for (final provider in providersWithCap) {
+      final caps = provider.capabilities.where((c) => c.type == type);
+      for (final cap in caps) {
+        if (cap.available) return cap;
+      }
+    }
+
+    // 没有可用 → 返回第一个不可用的
+    for (final provider in providersWithCap) {
+      final caps = provider.capabilities.where((c) => c.type == type);
+      if (caps.isNotEmpty) return caps.first;
+    }
+
+    return null;
+  }
 }
