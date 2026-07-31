@@ -116,7 +116,8 @@ File createTinyRootfsTarXz(Directory dir, {required bool systemXzCompress}) {
   if (systemXzCompress) {
     final rawTar = File('${dir.path}/tiny-rootfs.tar')
       ..writeAsBytesSync(tarBytes);
-    final xz = Process.runSync(systemXz, ['-c', rawTar.path]);
+    final xz = Process.runSync(systemXz, ['-c', rawTar.path],
+        stdoutEncoding: null); // 二进制输出，禁止 UTF-8 解码
     expect(xz.exitCode, 0, reason: '系统 xz 压缩失败');
     file.writeAsBytesSync((xz.stdout as List<int>));
     try {
