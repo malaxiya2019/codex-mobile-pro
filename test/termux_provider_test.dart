@@ -240,7 +240,10 @@ void main() {
       // 只安装了 node 和 bash
       fakeTransport.setWhichResult('node', '/data/data/com.termux/files/usr/bin/node');
       fakeTransport.setWhichResult('bash', '/data/data/com.termux/files/usr/bin/bash');
-      // 其他返回 null
+      // 其他明确未找到（null）
+      fakeTransport.setWhichResult('python3', null);
+      fakeTransport.setWhichResult('git', null);
+      fakeTransport.setWhichResult('npm', null);
 
       await provider.detect();
       final caps = provider.capabilities;
