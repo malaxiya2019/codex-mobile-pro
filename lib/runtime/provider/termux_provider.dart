@@ -9,8 +9,13 @@
 ///   2. getEnvironment() — 获取 Termux 环境变量（HOME/PATH/PREFIX/TMPDIR/LANG）
 ///   3. isAvailable() — 简化可用性检查
 ///   4. healthCheck() — 健康检查
-///   5. capabilities — 提供的 Capability 列表
+///   5. capabilities — 提供的 Capability 列表（真实存在的工具）
 ///   6. resolveExecutable() — 解析可执行文件路径
+///
+/// Capability 策略：
+///   - _buildCapabilities() 使用 resolveExecutable 检测真实存在的工具
+///   - 只报告「确定存在」的能力，不做假设
+///   - 运行时健康检查由 CapabilityResolver 通过 RuntimeProcessRunner 完成
 ///
 /// 通信机制：
 ///   TermuxRuntimeProvider → TermuxTransport → MethodChannel → TermuxBridge.kt
@@ -32,6 +37,18 @@ class TermuxRuntimeProvider implements IRuntimeProvider {
   TermuxEnvResult? _lastEnvironment;
   ProviderStatus _status = ProviderStatus.unavailable;
   List<RuntimeCapability> _cachedCapabilities = const [];
+
+  /// Termux 可能提供的所有可执行能力
+  static const _declaredCapabilities = <CapabilityType>[
+    CapabilityType.bash,
+    CapabilityType.node,
+    CapabilityType.npm,
+    CapabilityType.python,
+    CapabilityType.git,
+    CapabilityType.codexCli,
+    CapabilityType.tar,
+    CapabilityType.xz,
+  ];
 
   TermuxRuntimeProvider({TermuxTransport? transport})
     : _transport = transport ?? MethodChannelTermuxTransport();
@@ -77,8 +94,8 @@ class TermuxRuntimeProvider implements IRuntimeProvider {
         _status = ProviderStatus.unavailable;
       }
 
-      // 4. 构建 Capability 列表
-      _cachedCapabilities = _buildCapabilities(diag, env);
+      // 4. 构建 Capability 列表（含真实可执行文件检测）
+      _cachedCapabilities = await _buildCapabilities(diag, env);
 
       // 5. 构建健康检查
       final health = ProviderHealth(
@@ -135,12 +152,18 @@ class TermuxRuntimeProvider implements IRuntimeProvider {
   @override
   Future<Map<String, String>> getEnvironment({String? appHome}) async {
     final env = await _transport.getEnvironment();
+
+    // 优先从真实 Termux 环境检测，不从唯一路径获取
     final result = <String, String>{};
 
-    // HOME — 优先真实检测，fallback 到 appHome
-    result['HOME'] = env.homePath ?? appHome ?? '/data/data/com.termux/files/home';
+    // HOME — 优先真实检测值
+    if (env.homePath != null) {
+      result['HOME'] = env.homePath!;
+    } else if (appHome != null) {
+      result['HOME'] = appHome;
+    }
 
-    // PATH — Termux Prefix bin + 系统路径
+    // PREFIX / PATH
     if (env.prefixPath != null) {
       result['PREFIX'] = env.prefixPath!;
       result['PATH'] = '${env.prefixPath}/bin:/system/bin:/system/xbin';
@@ -153,10 +176,8 @@ class TermuxRuntimeProvider implements IRuntimeProvider {
       result['SHELL'] = env.shellPath!;
     }
 
-    // TMPDIR
+    // 标准环境变量
     result['TMPDIR'] = '/data/local/tmp';
-
-    // 本地化
     result['LANG'] = 'en_US.UTF-8';
     result['LC_ALL'] = 'en_US.UTF-8';
 
@@ -247,13 +268,16 @@ class TermuxRuntimeProvider implements IRuntimeProvider {
   // ─── 内部 ────────────────────────────────────────────────────
 
   /// 构建 Capability 列表
-  List<RuntimeCapability> _buildCapabilities(
+  ///
+  /// 使用 resolveExecutable 检测 Termux 中真实存在的可执行文件。
+  /// 只报告已确认存在的能力，不做假设。
+  Future<List<RuntimeCapability>> _buildCapabilities(
     TermuxDiagnosticResult diag,
     TermuxEnvResult env,
-  ) {
+  ) async {
     final result = <RuntimeCapability>[];
 
-    // Termux Runtime 本身
+    // 1. Termux Runtime 本身
     result.add(RuntimeCapability(
       type: CapabilityType.termux,
       provider: type,
@@ -276,7 +300,46 @@ class TermuxRuntimeProvider implements IRuntimeProvider {
               : 'Termux 未安装',
     ));
 
+    // 2. Termux 不可用时不再检测具体工具
+    if (!diag.isAvailable) return result;
+
+    // 3. 检测各可执行文件是否存在
+    for (final capType in _declaredCapabilities) {
+      final binary = _binaryForCapability(capType);
+      if (binary == null) continue;
+
+      final executablePath = await _transport.which(binary);
+      final available = executablePath != null;
+
+      result.add(RuntimeCapability(
+        type: capType,
+        provider: type,
+        available: available,
+        status:
+            available ? CapabilityStatus.available : CapabilityStatus.unavailable,
+        executable: executablePath,
+        health:
+            available ? CapabilityHealth.healthy : CapabilityHealth.unavailable,
+        reason: available ? null : 'Termux 中未安装 $binary',
+      ));
+    }
+
     return result;
+  }
+
+  /// Capability 类型 → 可执行文件名
+  static String? _binaryForCapability(CapabilityType type) {
+    switch (type) {
+      case CapabilityType.bash: return 'bash';
+      case CapabilityType.node: return 'node';
+      case CapabilityType.npm: return 'npm';
+      case CapabilityType.python: return 'python3';
+      case CapabilityType.git: return 'git';
+      case CapabilityType.codexCli: return 'codex';
+      case CapabilityType.tar: return 'tar';
+      case CapabilityType.xz: return 'xz';
+      default: return null;
+    }
   }
 
   String _statusDescription(TermuxDiagnosticResult diag, TermuxEnvResult? env) {
