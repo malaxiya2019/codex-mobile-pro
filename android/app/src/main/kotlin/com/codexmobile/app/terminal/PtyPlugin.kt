@@ -132,29 +132,86 @@ class PtyPlugin(private val context: Context) {
 
         val busyboxFile = File(binDir, BUSYBOX_NAME)
 
-        if (busyboxFile.exists() && busyboxFile.canExecute()) {
-            Log.d(TAG, "BusyBox already exists at ${busyboxFile.absolutePath}")
+        // 复用前必须通过 execve 冒烟：canExecute() 只反映权限位，
+        // 无法发现 noexec / SELinux denial / 半写损坏文件。与 Dart
+        // NativeBusybox 共用 files/bin/busybox，只有「可用」才复用，
+        // 否则原子重建，避免把坏文件当作可用工具。
+        if (busyboxFile.exists() && busyboxFile.canExecute() && busyboxExecSmoke(busyboxFile)) {
+            Log.d(TAG, "BusyBox already exists and works at ${busyboxFile.absolutePath}")
         } else {
+            if (busyboxFile.exists()) {
+                Log.w(TAG, "BusyBox exists but unusable, rebuilding: ${busyboxFile.absolutePath}")
+                busyboxFile.delete()
+            }
             Log.d(TAG, "Extracting BusyBox from assets...")
             try {
-                context.assets.open(BUSYBOX_ASSET).use { input ->
-                    FileOutputStream(busyboxFile).use { output ->
-                        input.copyTo(output)
-                    }
-                }
+                extractBusyboxAtomically(busyboxFile)
             } catch (e: Exception) {
                 throw PtySession.PtyException(
                     "Failed to extract BusyBox from assets: ${e.message}"
                 )
             }
-            busyboxFile.setExecutable(true, false)
-            busyboxFile.setReadable(true, false)
+            if (!busyboxExecSmoke(busyboxFile)) {
+                throw PtySession.PtyException(
+                    "BusyBox extracted but execve smoke failed: ${busyboxFile.absolutePath}"
+                )
+            }
             Log.d(TAG, "BusyBox extracted: ${busyboxFile.length()} bytes")
         }
 
         installBusyboxApplets(busyboxFile)
         busyboxReady = true
         Log.d(TAG, "BusyBox setup complete at ${binDir!!.absolutePath}")
+    }
+
+    // execve 冒烟：`busybox true`，3 秒超时。stat 权限位正确不等于
+    // 内核允许执行（noexec mount / SELinux denial / 损坏 ELF / 半写
+    // 截断都会在这里暴露），与 Dart NativeBusybox.verifyUsable 对齐。
+    private fun busyboxExecSmoke(busyboxFile: File): Boolean {
+        return try {
+            val p = Runtime.getRuntime().exec(arrayOf(busyboxFile.absolutePath, "true"))
+            val ok = p.waitFor(3, java.util.concurrent.TimeUnit.SECONDS) && p.exitValue() == 0
+            if (!ok) {
+                Log.w(TAG, "BusyBox execve smoke failed: ${busyboxFile.absolutePath}")
+            }
+            ok
+        } catch (e: Exception) {
+            Log.w(TAG, "BusyBox execve smoke error: ${busyboxFile.absolutePath} -> ${e.message}")
+            false
+        }
+    }
+
+    // 原子写入：写 `busybox.tmp` → setExecutable → rename 覆盖目标。
+    // 与 Dart NativeBusybox 共用 files/bin/busybox，必须避免对同一文件
+    // 非原子覆盖写（FileOutputStream 直写目标会先截断再写，并发下留下
+    // 半写文件 → Process.start EACCES / Exec format error）。临时文件
+    // 与目标同目录，保证 rename 在同一文件系统内原子完成。
+    private fun extractBusyboxAtomically(busyboxFile: File) {
+        val dir = busyboxFile.parentFile
+            ?: throw PtySession.PtyException("busybox parent dir missing")
+        val tmp = File(dir, "busybox.tmp.${System.currentTimeMillis()}")
+        try {
+            context.assets.open(BUSYBOX_ASSET).use { input ->
+                FileOutputStream(tmp).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            tmp.setExecutable(true, false)
+            tmp.setReadable(true, false)
+            if (!tmp.canExecute()) {
+                throw PtySession.PtyException("busybox tmp not executable")
+            }
+            if (!tmp.renameTo(busyboxFile)) {
+                // renameTo 失败（目标已存在等）→ 先删除目标再重试
+                busyboxFile.delete()
+                if (!tmp.renameTo(busyboxFile)) {
+                    throw PtySession.PtyException("busybox atomic rename failed")
+                }
+            }
+        } catch (e: Exception) {
+            tmp.delete()
+            throw e
+        }
     }
 
     private fun installBusyboxApplets(busyboxFile: File) {

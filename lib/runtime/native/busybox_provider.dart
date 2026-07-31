@@ -59,9 +59,13 @@ class NativeBusybox {
 
   /// 确保 busybox 已安装到 `files/bin/busybox`，返回完整路径
   ///
-  /// 优先复用已存在的「可执行 + 大小合理」二进制（Kotlin PtyPlugin
-  /// 或本模块解压的），缺失 / 不可执行 / 损坏时从 Flutter asset 解压
-  /// 并设置可执行权限。
+  /// 优先复用已存在的「可执行 + 大小合理 + execve 冒烟通过」二进制
+  /// （Kotlin PtyPlugin 或本模块安装的）；缺失 / 不可执行 / 损坏时
+  /// 从 Flutter asset **原子安装**（写临时文件 → SHA-256 → chmod +x
+  /// → execve 冒烟 → rename 覆盖），保证任何时刻 `files/bin/busybox`
+  /// 要么是完整可用版本，要么不存在 —— 不会出现半写/截断文件被复用，
+  /// 从而避免 `Process.start` 抛 EACCES / Exec format error。
+  ///
   /// 返回 null 表示安装失败（调用方应转为结构化 DeployError）。
   static Future<String?> ensureInstalled() async {
     try {
@@ -76,60 +80,102 @@ class NativeBusybox {
           LogService.info('Busybox', '复用已安装的 busybox: ${busyboxFile.path}');
           return reused;
         }
-        // 存在但不可执行 / 损坏 / 冒烟失败 → 删除重建
+        // 存在但不可执行 / 损坏 / 冒烟失败 → 原子重建
         LogService.warning(
           'Busybox',
-          '已存在但不可复用，删除重建: ${busyboxFile.path}',
+          '已存在但不可复用，原子重建: ${busyboxFile.path}',
         );
         await _deleteBestEffort(busyboxFile);
       }
 
-      // ─── 从 Flutter asset 解压 ────────────────────────────────
+      // ─── 从 Flutter asset 原子安装 ───────────────────────────
       await binDir.create(recursive: true);
       final data = await rootBundle.load(assetName);
-      await busyboxFile.writeAsBytes(
+      return installFromBytes(
+        binDir,
+        busyboxFile,
         data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-        flush: true,
+        expectedSha: expectedSha256,
       );
+    } catch (e) {
+      LogService.error('Busybox', '安装 busybox 失败: $e');
+      return null;
+    }
+  }
 
-      // ─── 内容完整性校验（SHA-256）────────────────────────────
-      if (!await verifySha256(busyboxFile)) {
-        LogService.error(
-          'Busybox',
-          'asset 解压后 SHA-256 不匹配，删除: ${busyboxFile.path}',
-        );
-        await _deleteBestEffort(busyboxFile);
-        return null;
+  /// 原子安装：把 [bytes] 写入同目录临时文件，依次完成
+  /// SHA-256（可选）→ chmod +x → execve 冒烟，全部通过后
+  /// rename 覆盖 [target]。
+  ///
+  /// 任何一步失败都会删除临时文件并返回 null，绝不留下半写文件。
+  /// 与 Kotlin PtyPlugin 共用 `files/bin/busybox`：通过「临时文件 +
+  /// rename」保证并发写入者最终都收敛到完整文件，避免旧实现的
+  /// 非原子覆盖写（FileOutputStream 直写目标）造成截断/半写，
+  /// 进而触发 `Process.start` EACCES / Exec format error。
+  ///
+  /// [expectedSha] 非空时校验内容 SHA-256；[minSize] 传递给
+  /// [verifyUsable] 作为 execve 冒烟前的最小大小阈值（测试可传 0）。
+  @visibleForTesting
+  static Future<String?> installFromBytes(
+    Directory binDir,
+    File target,
+    List<int> bytes, {
+    String? expectedSha,
+    int minSize = _minPlausibleSize,
+  }) async {
+    final tmp = File(
+      '${binDir.path}/busybox.tmp.${DateTime.now().microsecondsSinceEpoch}',
+    );
+    try {
+      await tmp.writeAsBytes(bytes, flush: true);
+
+      if (expectedSha != null) {
+        final digest = await sha256Of(tmp);
+        if (digest != expectedSha) {
+          LogService.error(
+            'Busybox',
+            '临时文件 SHA-256 不匹配，丢弃: ${tmp.path}',
+          );
+          await _deleteBestEffort(tmp);
+          return null;
+        }
       }
 
-      // ─── 设置可执行权限（chmod +x），必须验证结果 ─────────────
-      final chmodOk = await _makeExecutable(busyboxFile.path);
+      final chmodOk = await _makeExecutable(tmp.path);
       if (!chmodOk) {
         LogService.error(
           'Busybox',
-          'chmod +x 失败: ${busyboxFile.path}（可能 SELinux 限制）',
+          '临时文件 chmod +x 失败: ${tmp.path}（可能 SELinux 限制）',
         );
+        await _deleteBestEffort(tmp);
         return null;
       }
 
-      // ─── 最终强制验证（权限位 + execve 冒烟）─────────────────
-      final verified = await verifyUsable(busyboxFile);
+      final verified = await verifyUsable(tmp, minSize: minSize);
       if (verified == null) {
         LogService.error(
           'Busybox',
-          '解压后 execve 冒烟失败: ${busyboxFile.path}',
+          '临时文件 execve 冒烟失败，丢弃: ${tmp.path}',
         );
+        await _deleteBestEffort(tmp);
         return null;
       }
 
+      // 原子替换目标（先 best-effort 删除已存在目标，再 rename；
+      // 并发写入者最终收敛到本完整版本）
+      if (target.existsSync()) {
+        await _deleteBestEffort(target);
+      }
+      await tmp.rename(target.path);
       LogService.info(
         'Busybox',
-        'busybox 就绪: ${busyboxFile.path} '
-            '(${await busyboxFile.length()} bytes)',
+        'busybox 就绪: ${target.path} '
+            '(${await target.length()} bytes)',
       );
-      return verified;
+      return target.path;
     } catch (e) {
-      LogService.error('Busybox', '安装 busybox 失败: $e');
+      LogService.error('Busybox', '原子安装失败: $e');
+      await _deleteBestEffort(tmp);
       return null;
     }
   }

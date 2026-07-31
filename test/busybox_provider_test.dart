@@ -126,4 +126,116 @@ void main() {
       expect(await NativeBusybox.verifySha256(ghost), isFalse);
     });
   });
+  group('installFromBytes - atomic install (tmp + rename)', () {
+    test(
+        'normal install: target exists, executable, content matches, no tmp leftover',
+        () async {
+      final binDir = Directory('${tmp.path}/bin')..createSync(recursive: true);
+      final target = File('${binDir.path}/busybox');
+      final fake = createFakeBusybox(tmp);
+      final bytes = fake.readAsBytesSync();
+      final digest = await NativeBusybox.sha256Of(fake);
+
+      final result = await NativeBusybox.installFromBytes(
+        binDir,
+        target,
+        bytes,
+        expectedSha: digest,
+        minSize: 0,
+      );
+
+      expect(result, target.path);
+      expect(target.existsSync(), isTrue);
+      expect(target.readAsBytesSync(), bytes);
+      final stat = await target.stat();
+      expect(stat.mode & 0x40, isNot(0), reason: 'should have owner exec bit');
+      // installed result must pass verifyUsable (minSize=0)
+      expect(await NativeBusybox.verifyUsable(target, minSize: 0), target.path);
+      // no temp file leftover
+      final leftovers = binDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.contains('.tmp.'));
+      expect(leftovers, isEmpty);
+    });
+
+    test('corrupt target is atomically replaced with full bytes', () async {
+      final binDir = Directory('${tmp.path}/bin')..createSync(recursive: true);
+      final target = File('${binDir.path}/busybox');
+      // simulate legacy broken file (half-written/truncated, exec bit set)
+      target.writeAsBytesSync(List<int>.generate(128, (i) => i % 251));
+      Process.runSync('chmod', ['+x', target.path]);
+
+      final fake = createFakeBusybox(tmp);
+      final bytes = fake.readAsBytesSync();
+      final digest = await NativeBusybox.sha256Of(fake);
+
+      final result = await NativeBusybox.installFromBytes(
+        binDir,
+        target,
+        bytes,
+        expectedSha: digest,
+        minSize: 0,
+      );
+
+      expect(result, target.path);
+      expect(target.readAsBytesSync(), bytes, reason: 'corrupt file replaced');
+    });
+
+    test('sha256 mismatch -> null, no target, no tmp leftover', () async {
+      final binDir = Directory('${tmp.path}/bin')..createSync(recursive: true);
+      final target = File('${binDir.path}/busybox');
+      final fake = createFakeBusybox(tmp);
+      final bytes = fake.readAsBytesSync();
+      final otherFile = File('${tmp.path}/other')
+        ..writeAsBytesSync(utf8.encode('different content'));
+
+      final result = await NativeBusybox.installFromBytes(
+        binDir,
+        target,
+        bytes,
+        expectedSha: await NativeBusybox.sha256Of(otherFile),
+        minSize: 0,
+      );
+
+      expect(result, isNull);
+      expect(target.existsSync(), isFalse,
+          reason: 'no target on failed install');
+      expect(
+        binDir
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.contains('.tmp.')),
+        isEmpty,
+        reason: 'no tmp leftover on failed install',
+      );
+    });
+
+    test('execve smoke failure (non-ELF random bytes) -> null, no leftover',
+        () async {
+      final binDir = Directory('${tmp.path}/bin')..createSync(recursive: true);
+      final target = File('${binDir.path}/busybox');
+      final bytes = List<int>.generate(1024, (i) => i % 251);
+
+      final result = await NativeBusybox.installFromBytes(
+        binDir,
+        target,
+        bytes,
+        // expectedSha omitted: skip sha256, focus on smoke failure path
+        minSize: 0,
+      );
+
+      expect(result, isNull);
+      expect(target.existsSync(), isFalse,
+          reason: 'no target when smoke fails');
+      expect(
+        binDir
+            .listSync()
+            .whereType<File>()
+            .where((f) => f.path.contains('.tmp.')),
+        isEmpty,
+        reason: 'no tmp leftover when smoke fails',
+      );
+    });
+  });
 }
