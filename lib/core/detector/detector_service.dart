@@ -1,56 +1,24 @@
 import 'detection_result.dart';
 import 'detector.dart';
 import 'detectors/android_system_detector.dart';
-import 'detectors/codex_detector.dart';
-import 'detectors/deepseek_key_detector.dart';
-import 'detectors/git_detector.dart';
-import 'detectors/mimo2codex_detector.dart';
 import 'detectors/network_detector.dart';
-import 'detectors/node_detector.dart';
-import 'detectors/python_detector.dart';
 import 'detectors/termux_detector.dart';
 
 /// 环境检测编排服务
 ///
-/// 按分层检测：
+/// 系统级检测服务（仅保留非工具检测器）
+///
+/// 工具能力检测统一通过 RuntimeManager + CapabilityResolver，
+/// 本服务仅保留系统级检测：
 ///   Layer 0: Android 系统环境（shell, curl, 存储）
 ///   Layer 1: Termux Runtime（Termux 包 + Prefix + 包管理器）
-///   Layer 2: Coding Runtime（Node, Git, Python — 依赖 Termux）
-///   Layer 3: 高级工具（Codex CLI, mimo2codex — 依赖 Node）
-///   AI: DeepSeek Key
-///   Dev: Flutter SDK（由 RuntimeDetector 补充）
+///   Network: 网络状态检测
 class DetectorService {
   final List<Detector> _detectors;
 
   DetectorService._(this._detectors);
 
-  /// 创建默认检测器列表
-  factory DetectorService.create() {
-    return DetectorService._([
-      // Layer 0: Android 系统环境
-      AndroidShellDetector(),
-      AndroidCurlDetector(),
-      StoragePermissionDetector(),
 
-      // Layer 1: Termux Runtime
-      TermuxDetector(),
-
-      // Layer 2: Coding Runtime（依赖 Termux）
-      NodeDetector(),
-      GitDetector(),
-      PythonDetector(),
-
-      // Layer 3: 高级工具（依赖 Node）
-      CodexDetector(),
-      Mimo2codexDetector(),
-
-      // Network（跨层依赖）
-      NetworkDetector(),
-
-      // AI
-      DeepSeekKeyDetector(),
-    ]);
-  }
 
   /// 创建特定检测器列表（测试用）
   factory DetectorService.custom(List<Detector> detectors) {
@@ -79,6 +47,22 @@ class DetectorService {
     final detector = getDetector(id);
     if (detector == null) return null;
     return detector.detect();
+  }
+
+  /// 创建系统级检测器（不含工具检测器，工具使用 CapabilityResolver）
+  factory DetectorService.createSystemDetectors() {
+    return DetectorService._([
+      // Layer 0: Android 系统环境
+      AndroidShellDetector(),
+      AndroidCurlDetector(),
+      StoragePermissionDetector(),
+
+      // Layer 1: Termux Runtime
+      TermuxDetector(),
+
+      // Network（跨层依赖）
+      NetworkDetector(),
+    ]);
   }
 
   /// 统计信息

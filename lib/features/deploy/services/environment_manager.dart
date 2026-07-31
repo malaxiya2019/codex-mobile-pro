@@ -1,6 +1,6 @@
 import 'dart:io';
 import '../../../core/detector/detection_result.dart';
-import '../../../core/detector/detector_service.dart';
+import '../../../runtime/runtime_detector.dart';
 import '../../../core/logger/log_service.dart';
 
 /// 环境详细信息
@@ -87,12 +87,15 @@ class InstallResult {
 /// 统一管理环境检测、详细信息获取、一键安装/修复。
 /// 模块化设计，预留 Docker/远程环境接口。
 class EnvironmentManager {
-  final DetectorService _detectorService;
+  final RuntimeDetector _runtimeDetector;
 
-  EnvironmentManager() : _detectorService = DetectorService.create();
+  EnvironmentManager() : _runtimeDetector = RuntimeDetector();
 
   /// 运行所有检测
-  Future<List<DetectionResult>> detectAll() => _detectorService.detectAll();
+  Future<List<DetectionResult>> detectAll() async {
+    final result = await _runtimeDetector.detectAll();
+    return result.all;
+  }
 
   /// 获取 Flutter 环境详情
   static Future<FlutterEnvironment?> getFlutterDetail() async {
