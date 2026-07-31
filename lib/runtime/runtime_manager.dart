@@ -291,6 +291,11 @@ class RuntimeManager {
       if (blockedTools.isNotEmpty && _lastDetection != null) {
         _patchBlockedDetection(blockedTools, _lastDetection!);
       }
+
+      // 关闭安装结果流（否则下游 .toList() 永不完成，UI 永久「正在部署」）
+      if (!controller.isClosed) {
+        controller.close();
+      }
     }
   }
 

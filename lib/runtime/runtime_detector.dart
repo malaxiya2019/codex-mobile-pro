@@ -275,23 +275,34 @@ class RuntimeDetector {
 
     String? version;
     DetectionStatus status;
+    String? missingHint;
+    String? errorMessage;
 
     if (prootFile.existsSync() && bashFile.existsSync()) {
-      status = DetectionStatus.installed;
-      final osRelease = File(p.join(ubuntuDir, 'etc', 'os-release'));
-      if (osRelease.existsSync()) {
-        try {
-          final content = osRelease.readAsStringSync();
-          final versionMatch =
-          RegExp(r'VERSION_ID="([^"]+)"').firstMatch(content);
-          if (versionMatch != null) {
-            version = 'Ubuntu ${versionMatch.group(1)}';
-          }
-        } catch (_) {}
+      // 目录存在并不等于安装完成：必须同时存在完成标记
+      if (!env.hasPartialUbuntuInstall) {
+        status = DetectionStatus.installed;
+        final osRelease = File(p.join(ubuntuDir, 'etc', 'os-release'));
+        if (osRelease.existsSync()) {
+          try {
+            final content = osRelease.readAsStringSync();
+            final versionMatch =
+            RegExp(r'VERSION_ID="([^"]+)"').firstMatch(content);
+            if (versionMatch != null) {
+              version = 'Ubuntu ${versionMatch.group(1)}';
+            }
+          } catch (_) {}
+        }
+        version ??= '24.04';
+      } else {
+        // 半成品 rootfs（上次初始化中断/失败）→ 明确提示重新初始化
+        status = DetectionStatus.error;
+        missingHint = 'Linux Runtime 上次初始化未完成，请重新初始化';
+        errorMessage = '检测到不完整的安装（缺少完成标记），为避免误用已标记为失败';
       }
-      version ??= '24.04';
     } else {
       status = DetectionStatus.missing;
+      missingHint = 'Linux Runtime 未初始化（PRoot + Ubuntu rootfs）';
     }
 
     results.add(DetectionResult(
@@ -300,7 +311,8 @@ class RuntimeDetector {
       icon: '🐧',
       status: status,
       version: version,
-      missingHint: 'Linux Runtime 未初始化（PRoot + Ubuntu rootfs）',
+      missingHint: missingHint,
+      errorMessage: errorMessage,
     ));
 
     return results;
