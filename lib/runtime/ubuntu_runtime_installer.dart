@@ -106,7 +106,9 @@ class UbuntuRuntimeInstaller {
       }
 
       final ubuntuDir = _env.ubuntuDir;
-      await Directory(ubuntuDir).create(recursive: true);
+      // 幂等清理：若 ubuntuDir 或其祖先被旧版错误创建为普通文件/链接，
+      // 先删除再重建为目录，避免后续创建子路径时 ENOTDIR。
+      await ArtifactManager.ensureDirectory(ubuntuDir);
 
       // 0.5 获取安装锁
       await lock.acquire();
@@ -222,7 +224,7 @@ class UbuntuRuntimeInstaller {
     final rootfsArtifact = manifest.artifacts[0]; // rootfs
     final rootfsDir = _env.ubuntuRootfsDir;
     final cacheDir = path.join(_env.ubuntuDir, '.cache');
-    await Directory(cacheDir).create(recursive: true);
+    await ArtifactManager.ensureDirectory(cacheDir);
 
     // 清理历史半成品/隔离目录（权限异常或中断遗留的 rootfs.tmp-* /
     // rootfs.old-*），避免旧文件影响本次安装与磁盘空间。
@@ -521,25 +523,74 @@ class UbuntuRuntimeInstaller {
 
   Future<void> _installProot(RuntimeManifest manifest) async {
     final prootArtifact = manifest.artifacts[1]; // proot
-    final prootDir = _env.ubuntuBinDir;
+    final ubuntuDir = _env.ubuntuDir;
+
+    // ─── 幂等清理（ENOTDIR 根因防御）───────────────────────────
+    // 旧版统一 strip 提取可能把 bin/proot 写成文件、甚至把
+    // ubuntu/bin 或 ubuntu 写成普通文件。先确保关键目录类型正确
+    // （是文件/链接则删除重建），再开始下载/提取。
+    await ArtifactManager.ensureDirectory(_env.ubuntuBinDir);
+    await ArtifactManager.ensureDirectory(_env.ubuntuLibexecDir);
+    await ArtifactManager.ensureDirectory(
+        path.join(_env.ubuntuLibexecDir, 'proot'));
 
     _report(InstallPhase.downloading, 0.84, '下载 proot...');
 
-    // 复用 ArtifactManager 的 .deb 下载和提取能力（.deb 仅 95KB，内存安全）
-    await ArtifactManager.downloadAndExtract(
+    final cacheDir = path.join(ubuntuDir, '.cache');
+    await ArtifactManager.ensureDirectory(cacheDir);
+    final debPath = path.join(cacheDir, 'proot.deb');
+
+    // 下载 + SHA256 校验（复用多镜像 fallback，.deb 仅 95KB）
+    await ArtifactManager.downloadFile(
       artifact: prootArtifact,
-      targetDir: prootDir,
-      onProgress: (downloaded, total, message) {
+      destPath: debPath,
+      expectedSize: prootArtifact.size,
+      expectedSha256: prootArtifact.sha256,
+      onProgress: (downloaded, total) {
         _report(
           InstallPhase.downloading,
           0.84 + (total > 0 ? (downloaded / total) : 0.0) * 0.05,
-          message,
+          '下载 proot ($downloaded/$total)...',
         );
       },
     );
 
+    // ─── 按精确目标路径提取 ─────────────────────────────────────
+    // proot .deb data.tar 内路径带 `data/data/com.termux/files/usr/`
+    // 前缀，统一 strip 会把 bin/proot 写成文件、loader 再当目录创建
+    // → ENOTDIR。改用 fileTargets 按文件精确映射到 bin/ 与 libexec/。
+    _report(InstallPhase.downloading, 0.89, '解压 proot...');
+    if (prootArtifact.fileTargets.isNotEmpty) {
+      final absTargets = <String, String>{
+        for (final e in prootArtifact.fileTargets.entries)
+          e.key: path.join(ubuntuDir, e.value),
+      };
+      await ArtifactManager.extractDebFileTargets(
+        debPath: debPath,
+        fileTargets: absTargets,
+      );
+    } else {
+      // 兜底：无精确映射时退回落盘到 ubuntuBinDir 的统一提取
+      await ArtifactManager.downloadAndExtract(
+        artifact: prootArtifact,
+        targetDir: _env.ubuntuBinDir,
+        onProgress: (downloaded, total, message) {
+          _report(
+            InstallPhase.downloading,
+            0.84 + (total > 0 ? (downloaded / total) : 0.0) * 0.05,
+            message,
+          );
+        },
+      );
+    }
+
+    // 清理缓存 .deb
+    try {
+      await File(debPath).delete();
+    } catch (_) {}
+
     // 确保 proot binary 有可执行权限（校验 chmod 结果，避免同类 EACCES）
-    final prootBin = File(path.join(prootDir, 'proot'));
+    final prootBin = File(path.join(_env.ubuntuBinDir, 'proot'));
     if (await prootBin.exists()) {
       final chmod = await Process.run('chmod', ['+x', prootBin.path]);
       if (chmod.exitCode != 0) {

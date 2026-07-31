@@ -45,7 +45,7 @@ class ArtifactManager {
     bool dnsWorking = true,
   }) async {
     final cachedDir = '$targetDir/.cache';
-    await Directory(cachedDir).create(recursive: true);
+    await ensureDirectory(cachedDir);
     final debPath = '$cachedDir/${artifact.name}.deb';
 
     onProgress?.call(0, artifact.size, '下载 ${artifact.name}...');
@@ -103,6 +103,122 @@ class ArtifactManager {
     try { await File(debPath).delete(); } catch (_) {}
 
     onProgress?.call(artifact.size, artifact.size, '${artifact.name} 完成');
+  }
+
+  // ==================================================================
+  // 幂等目录创建（ENOTDIR 防御）
+  // ==================================================================
+
+  /// 幂等创建目录：若 [dirPath] 本身或其任意祖先被错误创建为
+  /// 普通文件 / 符号链接，先安全删除再重建为目录。
+  ///
+  /// 背景（2026-08 真机 ENOTDIR）：
+  ///   旧版 proot 统一 strip 提取会把 `bin/proot` 写成文件，随后
+  ///   loader 需要把 `bin/proot` 当目录创建 → FileSystemException:
+  ///   Creation failed, path = '.../ubuntu/bin/proot' (errno 20)。
+  /// 本方法保证「目录型目标路径」在创建任何子路径前类型正确。
+  static Future<void> ensureDirectory(String dirPath) async {
+    ensureDirectorySync(dirPath);
+  }
+
+  /// [ensureDirectory] 的同步版本（供同步提取逻辑内部使用）
+  static void ensureDirectorySync(String dirPath) {
+    final normalized = path.normalize(dirPath);
+    final ancestors = <String>[];
+    var current = normalized;
+    while (true) {
+      ancestors.add(current);
+      final parent = path.dirname(current);
+      if (parent == current) break;
+      current = parent;
+    }
+    // 从最顶层开始，删除被错误创建为文件/链接的层
+    for (final ancestor in ancestors.reversed) {
+      try {
+        // followLinks:false 必须显式指定：Android 上悬空符号链接
+        // 默认 typeSync 会返回 notFound（内部 stat 而非 lstat），
+        // 导致链接不被删除、随后 create 沿链接落空 → ENOENT。
+        final type =
+            FileSystemEntity.typeSync(ancestor, followLinks: false);
+        final isLink =
+            type == FileSystemEntityType.link || Link(ancestor).existsSync();
+        if (type == FileSystemEntityType.file) {
+          File(ancestor).deleteSync();
+        } else if (isLink) {
+          Link(ancestor).deleteSync();
+        }
+      } catch (_) {
+        // 无权限/IO 异常忽略：后续 create 仍会给出真实错误
+      }
+    }
+    Directory(dirPath).createSync(recursive: true);
+  }
+
+  // ==================================================================
+  // .deb 精确目标路径提取（proot 专用）
+  // ==================================================================
+
+  /// 从 .deb 中按「tar 路径后缀 → 目标绝对路径」精确提取文件。
+  ///
+  /// 用于 proot 这类 .deb 内部路径与目标布局不一致的情况：
+  ///   data.tar 内 `data/data/com.termux/files/usr/bin/proot`
+  ///   需映射到 `bin/proot`；
+  ///   `.../usr/libexec/proot/loader` 需映射到 `libexec/proot/loader`。
+  /// 统一 strip 无法同时满足 bin/ 与 libexec/ 两个目标布局，
+  /// 因此必须按文件逐个映射（见 [RuntimeArtifact.fileTargets]）。
+  ///
+  /// 每个目标写入前会：
+  ///   1. 用 [ensureDirectorySync] 确保父目录类型正确（防 ENOTDIR）；
+  ///   2. 若目标路径已存在且是目录 → 先删除（防类型冲突）。
+  /// 已存在文件会被直接覆盖（幂等，支持失败后重部署）。
+  static Future<void> extractDebFileTargets({
+    required String debPath,
+    required Map<String, String> fileTargets,
+  }) async {
+    final debBytes = await File(debPath).readAsBytes();
+
+    final dataTarXz = _extractArMember(debBytes, 'data.tar.xz');
+    if (dataTarXz == null) {
+      throw DeployError(
+        code: DeployErrorCode.extractionFailed,
+        message: '.deb 中没有找到 data.tar.xz',
+        userSuggestion:
+            DeployErrorSuggestions.forCode(DeployErrorCode.extractionFailed),
+      );
+    }
+
+    final tarBytes = XZDecoder().decodeBytes(dataTarXz);
+    final decoder = TarDecoder();
+    final archive = decoder.decodeBytes(tarBytes);
+
+    for (final entry in archive) {
+      if (!entry.isFile) continue;
+      final tarPath = entry.name;
+      for (final suffix in fileTargets.keys) {
+        if (!tarPath.endsWith(suffix)) continue;
+        final destPath = fileTargets[suffix]!;
+        ensureDirectorySync(path.dirname(destPath));
+
+        // 目标已是目录（旧版误建）→ 删除后写文件，避免类型冲突
+        final destType =
+            FileSystemEntity.typeSync(destPath, followLinks: false);
+        if (destType == FileSystemEntityType.directory ||
+            (destType == FileSystemEntityType.link &&
+                Directory(destPath).existsSync())) {
+          Directory(destPath).deleteSync(recursive: true);
+        }
+
+        File(destPath).writeAsBytesSync(entry.content as List<int>);
+
+        // 保留可执行位（.deb 中 proot/loader 均带 +x）
+        if ((entry.mode & 0x40) != 0) {
+          try {
+            Process.runSync('chmod', ['+x', destPath]);
+          } catch (_) {}
+        }
+        break;
+      }
+    }
   }
 
   // ==================================================================
@@ -533,7 +649,7 @@ class ArtifactManager {
         final destPath = path.join(targetDir, strippedPath);
         final destDir = path.dirname(destPath);
 
-        Directory(destDir).createSync(recursive: true);
+        ensureDirectorySync(destDir);
         File(destPath).writeAsBytesSync(entry.content as List<int>);
 
         if ((entry.mode & 0x40) != 0) {

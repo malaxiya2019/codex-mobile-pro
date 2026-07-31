@@ -41,3 +41,6 @@ test_report*.json
 *.bak2
 *.empty
 .ci_trigger
+
+# Local CI scratch (never commit)
+.tmp-ci/

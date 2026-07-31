@@ -94,6 +94,15 @@ class RuntimeArtifact {
   /// 提取时要 strip 的路径组件数
   final int stripComponents;
 
+  /// 按「tar 路径后缀 → 相对目标路径」的精确提取映射（proot 等复杂布局）。
+  ///
+  /// 当 .deb 内路径与目标布局不一致（如
+  /// `data/data/com.termux/files/usr/bin/proot` 需映射到 `bin/proot`，
+  /// `.../usr/libexec/proot/loader` 需映射到 `libexec/proot/loader`）时，
+  /// 使用 [ArtifactManager.extractDebFileTargets] 逐文件精确映射。
+  /// 与 [stripComponents] 互斥：设置后忽略 strip/单目标提取。
+  final Map<String, String> fileTargets;
+
   /// 解压后 tar 流的总字节数（用于流式解压的真实进度计算）
   ///
   /// 仅 rootfs 类 artifact 需要；.deb 等小包可省略（0）。
@@ -109,6 +118,7 @@ class RuntimeArtifact {
     this.targetSubDir = '',
     this.includeFiles,
     this.stripComponents = 6,
+    this.fileTargets = const {},
     this.expandedBytes = 0,
   });
 
@@ -449,6 +459,16 @@ class RuntimeManifest {
             'usr/libexec/proot/loader',
             'usr/libexec/proot/loader32',
           ],
+          // 2026-08 真机 ENOTDIR 根因修复：
+          //   .deb data.tar 内路径带 `data/data/com.termux/files/usr/`
+          //   前缀（7~8 层），统一 strip=6 会把 `bin/proot` 写成文件，
+          //   随后 loader 需要把 `bin/proot` 当目录创建 → errno 20。
+          // 因此改为按文件精确映射（bin/ 与 libexec/ 分离布局）。
+          fileTargets: {
+            'usr/bin/proot': 'bin/proot',
+            'usr/libexec/proot/loader': 'libexec/proot/loader',
+            'usr/libexec/proot/loader32': 'libexec/proot/loader32',
+          },
         ),
       ],
     );

@@ -59,5 +59,18 @@ void main() {
       expect(proot.includeFiles, contains('usr/bin/proot'));
       expect(proot.includeFiles, contains('usr/libexec/proot/loader'));
     });
+
+    test('proot artifact 具备精确 fileTargets 映射（ENOTDIR 根因修复）', () {
+      final manifest = RuntimeManifest.forTool(RuntimeTool.ubuntu)!;
+      final proot = manifest.artifacts[1];
+      // .deb data.tar 内路径带 data/data/com.termux/files/usr/ 前缀，
+      // 统一 strip 会把 bin/proot 写成文件、loader 再当目录创建 → ENOTDIR。
+      // 必须按文件精确映射到 bin/ 与 libexec/ 两个布局。
+      expect(proot.fileTargets, {
+        'usr/bin/proot': 'bin/proot',
+        'usr/libexec/proot/loader': 'libexec/proot/loader',
+        'usr/libexec/proot/loader32': 'libexec/proot/loader32',
+      });
+    });
   });
 }
