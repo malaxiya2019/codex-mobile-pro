@@ -1005,10 +1005,23 @@ class _DeployPageState extends ConsumerState<DeployPage> {
   // ════════════════════════════════════════════════════════════════
 
   /// 哪些工具支持自动安装
-  /// 当前仅支持 Linux Runtime 初始化（PRoot + Ubuntu rootfs）。
-  /// node/git/python/codex/mimo2codex 工具链安装属于后续阶段。
+  ///
+  /// 支持：
+  ///   - ubuntu：Linux Runtime 初始化（PRoot + Ubuntu rootfs）
+  ///   - node / git / python / codex / mimo2codex：
+  ///     Coding Runtime 工具链（Ubuntu apt / npm，rootfs 内自动安装）
   bool _canInstall(String id) {
-    return id == 'ubuntu';
+    switch (id) {
+      case 'ubuntu':
+      case 'node':
+      case 'git':
+      case 'python':
+      case 'codex':
+      case 'mimo2codex':
+        return true;
+      default:
+        return false;
+    }
   }
 
   /// 安装工具

@@ -40,6 +40,8 @@ import 'capability/capability_resolver.dart';
 import 'capability/provider_enhancer.dart';
 import 'download_queue.dart';
 import 'install_models.dart';
+import 'installers/toolchain_context.dart';
+import 'installers/toolchain_orchestrator.dart';
 import 'process/linux_execution.dart';
 import 'process/process_runner.dart';
 import 'provider/android_runtime_provider.dart';
@@ -50,7 +52,6 @@ import 'provider/runtime_provider.dart' hide InstallResult, VerificationResult;
 import 'runtime_dependency.dart';
 import 'runtime_detector.dart';
 import 'runtime_environment.dart';
-import 'runtime_manifest.dart';
 import 'ubuntu_runtime_installer.dart';
 
 /// 管理器状态
@@ -87,6 +88,8 @@ class RuntimeManager {
   RuntimeDetector? _detector;
   UbuntuRuntimeInstaller? _ubuntuInstaller;
   DownloadQueueScheduler? _queue;
+  RuntimeProcessRunner? _runner;
+  ToolchainOrchestrator? _orchestrator;
 
   // ─── Phase 4: Capability Resolver ───────────────────────────
   CapabilityResolver? _resolver;
@@ -140,12 +143,14 @@ class RuntimeManager {
     await _environment!.ensureDirectories();
     _detector = RuntimeDetector();
     _ubuntuInstaller = UbuntuRuntimeInstaller(_environment!, _onInstallProgress);
+    _orchestrator = ToolchainOrchestrator()..bindProgress(_onInstallProgress);
 
     // 初始化下载队列
     _queue = DownloadQueueScheduler.instance;
 
     // 初始化 Capability Resolver（Linux 执行经 PRoot 适配器）
     final runner = RuntimeProcessRunner();
+    _runner = runner;
     final linux = linuxProvider;
     if (linux != null) {
       runner.registerAdapter(LinuxExecutionAdapter(linux));
@@ -243,8 +248,9 @@ class RuntimeManager {
         }
         if (depBlocked) continue;
 
-        // 检查是否支持安装
-        if (!RuntimeManifest.isSupported(tool) && tool != RuntimeTool.ubuntu) {
+        // 检查是否支持安装（无安装器 = 真正的平台不支持）
+        final orchestrator = _orchestrator!;
+        if (!orchestrator.hasInstallerFor(tool) && tool != RuntimeTool.ubuntu) {
           unsupportedTools.add(tool);
           controller.add(InstallResult(
             tool: tool,
@@ -255,18 +261,14 @@ class RuntimeManager {
           continue;
         }
 
-        // 执行安装 —— 本阶段仅支持 Linux Runtime（rootfs + proot）
-        // Node/Python/Git/Codex 工具链安装属于后续阶段
+        // 执行安装：
+        //   ubuntu → UbuntuRuntimeInstaller（PRoot + rootfs）
+        //   其他   → ToolchainOrchestrator（Ubuntu apt / npm，rootfs 内）
         InstallResult result;
         if (tool == RuntimeTool.ubuntu) {
           result = await _ubuntuInstaller!.install();
         } else {
-          result = InstallResult(
-            tool: tool,
-            success: false,
-            errorMessage: '暂不支持自动安装（工具链安装属于后续阶段）',
-            phase: InstallPhase.failed,
-          );
+          result = await orchestrator.installOne(tool, _buildToolchainContext());
         }
 
         if (!result.success) {
@@ -334,12 +336,7 @@ class RuntimeManager {
       if (tool == RuntimeTool.ubuntu) {
         result = await _ubuntuInstaller!.install();
       } else {
-        result = InstallResult(
-          tool: tool,
-          success: false,
-          errorMessage: '暂不支持自动安装（工具链安装属于后续阶段）',
-          phase: InstallPhase.failed,
-        );
+        result = await _orchestrator!.installOne(tool, _buildToolchainContext());
       }
       return result;
     } finally {
@@ -438,6 +435,14 @@ class RuntimeManager {
   /// 检查 Ubuntu Runtime 是否已就绪
   bool get isUbuntuReady {
     return _environment != null && _environment!.isUbuntuInstalled();
+  }
+
+  /// 构建工具链安装上下文（Linux Runtime → PRoot → Ubuntu rootfs）
+  ToolchainContext _buildToolchainContext() {
+    return ToolchainContext(
+      runner: _runner ?? RuntimeProcessRunner(),
+      linux: linuxProvider,
+    );
   }
 
   /// 安装进度回调
