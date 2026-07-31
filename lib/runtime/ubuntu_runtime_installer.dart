@@ -396,12 +396,48 @@ class UbuntuRuntimeInstaller {
   /// 此属预期（rootfs 的 /dev 由 proot 虚拟化），按警告处理而不是失败。
   ///
   /// 2026-08 增强（修复「ProcessException: Permission denied」）：
-  ///   - Process.start 抛 ProcessException（EACCES/ENOENT/Exec format
-  ///     error）时转为结构化 DeployError，携带 busybox + 镜像诊断，
-  ///     不再把裸异常抛给 UI。
+  ///   - Process.start 抛 ProcessException / PathAccessException
+  ///     （EACCES/ENOENT/Exec format error）时转为结构化 DeployError，
+  ///     携带 busybox + 镜像诊断，不再把裸异常抛给 UI。
   ///   - 启动前输出诊断日志（busybox / 镜像路径 / 存在性 / 大小 /
   ///     父目录 / 可读性）。
   ///   - 支持 [_busyboxOverride] 注入（测试 / 回退用）。
+  ///   - addStream 后显式 close(tar.stdin)，防止 tar 等待 EOF 挂起。
+
+  /// 将解压工具启动失败（ProcessException / PathAccessException）统一
+  /// 转换为结构化 [DeployError]，避免裸异常一路抛到 UI。
+  ///
+  /// - errno 13（EACCES）/ 消息含 "Permission" → permissionDenied
+  /// - errno 2（ENOENT）/ 消息含 "No such" → extractionFailed（附提示）
+  DeployError _processStartDeployError(
+    String message,
+    int? errno, {
+    required String busyboxPath,
+    required String tarPath,
+    required bool imageExists,
+    required int imageSize,
+    required bool imageReadable,
+    required bool parentExists,
+  }) {
+    final isPermission = errno == 13 || message.contains('ermission');
+    final isNoEnt = errno == 2 || message.contains('No such');
+    return DeployError(
+      code: isPermission
+          ? DeployErrorCode.permissionDenied
+          : DeployErrorCode.extractionFailed,
+      message: isPermission ? '解压工具启动失败（权限被拒绝）' : '解压工具启动失败（$message）',
+      detail: 'busybox=$busyboxPath\n'
+          'error=$message (errno=$errno)\n'
+          'image=$tarPath exists=$imageExists size=$imageSize '
+          'readable=$imageReadable '
+          'parentExists=$parentExists\n'
+          '${isNoEnt ? '解压工具不存在或路径错误。' : ''}'
+          '若为可执行权限问题，点击「重新初始化」将重新安装内置解压工具',
+      userSuggestion: '点击「重新初始化」重试（将重新安装内置解压工具）；'
+          '若反复失败请清理应用数据后重新部署',
+    );
+  }
+
   @visibleForTesting
   Future<void> extractTarXzStreaming({
     required String tarPath,
@@ -471,23 +507,29 @@ class UbuntuRuntimeInstaller {
     } on ProcessException catch (e) {
       // 核心修复：exec 失败（EACCES=13 / ENOENT=2 / Exec format error）
       // 转结构化 DeployError，而不是让裸异常一路抛到 UI。
-      final errno = e.errorCode;
-      final isPermission = errno == 13 || e.message.contains('ermission');
-      final isNoEnt = errno == 2 || e.message.contains('No such');
-      throw DeployError(
-        code: isPermission
-            ? DeployErrorCode.permissionDenied
-            : DeployErrorCode.extractionFailed,
-        message: isPermission ? '解压工具启动失败（权限被拒绝）' : '解压工具启动失败（${e.message}）',
-        detail: 'busybox=$busyboxPath\n'
-            'error=${e.message} (errno=$errno)\n'
-            'image=$tarPath exists=$imageExists size=$imageSize '
-            'readable=$imageReadable '
-            'parentExists=${await parentDir.exists()}\n'
-            '${isNoEnt ? '解压工具不存在或路径错误。' : ''}'
-            '若为可执行权限问题，点击「重新初始化」将重新安装内置解压工具',
-        userSuggestion: '点击「重新初始化」重试（将重新安装内置解压工具）；'
-            '若反复失败请清理应用数据后重新部署',
+      throw _processStartDeployError(
+        e.message,
+        e.errorCode,
+        busyboxPath: busyboxPath,
+        tarPath: tarPath,
+        imageExists: imageExists,
+        imageSize: imageSize,
+        imageReadable: imageReadable,
+        parentExists: await parentDir.exists(),
+      );
+    } on PathAccessException catch (e) {
+      // Linux（CI）上对 chmod 000 / 不存在的可执行文件，Process.start
+      // 可能抛 PathAccessException（open 阶段 EACCES/ENOENT）而非
+      // ProcessException，同样转结构化 DeployError。
+      throw _processStartDeployError(
+        e.message,
+        e.osError?.errorCode,
+        busyboxPath: busyboxPath,
+        tarPath: tarPath,
+        imageExists: imageExists,
+        imageSize: imageSize,
+        imageReadable: imageReadable,
+        parentExists: await parentDir.exists(),
       );
     }
 
@@ -522,7 +564,12 @@ class UbuntuRuntimeInstaller {
 
     try {
       await Future.any([
-        tar.stdin.addStream(counting),
+        (() async {
+          await tar.stdin.addStream(counting);
+          // dart:io IOSink.addStream 完成时不会自动关闭 sink；
+          // 不显式 close 会让 tar 永远等待 EOF → exitCode 挂起。
+          await tar.stdin.close();
+        })(),
         timeoutCompleter.future,
       ]);
       if (timeoutCompleter.isCompleted) {
