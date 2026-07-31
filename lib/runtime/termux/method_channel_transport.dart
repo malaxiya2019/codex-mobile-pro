@@ -40,6 +40,7 @@ class MethodChannelTermuxTransport implements TermuxTransport {
         works: works,
         version: await _detectVersion(packageInstalled, intentAvailable, works),
         lastError: _str(map['termux_last_stderr']),
+        pkgManager: await _detectPackageManager(packageInstalled),
       );
 
       _lastDiagnostics = diagnostics;

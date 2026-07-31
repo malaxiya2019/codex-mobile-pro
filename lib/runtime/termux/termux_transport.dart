@@ -44,6 +44,7 @@ class TermuxDiagnosticResult {
   final bool works;
   final String? version;
   final String lastError;
+  final TermuxPkgManager pkgManager;
 
   const TermuxDiagnosticResult({
     this.packageInstalled = false,
@@ -51,6 +52,7 @@ class TermuxDiagnosticResult {
     this.works = false,
     this.version,
     this.lastError = '',
+    this.pkgManager = TermuxPkgManager.unavailable,
   });
 
   bool get isAvailable => packageInstalled && intentAvailable && works;

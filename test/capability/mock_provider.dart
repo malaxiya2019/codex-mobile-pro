@@ -4,8 +4,8 @@
 /// 返回预设的 Provider 信息，不执行真实检测。
 /// ====================================================================
 
-import '../../lib/runtime/provider/runtime_capability.dart';
-import '../../lib/runtime/provider/runtime_provider.dart';
+import 'package:codex_mobile_pro/runtime/provider/runtime_capability.dart';
+import 'package:codex_mobile_pro/runtime/provider/runtime_provider.dart';
 
 /// Mock Provider 配置
 class MockProviderConfig {

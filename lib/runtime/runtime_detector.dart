@@ -199,7 +199,7 @@ class RuntimeDetector {
   })  : _runtimeManager = runtimeManager ?? RuntimeManager.instance,
         _capabilityResolver = capabilityResolver ?? CapabilityResolver(),
         _runner = runner ?? RuntimeProcessRunner(),
-        _systemService = DetectorService._withSystemDetectors();
+        _systemService = DetectorService.createSystemDetectors();
 
   /// 执行所有检测并按类别分组
   ///
@@ -228,7 +228,7 @@ class RuntimeDetector {
       results.addAll(await _detectUbuntu(environment));
     }
 
-    return _reGroupResults(results);
+    return reGroupResults(results);
   }
 
   /// 通过 CapabilityResolver 检测工具能力
@@ -345,7 +345,7 @@ class RuntimeDetector {
   }
 
   /// 将检测结果按 RuntimeCategory 分组
-  RuntimeDetectionResult _reGroupResults(List<DetectionResult> results) {
+  RuntimeDetectionResult reGroupResults(List<DetectionResult> results) {
     final basic = <DetectionResult>[];
     final termux = <DetectionResult>[];
     final coding = <DetectionResult>[];

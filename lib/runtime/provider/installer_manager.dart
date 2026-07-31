@@ -199,7 +199,6 @@ class InstallerManager implements IRuntimeInstaller {
       return InstallResult(
         capability: capability,
         success: result.success,
-        version: result.version,
         errorMessage: result.errorMessage,
       );
     } catch (e) {

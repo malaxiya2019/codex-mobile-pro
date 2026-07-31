@@ -5,8 +5,8 @@
 /// 支持模拟：成功执行、超时、启动失败、权限拒绝等场景。
 /// ====================================================================
 
-import '../../lib/runtime/process/process_runner.dart';
-import '../../lib/runtime/process/runner_models.dart';
+import 'package:codex_mobile_pro/runtime/process/process_runner.dart';
+import 'package:codex_mobile_pro/runtime/process/runner_models.dart';
 
 /// 预设执行结果
 class FakeCommandResult {
