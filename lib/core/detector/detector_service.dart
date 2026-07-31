@@ -2,7 +2,6 @@ import 'detection_result.dart';
 import 'detector.dart';
 import 'detectors/android_system_detector.dart';
 import 'detectors/network_detector.dart';
-import 'detectors/termux_detector.dart';
 
 /// 环境检测编排服务
 ///
@@ -11,7 +10,6 @@ import 'detectors/termux_detector.dart';
 /// 工具能力检测统一通过 RuntimeManager + CapabilityResolver，
 /// 本服务仅保留系统级检测：
 ///   Layer 0: Android 系统环境（shell, curl, 存储）
-///   Layer 1: Termux Runtime（Termux 包 + Prefix + 包管理器）
 ///   Network: 网络状态检测
 class DetectorService {
   final List<Detector> _detectors;
@@ -56,9 +54,6 @@ class DetectorService {
       AndroidShellDetector(),
       AndroidCurlDetector(),
       StoragePermissionDetector(),
-
-      // Layer 1: Termux Runtime
-      TermuxDetector(),
 
       // Network（跨层依赖）
       NetworkDetector(),

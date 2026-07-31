@@ -105,7 +105,7 @@ void main() {
     test('summary 包含基础/编码/AI/开发信息', () {
       final result = RuntimeDetectionResult(
         basic: [
-          makeResult(id: 'termux', name: 'Termux', status: DetectionStatus.installed),
+          makeResult(id: 'linux', name: 'Linux', status: DetectionStatus.installed),
         ],
         coding: [
           makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),

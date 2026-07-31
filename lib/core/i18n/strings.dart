@@ -63,7 +63,6 @@ class Strings {
 
   String get navHome => _t('首页', 'Home');
   String get navDeploy => _t('部署', 'Deploy');
-  String get navTermux => _t('Termux', 'Termux');
   String get navAi => _t('AI', 'AI');
 
   // ══════════════════════════════════════
@@ -98,15 +97,6 @@ class Strings {
   String get fontFamily => _t('字体', 'Font');
   String get fontSize => _t('字体大小', 'Font Size');
   String get fontPreview => _t('预览文本', 'Preview');
-
-  // ══════════════════════════════════════
-  //  Termux 测试页
-  // ══════════════════════════════════════
-
-  String get termuxTestTitle => _t('Termux 通信验证', 'Termux Comm Test');
-  String get termuxEnvCheck => _t('环境检查', 'Environment Check');
-  String get termuxCmdTest => _t('命令测试', 'Command Test');
-  String get termuxBatchTest => _t('批量测试', 'Batch Test');
 
   // ══════════════════════════════════════
   //  部署中心

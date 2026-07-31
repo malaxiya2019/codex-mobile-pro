@@ -122,7 +122,7 @@ DetectionResult _capabilityToResult(
 /// 检测结果（按类别分组）
 class RuntimeDetectionResult {
   final List<DetectionResult> basic;       // Layer 0: Android 系统
-  final List<DetectionResult> termux;      // Layer 1: Termux Runtime
+  final List<DetectionResult> linux;       // Layer 1: Linux Runtime
   final List<DetectionResult> coding;      // Layer 2: Coding Runtime
   final List<DetectionResult> advanced;    // Layer 3: 高级工具
   final List<DetectionResult> ai;
@@ -132,7 +132,7 @@ class RuntimeDetectionResult {
 
   const RuntimeDetectionResult({
     this.basic = const [],
-    this.termux = const [],
+    this.linux = const [],
     this.coding = const [],
     this.advanced = const [],
     this.ai = const [],
@@ -160,9 +160,9 @@ class RuntimeDetectionResult {
       final i = basic.where((r) => r.status == DetectionStatus.installed).length;
       parts.add('基础 ✅$i/${basic.length}');
     }
-    if (termux.isNotEmpty) {
-      final i = termux.where((r) => r.status == DetectionStatus.installed).length;
-      parts.add('Termux ✅$i/${termux.length}');
+    if (linux.isNotEmpty) {
+      final i = linux.where((r) => r.status == DetectionStatus.installed).length;
+      parts.add('Linux ✅$i/${linux.length}');
     }
     if (coding.isNotEmpty) {
       parts.add('编码 ✅$codingInstalled/$codingTotal');
@@ -218,14 +218,9 @@ class RuntimeDetector {
     final toolResults = await _detectCapabilities();
     results.addAll(toolResults);
 
-    // 3. 检测 Termux Runtime（特殊处理 — 需要完整诊断）
-    if (results.any((r) => r.id == 'termux')) {
-      // TermuxDetector 已由 _systemService 提供，保留
-    }
-
-    // 4. Ubuntu 补充检测
+    // 3. Linux Runtime 补充检测（PRoot + Ubuntu rootfs）
     if (environment != null) {
-      results.addAll(await _detectUbuntu(environment));
+      results.addAll(await _detectLinux(environment));
     }
 
     return reGroupResults(results);
@@ -270,8 +265,8 @@ class RuntimeDetector {
     return results;
   }
 
-  /// 检测 Ubuntu Runtime
-  Future<List<DetectionResult>> _detectUbuntu(
+  /// 检测 Linux Runtime（PRoot + Ubuntu rootfs）
+  Future<List<DetectionResult>> _detectLinux(
       RuntimeEnvironment env) async {
     final results = <DetectionResult>[];
     final ubuntuDir = env.ubuntuRootfsDir;
@@ -300,11 +295,12 @@ class RuntimeDetector {
     }
 
     results.add(DetectionResult(
-      id: 'ubuntu',
-      name: 'Ubuntu Runtime',
+      id: 'linux',
+      name: 'Linux Runtime',
       icon: '🐧',
       status: status,
       version: version,
+      missingHint: 'Linux Runtime 未初始化（PRoot + Ubuntu rootfs）',
     ));
 
     return results;
@@ -314,7 +310,7 @@ class RuntimeDetector {
   ///
   /// 支持两类 ID：
   ///   - 工具 ID（node / git / python / codex / flutter 等）→ CapabilityResolver
-  ///   - 系统 ID（termux / shell / network / storage 等）→ DetectorService
+  ///   - 系统 ID（shell / network / storage 等）→ DetectorService
   Future<DetectionResult?> detectOne(String id) async {
     // 1. 先尝试 CapabilityResolver（工具能力）
     for (final mapping in _kCapabilityMappings) {
@@ -347,7 +343,7 @@ class RuntimeDetector {
   /// 将检测结果按 RuntimeCategory 分组
   RuntimeDetectionResult reGroupResults(List<DetectionResult> results) {
     final basic = <DetectionResult>[];
-    final termux = <DetectionResult>[];
+    final linux = <DetectionResult>[];
     final coding = <DetectionResult>[];
     final advanced = <DetectionResult>[];
     final ai = <DetectionResult>[];
@@ -359,10 +355,10 @@ class RuntimeDetector {
           basic.add(r);
           break;
         case RuntimeSubCategory.coding:
-          if (r.id == 'termux') {
-            termux.add(r);
+          if (r.id == 'linux') {
+            linux.add(r);
           } else if (r.id == 'node' || r.id == 'git' || r.id == 'python' ||
-              r.id == 'ubuntu' || r.id == 'npm') {
+              r.id == 'npm') {
             coding.add(r);
           } else {
             advanced.add(r);
@@ -379,7 +375,7 @@ class RuntimeDetector {
 
     return RuntimeDetectionResult(
       basic: basic,
-      termux: termux,
+      linux: linux,
       coding: coding,
       advanced: advanced,
       ai: ai,
@@ -396,7 +392,7 @@ class RuntimeDetector {
     final results = <VerificationResult>[];
 
     if (environment != null &&
-        environment.getRuntimeType() == RuntimeType.ubuntu) {
+        environment.getRuntimeType() == RuntimeType.linux) {
       final ubuntuBin = p.join(environment.ubuntuRootfsDir, 'usr', 'bin');
       for (final tool in ['node', 'git', 'python3']) {
         final toolPath = p.join(ubuntuBin, tool);

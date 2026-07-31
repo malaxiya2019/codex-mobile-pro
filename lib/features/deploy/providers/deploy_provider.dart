@@ -4,9 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/detector/detection_result.dart';
 import '../../../core/detector/detectors/network_detector.dart';
+import '../../../runtime/install_models.dart';
 import '../../../runtime/runtime_dependency.dart';
 import '../../../runtime/runtime_detector.dart';
-import '../../../runtime/runtime_installer.dart';
 import '../../../runtime/runtime_manager.dart';
 
 /// 状态

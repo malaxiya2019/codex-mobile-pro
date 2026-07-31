@@ -9,10 +9,6 @@ void main() {
       expect(info.isAvailable, true);
     });
 
-    test('isTermuxAvailable 默认 false', () {
-      const info = ShellInfo();
-      expect(info.isTermuxAvailable, false);
-    });
   });
 
   group('TerminalSession', () {

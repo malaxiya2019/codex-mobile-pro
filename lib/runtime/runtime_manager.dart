@@ -6,9 +6,10 @@
 /// 数据流：
 ///   Detector → Dependency Graph → Installer → Environment → Terminal
 ///
-/// 当前支持两种 Runtime：
-///   1. 系统默认 Runtime（/system/bin/sh）— 现有
-///   2. Ubuntu Runtime（rootfs + proot）— 新增，推荐
+/// 当前支持三种 Runtime：
+///   1. AppRuntime — 应用自身能力（fallback）
+///   2. Android 系统 Runtime（/system/bin/sh）— 系统回退
+///   3. Linux Runtime（PRoot + Ubuntu rootfs）— 主 Coding Environment
 ///
 /// Provider Orchestration（Phase 2 新增）：
 ///   1. registerProvider(IRuntimeProvider)
@@ -31,24 +32,25 @@ library;
 
 import 'dart:async';
 
+import 'dart:io';
+
 import '../core/detector/detection_result.dart';
 import '../core/logger/log_service.dart';
 import 'capability/capability_resolver.dart';
 import 'capability/provider_enhancer.dart';
 import 'download_queue.dart';
+import 'install_models.dart';
+import 'process/linux_execution.dart';
+import 'process/process_runner.dart';
 import 'provider/android_runtime_provider.dart';
 import 'provider/app_runtime_provider.dart';
-// Phase 2: Provider 导入
+import 'provider/linux_runtime_provider.dart';
 import 'provider/runtime_capability.dart';
 import 'provider/runtime_provider.dart' hide InstallResult, VerificationResult;
-import 'provider/termux_provider.dart';
-import 'provider/ubuntu_runtime_provider.dart';
 import 'runtime_dependency.dart';
 import 'runtime_detector.dart';
 import 'runtime_environment.dart';
-import 'runtime_installer.dart';
 import 'runtime_manifest.dart';
-import 'termux/method_channel_transport.dart';
 import 'ubuntu_runtime_installer.dart';
 
 /// 管理器状态
@@ -83,7 +85,6 @@ class RuntimeManager {
   RuntimeManagerState _state = RuntimeManagerState.uninitialized;
   RuntimeEnvironment? _environment;
   RuntimeDetector? _detector;
-  RuntimeInstaller? _installer;
   UbuntuRuntimeInstaller? _ubuntuInstaller;
   DownloadQueueScheduler? _queue;
 
@@ -116,12 +117,14 @@ class RuntimeManager {
   RuntimeEnvironment? get environment => _environment;
 
   RuntimeManager._() {
-    // Phase 2: 注册默认 Provider（按优先级排序）
+    // 注册默认 Provider（按优先级排序）
+    //   AppRuntimeProvider — Android 原生能力 / fallback
+    //   AndroidRuntimeProvider — Android 系统环境
+    //   LinuxRuntimeProvider — App 内置 Linux Runtime（PRoot + Ubuntu rootfs）
     _providers.addAll([
       AppRuntimeProvider(),
       AndroidRuntimeProvider(),
-      TermuxRuntimeProvider(),
-      UbuntuRuntimeProvider(),
+      LinuxRuntimeProvider(),
     ]);
   }
 
@@ -136,16 +139,18 @@ class RuntimeManager {
     _environment = await RuntimeEnvironment.getInstance();
     await _environment!.ensureDirectories();
     _detector = RuntimeDetector();
-    _installer = RuntimeInstaller(_environment!, _onInstallProgress);
     _ubuntuInstaller = UbuntuRuntimeInstaller(_environment!, _onInstallProgress);
-    
+
     // 初始化下载队列
     _queue = DownloadQueueScheduler.instance;
-    
-    // Phase 4: 初始化 Capability Resolver
-    _resolver = CapabilityResolver(
-        termuxTransport: MethodChannelTermuxTransport(),
-      );
+
+    // 初始化 Capability Resolver（Linux 执行经 PRoot 适配器）
+    final runner = RuntimeProcessRunner();
+    final linux = linuxProvider;
+    if (linux != null) {
+      runner.registerAdapter(LinuxExecutionAdapter(linux));
+    }
+    _resolver = CapabilityResolver(runner: runner);
     _enhancer = ProviderCapabilityEnhancer(resolver: _resolver);
     final backlogDir = '${_environment!.runtimeDir}/.queue_backlog';
     await _queue!.initialize(backlogDir: backlogDir);
@@ -250,12 +255,18 @@ class RuntimeManager {
           continue;
         }
 
-        // 执行安装 —— Ubuntu Runtime 使用专用安装器
+        // 执行安装 —— 本阶段仅支持 Linux Runtime（rootfs + proot）
+        // Node/Python/Git/Codex 工具链安装属于后续阶段
         InstallResult result;
         if (tool == RuntimeTool.ubuntu) {
           result = await _ubuntuInstaller!.install();
         } else {
-          result = await _installer!.install(tool);
+          result = InstallResult(
+            tool: tool,
+            success: false,
+            errorMessage: '暂不支持自动安装（工具链安装属于后续阶段）',
+            phase: InstallPhase.failed,
+          );
         }
 
         if (!result.success) {
@@ -318,7 +329,12 @@ class RuntimeManager {
       if (tool == RuntimeTool.ubuntu) {
         result = await _ubuntuInstaller!.install();
       } else {
-        result = await _installer!.install(tool);
+        result = InstallResult(
+          tool: tool,
+          success: false,
+          errorMessage: '暂不支持自动安装（工具链安装属于后续阶段）',
+          phase: InstallPhase.failed,
+        );
       }
       return result;
     } finally {
@@ -340,16 +356,58 @@ class RuntimeManager {
     }
   }
 
-  /// 获取终端环境变量
+  /// 获取终端环境变量（异步，Linux 优先）
   ///
   /// 供 TerminalService 调用。
-  /// 如果 Ubuntu Runtime 已安装，返回 proot 环境；
-  /// 否则返回系统默认环境。
-  Map<String, String> getTerminalEnvironment() {
+  /// 1. Linux Runtime 已就绪 → LinuxRuntimeProvider 环境（PRoot 内）
+  /// 2. 否则 → Android 系统默认环境（/system/bin/sh 回退）
+  Future<Map<String, String>> getTerminalEnvironment() async {
+    final linux = linuxProvider;
+    if (linux != null) {
+      try {
+        final paths = await linux.resolvePaths();
+        final ready = File(paths.prootExecutable).existsSync() &&
+            (File('${paths.rootfsDir}/usr/bin/bash').existsSync() ||
+                File('${paths.rootfsDir}/bin/bash').existsSync());
+        if (ready) {
+          return linux.buildEnvironment(paths);
+        }
+      } catch (_) {}
+    }
     if (_environment == null) {
       return {};
     }
     return _environment!.buildTerminalEnvironment();
+  }
+
+  /// 获取 Linux Runtime Provider（终端 shell 来源）
+  LinuxRuntimeProvider? get linuxProvider {
+    for (final provider in _providers) {
+      if (provider is LinuxRuntimeProvider) return provider;
+    }
+    return null;
+  }
+
+  /// 构建终端 shell 启动规格（PRoot → /bin/bash）
+  ///
+  /// 返回 null 表示 Linux Runtime 未就绪（终端应回退到 Android shell）。
+  Future<LinuxProcessSpec?> buildTerminalShellSpec({
+    String? workingDirectory,
+  }) async {
+    final linux = linuxProvider;
+    if (linux == null) return null;
+    try {
+      final paths = await linux.resolvePaths();
+      final ready = File(paths.prootExecutable).existsSync() &&
+          (File('${paths.rootfsDir}/usr/bin/bash').existsSync() ||
+              File('${paths.rootfsDir}/bin/bash').existsSync());
+      if (!ready) return null;
+      return await linux.buildShellSpec(
+        workingDirectory: workingDirectory,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   /// 检查工具是否已安装
@@ -496,7 +554,7 @@ class RuntimeManager {
 
   /// 获取能提供指定 Capability 的 Provider 列表
   ///
-  /// 按优先级排序：android → termux → ubuntu
+  /// 按优先级排序：app → android → linux
   List<IRuntimeProvider> getProvidersForCapability(CapabilityType type) {
     return _providers.where((p) {
       return p.capabilities.any((c) => c.type == type);

@@ -15,24 +15,37 @@ import 'ring_buffer.dart';
 // ─── Shell 信息（本地定义，替代旧 ShellDetector）─────────────
 
 
-/// Shell 信息（Android 系统 Shell）
+/// Shell 信息
+///
+/// 运行时 Shell 来源：
+///   1. Linux Runtime（PRoot → Ubuntu /bin/bash）— 主 Shell
+///   2. Android 系统 Shell（/system/bin/sh）— 回退
 class ShellInfo {
+  /// 可执行文件绝对路径（proot 或 /system/bin/sh）
   final String shellPath;
-  final String version;
-  final bool isTermuxAvailable;
 
-  const ShellInfo()
-      : shellPath = '/system/bin/sh',
-        version = 'Android System Shell',
-        isTermuxAvailable = false;
+  /// 启动参数（Linux 时为 PRoot 参数，如 -r rootfs /bin/bash -l）
+  final List<String> args;
+
+  final String version;
+
+  /// 是否 Linux Runtime Shell
+  final bool isLinux;
+
+  const ShellInfo({
+    this.shellPath = '/system/bin/sh',
+    this.args = const ['-i'],
+    this.version = 'Android System Shell',
+    this.isLinux = false,
+  });
 
   bool get isAvailable => true;
-  List<String> get launchArgs => ['-i'];
+  List<String> get launchArgs => args;
   bool get useRunInShell => false;
-  String get friendlyDescription => 'Android 系统 Shell';
+  String get friendlyDescription => isLinux ? 'Linux Runtime Shell' : 'Android 系统 Shell';
 
   @override
-  String toString() => 'ShellInfo(type=systemSh, path=$shellPath, version=$version)';
+  String toString() => 'ShellInfo(isLinux=$isLinux, path=$shellPath, args=$args, version=$version)';
 }
 
 /// 默认 Shell 信息
@@ -41,8 +54,10 @@ const _kDefaultShell = ShellInfo();
 
 /// 构建终端环境变量
 ///
-/// 基础环境来源于 RuntimeManager（可包含 Termux/App Runtime 信息），
-/// 配合合理默认值。不再使用旧 ShellDetector.getShellEnvironment()。
+/// 基础环境来源于 RuntimeManager：
+///   - Linux Runtime 就绪 → LinuxRuntimeProvider 环境（HOME=/root、PATH、SHELL=/bin/bash）
+///   - 否则 → Android 系统默认环境（/system/bin/sh 回退）
+/// 不再使用旧 ShellDetector。
 Map<String, String> _buildTerminalEnvironment({
   required String home,
   required Map<String, String> runtimeEnv,
@@ -141,7 +156,7 @@ class TerminalSession {
     LogService.info('Terminal', '启动会话 $id');
     LogService.info('Terminal', '  Shell: ${shellInfo.shellPath}');
     LogService.info('Terminal', '  类型: ${shellInfo.friendlyDescription}');
-    LogService.info('Terminal', '  Termux: ${shellInfo.isTermuxAvailable}');
+    LogService.info('Terminal', '  Linux Shell: ${shellInfo.isLinux}');
     LogService.info('Terminal', '  工作目录: $cwd');
     LogService.info('Terminal', '  后端: ${_backend?.name ?? "process"} (${_backend?.runtimeType ?? "null"})');
 
@@ -171,10 +186,10 @@ class TerminalSession {
   Future<bool> _startWithProcess() async {
     final appDir = await getApplicationDocumentsDirectory();
 
-    // 从 RuntimeManager 获取运行环境
+    // 从 RuntimeManager 获取运行环境（Linux 优先）
     Map<String, String> runtimeEnv = {};
     try {
-      runtimeEnv = RuntimeManager.instance.getTerminalEnvironment();
+      runtimeEnv = await RuntimeManager.instance.getTerminalEnvironment();
     } catch (_) {}
 
     final env = _buildTerminalEnvironment(home: appDir.path, runtimeEnv: runtimeEnv);
@@ -228,10 +243,10 @@ class TerminalSession {
   Future<bool> _startWithNativePty() async {
     final appDir = await getApplicationDocumentsDirectory();
 
-    // 从 RuntimeManager 获取运行环境
+    // 从 RuntimeManager 获取运行环境（Linux 优先）
     Map<String, String> runtimeEnv = {};
     try {
-      runtimeEnv = RuntimeManager.instance.getTerminalEnvironment();
+      runtimeEnv = await RuntimeManager.instance.getTerminalEnvironment();
     } catch (_) {}
 
     final env = _buildTerminalEnvironment(home: appDir.path, runtimeEnv: runtimeEnv);
@@ -360,7 +375,6 @@ class TerminalSession {
 /// 不再依赖旧 ShellDetector。
 class TerminalService {
   final List<TerminalSession> _sessions = [];
-  ShellInfo? _cachedShellInfo;
   ITerminalBackend? _backend;
 
   List<TerminalSession> get sessions => List.unmodifiable(_sessions);
@@ -408,6 +422,29 @@ class TerminalService {
       LogService.info('Terminal', '  backend runtimeType: ${_backend.runtimeType}');
   }
 
+  /// 解析终端 Shell 来源
+  ///
+  /// 优先使用 Linux Runtime（RuntimeManager → LinuxRuntimeProvider → PRoot → /bin/bash）。
+  /// Linux Runtime 未就绪时回退到 Android 系统 Shell。
+  Future<ShellInfo> _resolveShellInfo() async {
+    try {
+      final spec = await RuntimeManager.instance.buildTerminalShellSpec();
+      if (spec != null) {
+        LogService.info('Terminal', '  使用 Linux Runtime Shell (PRoot)');
+        return ShellInfo(
+          shellPath: spec.executable,
+          args: spec.arguments,
+          version: 'Linux Runtime Shell',
+          isLinux: true,
+        );
+      }
+    } catch (e) {
+      LogService.error('Terminal', '  解析 Linux Shell 失败，回退 Android Shell: $e');
+    }
+    LogService.info('Terminal', '  使用 Android 系统 Shell（回退）');
+    return _kDefaultShell;
+  }
+
   /// 创建新终端会话
   Future<TerminalSession> createSession({
     String? name,
@@ -417,9 +454,10 @@ class TerminalService {
     await initDefaultBackend();
     LogService.info('Terminal', 'createSession 后端: ${_backend?.runtimeType ?? "null"}');
 
-    // 使用默认 Shell（始终为 Android 系统 Shell）
-    _cachedShellInfo ??= _kDefaultShell;
-    final shellInfo = _cachedShellInfo!;
+    // 解析 Shell 来源：
+    //   1. Linux Runtime（PRoot → Ubuntu /bin/bash）— 优先
+    //   2. Android 系统 Shell（/system/bin/sh）— 回退
+    final shellInfo = await _resolveShellInfo();
 
     // 使用 App 私有目录作为默认工作目录
     final appDir = await getApplicationDocumentsDirectory();
@@ -466,6 +504,5 @@ class TerminalService {
       await session.dispose();
     }
     _sessions.clear();
-    _cachedShellInfo = null;
   }
 }

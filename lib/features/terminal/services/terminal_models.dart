@@ -24,13 +24,11 @@ class ShellInfo {
   final ShellType type;
   final String shellPath;
   final String version;
-  final bool isTermuxAvailable;
 
   const ShellInfo({
     this.type = ShellType.systemSh,
     this.shellPath = '/system/bin/sh',
     this.version = 'Android System Shell',
-    this.isTermuxAvailable = false,
   });
 
   bool get isAvailable => true;

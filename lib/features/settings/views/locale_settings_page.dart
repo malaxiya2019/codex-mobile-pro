@@ -69,7 +69,7 @@ class LocaleSettingsPage extends ConsumerWidget {
                   Text(s.appName, style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   Text(
-                    '${s.navHome} · ${s.navDeploy} · ${s.navTermux} · ${s.navAi}',
+                    '${s.navHome} · ${s.navDeploy} · ${s.navAi}',
                     style: theme.textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 4),

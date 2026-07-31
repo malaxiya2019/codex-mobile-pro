@@ -5,12 +5,11 @@
 /// 参考 Phase 1 Audit Report 的调用链设计。
 ///
 /// 当前 Provider：
-///   AndroidRuntimeProvider  — Android 系统内置能力
-///   TermuxRuntimeProvider   — Termux 提供的 Runtime
-///   UbuntuRuntimeProvider   — Ubuntu Runtime（实验性）
+///   AppRuntimeProvider     — 应用自身能力（fallback）
+///   AndroidRuntimeProvider — Android 系统内置能力（/system/bin/sh 回退）
+///   LinuxRuntimeProvider   — App 内置 Linux Runtime（PRoot + Ubuntu rootfs）
 ///
-/// AppRuntimeProvider 接口已定义，但本阶段不实现脱离 Termux 的
-/// Node/Python/Git Runtime。
+/// Node/Python/Git/Codex 工具链安装属于后续阶段。
 /// ====================================================================
 library;
 
@@ -97,10 +96,10 @@ class ProviderInfo {
 ///   4. 健康检查
 /// ====================================================================
 abstract class IRuntimeProvider {
-  /// Provider 标识（如 "android", "termux", "ubuntu"）
+  /// Provider 标识（如 "app", "android", "linux"）
   String get id;
 
-  /// 显示名称（如 "Android 基础环境", "Termux Runtime"）
+  /// 显示名称（如 "Android 基础环境", "Linux Runtime"）
   String get name;
 
   /// Provider 类型

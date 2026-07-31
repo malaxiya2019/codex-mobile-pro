@@ -45,8 +45,8 @@ class LocalProcessExecution implements IExecutionAdapter {
 
   @override
   bool supports(RuntimeProcessRequest request) {
-    // 本地执行支持所有非 Termux 和 Ubuntu 的请求
-    // Termux/Ubuntu 由专门适配器处理
+    // 本地执行支持 android / app 请求
+    // Linux Runtime 由 LinuxExecutionAdapter 处理（PRoot）
     return request.runtimeId == null ||
         request.runtimeId == 'android' ||
         request.runtimeId == 'app';

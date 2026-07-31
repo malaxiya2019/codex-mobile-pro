@@ -35,8 +35,8 @@ class RuntimeEnvironment {
   String get npmGlobalDir => '$runtimeDir/npm-global';
   String get npmGlobalBinDir => '$npmGlobalDir/bin';
 
-  // ─── Ubuntu Runtime 目录 ──────────────────────────────────────
-  /// Ubuntu Runtime 根目录
+  // ─── Linux Runtime 目录（Ubuntu rootfs）──────────────────────
+  /// Linux Runtime 根目录（Ubuntu rootfs）
   String get ubuntuDir => '$runtimeDir/ubuntu';
 
   /// Ubuntu rootfs 解压目录
@@ -83,17 +83,12 @@ class RuntimeEnvironment {
     }
   }
 
-  /// 构建终端环境变量
+  /// 构建默认（Android 回退）环境变量
   ///
-  /// 这是 Runtime 环境变量的唯一构建点。
-  /// 所有模块（TerminalService、Detector、Installer）必须使用此方法。
-  ///
-  /// 如果 Ubuntu Runtime 已安装，自动使用 Ubuntu 环境。
-  /// 否则使用系统默认环境。
+  /// Linux Runtime 环境由 LinuxRuntimeProvider 统一提供
+  /// （HOME=/root、PATH、SHELL=/bin/bash 等）。
+  /// 本方法仅用于 Linux Runtime 未就绪时的 Android 系统回退。
   Map<String, String> buildTerminalEnvironment() {
-    if (isUbuntuInstalled()) {
-      return _buildUbuntuEnvironment();
-    }
     return _buildDefaultEnvironment();
   }
 
@@ -134,10 +129,10 @@ class RuntimeEnvironment {
     return env;
   }
 
-  /// ─── Ubuntu Runtime 环境 ─────────────────────────────────────
+  /// ─── Linux Runtime 环境（Ubuntu rootfs）─────────────────────
 
   Map<String, String> _buildUbuntuEnvironment() {
-    // Ubuntu Runtime 的核心路径
+    // Linux Runtime 的核心路径
     final rootfsPath = ubuntuRootfsDir;
 
     // PATH: 优先使用 rootfs 中的系统 bin，回退到 Android 系统 bin
@@ -156,7 +151,7 @@ class RuntimeEnvironment {
     final validPaths = paths.where((p) => Directory(p).existsSync()).toList();
     final pathStr = _deduplicatePath(validPaths.join(':'));
 
-    // HOME: Ubuntu 默认 home
+    // HOME: rootfs 内默认 home
     final homeDir = path.join(rootfsPath, 'root');
 
     final env = <String, String>{
@@ -184,9 +179,12 @@ class RuntimeEnvironment {
     return prootFile.existsSync() && rootfsBash.existsSync();
   }
 
+  /// Linux Runtime 是否已就绪（isUbuntuInstalled 的对外别名）
+  bool get isLinuxReady => isUbuntuInstalled();
+
   /// 获取当前有效的 Runtime 类型
   RuntimeType getRuntimeType() {
-    if (isUbuntuInstalled()) return RuntimeType.ubuntu;
+    if (isUbuntuInstalled()) return RuntimeType.linux;
     return RuntimeType.system;
   }
 
@@ -283,9 +281,9 @@ class RuntimeEnvironment {
 
 /// Runtime 类型
 enum RuntimeType {
-  /// 系统默认（/system/bin/sh）
+  /// Android 系统默认（/system/bin/sh，回退）
   system,
 
-  /// Ubuntu Runtime（rootfs + proot）
-  ubuntu,
+  /// Linux Runtime（PRoot + Ubuntu rootfs）
+  linux,
 }

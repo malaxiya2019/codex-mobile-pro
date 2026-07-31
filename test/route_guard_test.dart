@@ -102,7 +102,6 @@ void main() {
   group('RoutePermissions', () {
     test('公开页面无需鉴权', () {
       expect(RoutePermissions.requiresAuth(RouteNames.home), false);
-      expect(RoutePermissions.requiresAuth(RouteNames.termuxTest), false);
       expect(RoutePermissions.requiresAuth(RouteNames.themeSettings), false);
     });
 

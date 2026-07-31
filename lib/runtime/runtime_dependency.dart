@@ -18,7 +18,7 @@ enum RuntimeTool {
   deepseekKey,
   flutterSdk,
 
-  /// Ubuntu Runtime（rootfs + proot，取代单包安装方案）
+  /// Linux Runtime（Ubuntu rootfs + PRoot）
   ubuntu,
 }
 
@@ -92,13 +92,13 @@ class RuntimeDependency {
           category: RuntimeCategory.basic,
         ),
 
-        // ── Ubuntu Runtime ──
+        // ── Linux Runtime ──
         const RuntimeDependency(
           tool: RuntimeTool.ubuntu,
-          displayName: 'Ubuntu Runtime',
+          displayName: 'Linux Runtime',
           icon: '🐧',
           dependencies: [RuntimeTool.curl],
-          hint: 'Ubuntu 24.04 rootfs + proot，提供完整 Coding 环境',
+          hint: 'Ubuntu 24.04 rootfs + PRoot，提供完整 Coding 环境',
         ),
 
         // ── Coding Runtime ──

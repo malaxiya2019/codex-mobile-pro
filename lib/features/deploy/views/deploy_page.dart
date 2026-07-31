@@ -130,13 +130,13 @@ class _DeployPageState extends ConsumerState<DeployPage> {
 
                   const SizedBox(height: 16),
 
-                  // 📦 Termux Runtime
-                  if (status.detectionResult!.termux.isNotEmpty)
+                  // 🐧 Linux Runtime
+                  if (status.detectionResult!.linux.isNotEmpty)
                     _buildCategorySection(
                       context: context,
-                      title: '📦 Termux Runtime',
+                      title: '🐧 Linux Runtime',
                       icon: Icons.terminal,
-                      results: status.detectionResult!.termux,
+                      results: status.detectionResult!.linux,
                       ref: ref,
                       showActionButtons: false,
                     ),
@@ -920,13 +920,10 @@ class _DeployPageState extends ConsumerState<DeployPage> {
   // ════════════════════════════════════════════════════════════════
 
   /// 哪些工具支持自动安装
-  /// node 已实现完整 Node.js 安装流程（Termux .deb + SHA256 + 健康检查）
-  /// git/python/codex/mimo2codex 暂未实现自动安装
+  /// 当前仅支持 Linux Runtime 初始化（PRoot + Ubuntu rootfs）。
+  /// node/git/python/codex/mimo2codex 工具链安装属于后续阶段。
   bool _canInstall(String id) {
-    // node 已实现完整安装流程
-    // ubuntu 已实现 rootfs + proot 安装流程
-    // git/python/codex/mimo2codex 暂未实现安装
-    return id == 'node' || id == 'ubuntu';
+    return id == 'ubuntu';
   }
 
   /// 安装工具

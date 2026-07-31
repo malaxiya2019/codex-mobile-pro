@@ -8,7 +8,7 @@
 ///   2. RuntimeProcessResult — 结果模型、状态判断
 ///   3. RuntimeProcessError — 结构化错误、工厂方法
 ///   4. EnvironmentMerger — 环境合并规则、优先级
-///   5. TermuxExecutionAdapter — 支持判定、命令构建
+///   5. LinuxExecutionAdapter — 支持判定、命令构建
 ///   6. RuntimeProcessRunner — 适配器选择、便捷方法
 ///   7. 集成场景 — 完整请求→执行流
 /// ====================================================================
@@ -19,8 +19,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/runtime/process/runner_models.dart';
 import 'package:codex_mobile_pro/runtime/process/process_runner.dart';
-import 'package:codex_mobile_pro/runtime/process/termux_execution.dart';
-import 'package:codex_mobile_pro/runtime/termux/fake_transport.dart';
+import 'package:codex_mobile_pro/runtime/process/linux_execution.dart';
+import 'package:codex_mobile_pro/runtime/provider/linux_runtime_provider.dart';
 
 void main() {
   // ═══════════════════════════════════════════════════════════════
@@ -50,7 +50,7 @@ void main() {
         timeout: const Duration(seconds: 30),
         runInShell: true,
         stdin: 'input data',
-        runtimeId: 'termux',
+        runtimeId: 'linux',
         label: 'health-check',
       );
 
@@ -60,7 +60,7 @@ void main() {
       expect(req.timeout, const Duration(seconds: 30));
       expect(req.runInShell, true);
       expect(req.stdin, 'input data');
-      expect(req.runtimeId, 'termux');
+      expect(req.runtimeId, 'linux');
       expect(req.label, 'health-check');
     });
 
@@ -321,11 +321,11 @@ void main() {
   group('EnvironmentMerger — 环境合并', () {
     test('合并 provider 和 defaults', () {
       final merged = EnvironmentMerger.merge(
-        providerEnv: {'PREFIX': '/data/termux', 'SHELL': '/bin/sh'},
+        providerEnv: {'PREFIX': '/data/linux', 'SHELL': '/bin/sh'},
         defaults: {'PATH': '/system/bin', 'HOME': '/data'},
       );
 
-      expect(merged, containsPair('PREFIX', '/data/termux'));
+      expect(merged, containsPair('PREFIX', '/data/linux'));
       expect(merged, containsPair('SHELL', '/bin/sh'));
       expect(merged, containsPair('PATH', '/system/bin'));
       expect(merged, containsPair('HOME', '/data'));
@@ -391,46 +391,6 @@ void main() {
   });
 
   // ═══════════════════════════════════════════════════════════════
-  // ═══════════════════════════════════════════════════════════════
-  // 5. TermuxExecutionAdapter 测试
-  // ═══════════════════════════════════════════════════════════════
-
-  group('TermuxExecutionAdapter — Termux 适配器', () {
-    late FakeTermuxTransport fakeTransport;
-
-    setUp(() {
-      fakeTransport = FakeTermuxTransport();
-    });
-
-    test('id 返回 termux', () {
-      final adapter = TermuxExecutionAdapter(transport: fakeTransport);
-      expect(adapter.id, 'termux');
-    });
-
-    test('supports runtimeId == termux', () {
-      final adapter = TermuxExecutionAdapter(transport: fakeTransport);
-
-      final termuxReq = RuntimeProcessRequest(
-        executable: 'node',
-        runtimeId: 'termux',
-      );
-      expect(adapter.supports(termuxReq), true);
-
-      final androidReq = RuntimeProcessRequest(
-        executable: 'node',
-        runtimeId: 'android',
-      );
-      expect(adapter.supports(androidReq), false);
-    });
-
-    test('supports null runtimeId 返回 false', () {
-      final adapter = TermuxExecutionAdapter(transport: fakeTransport);
-      final req = RuntimeProcessRequest(executable: 'node');
-      expect(adapter.supports(req), false);
-    });
-  });
-
-  // ═══════════════════════════════════════════════════════════════
   // 6. RuntimeProcessRunner 测试
   // ═══════════════════════════════════════════════════════════════
 
@@ -443,7 +403,7 @@ void main() {
 
     test('registerAdapter 添加适配器', () {
       final runner = RuntimeProcessRunner();
-      runner.registerAdapter(TermuxExecutionAdapter(transport: FakeTermuxTransport()));
+      runner.registerAdapter(LinuxExecutionAdapter(LinuxRuntimeProvider()));
       expect(runner.registeredAdapters.length, 2);
     });
 
@@ -478,7 +438,7 @@ void main() {
       final execution = LocalProcessExecution();
       final req = RuntimeProcessRequest(
         executable: 'node',
-        runtimeId: 'termux',
+        runtimeId: 'unknown-runtime',
       );
 
       expect(execution.supports(req), false);

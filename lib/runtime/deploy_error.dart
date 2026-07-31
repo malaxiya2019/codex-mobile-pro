@@ -157,7 +157,7 @@ class DeployErrorSuggestions {
     DeployErrorCode.dependencyMissing:
         '缺少依赖。请先安装所需依赖后重试',
     DeployErrorCode.toolInstallationFailed:
-        '系统工具安装失败。将通过 Termux 自动安装缺失工具，请确保网络连接正常',
+        '系统工具安装失败。请确保 Linux Runtime 已初始化且网络连接正常',
     DeployErrorCode.versionMismatch:
         '版本不匹配。将尝试安装兼容版本',
     DeployErrorCode.unknown:

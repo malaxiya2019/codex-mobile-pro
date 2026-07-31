@@ -56,7 +56,7 @@ class RuntimeProcessRequest {
 
   /// 运行时标识（用于 Provider 路由）
   ///
-  /// 例如 "android", "termux", "ubuntu"。
+  /// 例如 "android", "linux"。
   /// 如果为 null，由 Runner 根据 executable 自动决定。
   final String? runtimeId;
 
@@ -201,7 +201,7 @@ enum RuntimeProcessErrorType {
   /// Runtime 不可用
   runtimeUnavailable,
 
-  /// IPC 通信失败（Termux 等远程执行）
+  /// IPC 通信失败（远程执行）
   ipcFailed,
 
   /// 原生进程崩溃
@@ -292,8 +292,8 @@ class RuntimeProcessError implements Exception {
 ///
 /// 不同的 Runtime 使用不同的底层执行方式：
 ///   - Android/App Runtime → LocalProcessExecution → Process.start
-///   - Termux Runtime     → TermuxExecutionAdapter  → MethodChannel IPC
-///   - Ubuntu Runtime     → 通过 proot 的 LocalProcessExecution
+///   - Linux Runtime      → LinuxExecutionAdapter → PRoot → Ubuntu rootfs
+///   - Android / App      → LocalProcessExecution
 ///
 /// 所有适配器返回统一的 RuntimeProcessResult。
 /// ====================================================================

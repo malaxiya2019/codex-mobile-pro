@@ -118,7 +118,6 @@ class RoutePermissions {
   static PermissionLevel of(String path) {
     switch (path) {
       case RouteNames.home:
-      case RouteNames.termuxTest:
       case RouteNames.themeSettings:
       case RouteNames.localeSettings:
       case RouteNames.workspaceList:

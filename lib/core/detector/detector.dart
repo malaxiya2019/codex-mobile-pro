@@ -2,7 +2,7 @@ import 'detection_result.dart';
 
 /// 环境类别（旧版 — 保持向后兼容）
 enum DetectorCategory {
-  /// 运行环境 — Termux、Shell、Node、Git、Python、Codex 等
+  /// 运行环境 — Shell、Node、Git、Python、Codex 等
   runtime,
 
   /// 开发环境 — Flutter SDK、Android SDK、Java、Gradle 等

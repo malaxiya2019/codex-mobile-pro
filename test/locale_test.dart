@@ -102,10 +102,6 @@ void main() {
       expect(zh.errorFatalMsg, isNotEmpty);
       expect(en.errorFatalMsg, isNotEmpty);
 
-      // Termux
-      expect(zh.termuxTestTitle, isNotEmpty);
-      expect(en.termuxTestTitle, isNotEmpty);
-
       // 部署
       expect(zh.deployTitle, isNotEmpty);
       expect(en.deployTitle, isNotEmpty);

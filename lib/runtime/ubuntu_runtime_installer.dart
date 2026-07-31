@@ -20,9 +20,9 @@ import 'package:path/path.dart' as path;
 import '../core/logger/log_service.dart';
 import 'artifact_manager.dart';
 import 'deploy_error.dart';
+import 'install_models.dart'; // 复用 InstallPhase, InstallResult
 import 'runtime_dependency.dart';
 import 'runtime_environment.dart';
-import 'runtime_installer.dart'; // 复用 InstallPhase, InstallResult
 import 'runtime_manifest.dart';
 import 'sysdata_setup.dart';
 

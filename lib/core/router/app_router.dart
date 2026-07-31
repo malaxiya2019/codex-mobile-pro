@@ -13,7 +13,6 @@ import '../../features/home/views/home_page.dart';
 import '../../features/settings/views/locale_settings_page.dart';
 import '../../features/settings/views/theme_settings_page.dart';
 import '../../features/terminal/views/terminal_page.dart';
-import '../../features/termux/views/termux_test_page.dart';
 import '../../features/workspace/views/workspace_list_page.dart';
 import 'route_guard.dart';
 import 'route_names.dart';
@@ -40,11 +39,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.home,
         name: 'home',
         builder: (context, state) => const HomePage(),
-      ),
-      GoRoute(
-        path: RouteNames.termuxTest,
-        name: 'termuxTest',
-        builder: (context, state) => const TermuxTestPage(),
       ),
       GoRoute(
         path: RouteNames.deploy,

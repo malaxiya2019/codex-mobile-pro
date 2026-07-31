@@ -25,7 +25,6 @@ enum CapabilityType {
   curl,
   storageAccess,
   networkAccess,
-  termux,
   node,
   npm,
   git,
@@ -42,7 +41,7 @@ enum CapabilityType {
 }
 
 /// Provider 类型
-enum ProviderType { android, app, termux, ubuntu }
+enum ProviderType { android, app, linux }
 
 /// Capability 健康状态
 enum CapabilityHealth { healthy, degraded, unavailable, unknown }
@@ -100,7 +99,6 @@ class RuntimeCapability {
       case CapabilityType.curl: return 'cURL';
       case CapabilityType.storageAccess: return '存储权限';
       case CapabilityType.networkAccess: return '网络连通性';
-      case CapabilityType.termux: return 'Termux Runtime';
       case CapabilityType.node: return 'Node.js';
       case CapabilityType.npm: return 'npm';
       case CapabilityType.git: return 'Git';
@@ -123,7 +121,6 @@ class RuntimeCapability {
       case CapabilityType.curl: return '\u{1F310}';
       case CapabilityType.storageAccess: return '\u{1F4BE}';
       case CapabilityType.networkAccess: return '\u{1F4E1}';
-      case CapabilityType.termux: return '\u{1F4E6}';
       case CapabilityType.node: return '\u{1F7E2}';
       case CapabilityType.npm: return '\u{1F4E6}';
       case CapabilityType.git: return '\u{1F500}';

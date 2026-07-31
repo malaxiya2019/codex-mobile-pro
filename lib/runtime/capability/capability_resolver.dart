@@ -14,15 +14,13 @@
 ///   - 所有检测命令必须通过 RuntimeProcessRunner，禁止直接 Process.run
 ///   - 检测失败不能 crash，必须返回结构化状态
 ///   - 缓存支持手动刷新和失效
-///   - Provider 特定执行路由（如 Termux）通过 runtimeId 实现
+///   - Provider 特定执行路由（如 Linux → PRoot）通过 runtimeId 实现
 /// ====================================================================
 library;
 
 import '../../core/logger/log_service.dart';
 import '../../runtime/process/process_runner.dart';
 import '../../runtime/process/runner_models.dart';
-import '../../runtime/process/termux_execution.dart';
-import '../../runtime/termux/termux_transport.dart';
 import '../provider/runtime_capability.dart';
 import '../provider/runtime_provider.dart';
 
@@ -80,30 +78,16 @@ class CapabilityResolver {
   CapabilityResolver({
     RuntimeProcessRunner? runner,
     Duration? defaultTtl,
-    TermuxTransport? termuxTransport,
-  })  : _runner = runner ?? _createRunner(termuxTransport),
+  })  : _runner = runner ?? RuntimeProcessRunner(),
         _defaultTtl = defaultTtl ?? const Duration(seconds: 30);
-
-  /// 创建带 Termux 适配器的 Runner
-  static RuntimeProcessRunner _createRunner(TermuxTransport? transport) {
-    final runner = RuntimeProcessRunner();
-    if (transport != null) {
-      runner.registerAdapter(TermuxExecutionAdapter(transport: transport));
-    } else {
-      runner.registerAdapter(TermuxExecutionAdapter());
-    }
-    return runner;
-  }
 
   /// 获取 Provider 对应的 runtimeId
   static String? _runtimeIdForProvider(ProviderType type) {
     switch (type) {
-      case ProviderType.termux:
-        return 'termux';
+      case ProviderType.linux:
+        return 'linux';
       case ProviderType.android:
         return 'android';
-      case ProviderType.ubuntu:
-        return 'ubuntu';
       case ProviderType.app:
         return 'app';
     }

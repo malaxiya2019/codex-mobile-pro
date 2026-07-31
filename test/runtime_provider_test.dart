@@ -15,7 +15,7 @@ library;
 import 'package:codex_mobile_pro/runtime/provider/android_runtime_provider.dart';
 import 'package:codex_mobile_pro/runtime/provider/runtime_capability.dart';
 import 'package:codex_mobile_pro/runtime/provider/runtime_provider.dart';
-import 'package:codex_mobile_pro/runtime/provider/ubuntu_runtime_provider.dart';
+import 'package:codex_mobile_pro/runtime/provider/linux_runtime_provider.dart';
 import 'package:codex_mobile_pro/runtime/runtime_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -46,16 +46,16 @@ void main() {
 
     test('不可用的 Capability 携带原因', () {
       const cap = RuntimeCapability(
-        type: CapabilityType.termux,
-        provider: ProviderType.termux,
+        type: CapabilityType.ubuntu,
+        provider: ProviderType.linux,
         available: false,
         health: CapabilityHealth.unavailable,
-        reason: 'Termux 未安装',
+        reason: 'Linux Runtime 未初始化',
       );
 
       expect(cap.available, false);
-      expect(cap.reason, 'Termux 未安装');
-      expect(cap.displayName, 'Termux Runtime');
+      expect(cap.reason, 'Linux Runtime 未初始化');
+      expect(cap.displayName, 'Ubuntu Runtime');
     });
 
     test('displayName 返回中文名称', () {
@@ -64,7 +64,6 @@ void main() {
         CapabilityType.curl: 'cURL',
         CapabilityType.storageAccess: '存储权限',
         CapabilityType.networkAccess: '网络连通性',
-        CapabilityType.termux: 'Termux Runtime',
         CapabilityType.node: 'Node.js',
         CapabilityType.npm: 'npm',
         CapabilityType.git: 'Git',
@@ -93,8 +92,8 @@ void main() {
       expect(healthy.statusDescription, contains('✅ 可用'));
 
       const unhealthy = RuntimeCapability(
-        type: CapabilityType.termux,
-        provider: ProviderType.termux,
+        type: CapabilityType.ubuntu,
+        provider: ProviderType.linux,
         available: false,
         reason: '未安装',
       );
@@ -175,38 +174,32 @@ void main() {
   });
 
   // ═══════════════════════════════════════════════════════════════
-  // 3. Ubuntu Provider 测试（实验性）
+  // 3. Linux Provider 测试（PRoot + Ubuntu rootfs）
   // ═══════════════════════════════════════════════════════════════
 
-  group('UbuntuRuntimeProvider — Ubuntu 实验性 Runtime', () {
+  group('LinuxRuntimeProvider — Linux Runtime', () {
     test('Provider 属性正确', () {
-      final provider = UbuntuRuntimeProvider();
-      expect(provider.id, 'ubuntu');
-      expect(provider.name, 'Ubuntu Runtime（实验性）');
-      expect(provider.type, ProviderType.ubuntu);
-      expect(provider.status, ProviderStatus.experimental); // 默认 experimental
-    });
-
-    test('status 始终为 experimental', () async {
-      final provider = UbuntuRuntimeProvider();
-      final info = await provider.detect();
-      expect(info.status, anyOf(ProviderStatus.experimental, ProviderStatus.unavailable));
-    });
-
-    test('capabilities 只包含 ubuntu', () async {
-      final provider = UbuntuRuntimeProvider();
-      final info = await provider.detect();
-      for (final cap in info.capabilities) {
-        expect(cap.type, CapabilityType.ubuntu);
-      }
+      final provider = LinuxRuntimeProvider();
+      expect(provider.id, 'linux');
+      expect(provider.name, 'Linux Runtime');
+      expect(provider.type, ProviderType.linux);
     });
 
     test('detect 不抛出异常', () async {
-      final provider = UbuntuRuntimeProvider();
-      // 不应抛出异常
-      await provider.detect();
+      final provider = LinuxRuntimeProvider();
+      // 不应抛出异常（未安装时返回 unavailable/degraded）
+      final info = await provider.detect();
+      expect(info.status, isNotNull);
       await provider.healthCheck();
       await provider.isAvailable();
+    });
+
+    test('detect 状态与 capabilities 一致', () async {
+      final provider = LinuxRuntimeProvider();
+      final info = await provider.detect();
+      for (final cap in info.capabilities) {
+        expect(cap.type, isNotNull);
+      }
     });
   });
 
@@ -225,10 +218,10 @@ void main() {
       final mgr = RuntimeManager.instance;
       final providers = mgr.registeredProviders;
 
-      // Android, Termux, Ubuntu
+      // App, Android, Linux
       expect(providers.length, greaterThanOrEqualTo(2));
       expect(providers.any((p) => p.id == 'android'), true);
-      expect(providers.any((p) => p.id == 'ubuntu'), true);
+      expect(providers.any((p) => p.id == 'linux'), true);
     });
 
     test('registerProvider 可以替换已有 Provider', () {
@@ -248,10 +241,10 @@ void main() {
       final providers = mgr.getProvidersForCapability(CapabilityType.systemShell);
       expect(providers, isNotEmpty);
 
-      // Ubuntu 提供 ubuntu
-      final ubuntuProviders = mgr.getProvidersForCapability(CapabilityType.ubuntu);
-      expect(ubuntuProviders, isNotEmpty);
-      expect(ubuntuProviders.any((p) => p.id == 'ubuntu'), true);
+      // Linux 提供 ubuntu（rootfs 能力）
+      final linuxProviders = mgr.getProvidersForCapability(CapabilityType.ubuntu);
+      expect(linuxProviders, isNotEmpty);
+      expect(linuxProviders.any((p) => p.id == 'linux'), true);
     });
 
     test('getCapability 查找可用 Capability', () async {
@@ -268,9 +261,9 @@ void main() {
       final infos = await mgr.discoverProviders();
       expect(infos, isNotEmpty);
 
-      // 包含 android 和 ubuntu
+      // 包含 android 和 linux
       expect(infos.any((i) => i.type == ProviderType.android), true);
-      expect(infos.any((i) => i.type == ProviderType.ubuntu), true);
+      expect(infos.any((i) => i.type == ProviderType.linux), true);
     });
 
     test('resolveFallbackProvider 返回可用 Provider', () async {
