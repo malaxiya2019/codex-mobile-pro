@@ -3,35 +3,29 @@
 ///
 /// 检测 Termux Runtime 的真实状态，不是 Android 系统 Shell。
 ///
+/// 使用 TermuxTransport 进行检测，不再直接访问 TermuxRuntimeBridge。
+///
 /// 检测项：
 ///   1. Termux APK 是否安装
 ///   2. RUN_COMMAND Intent 是否可用
 ///   3. Termux 命令能否真正执行
 ///   4. Termux Prefix 是否存在
 ///   5. 包管理器是否可用（pkg / apt / dpkg）
-///
-/// 不再把 /system/bin/sh 误报为「Termux 环境」。
 /// ====================================================================
 library;
 
+import '../../../runtime/termux/termux_transport.dart';
+import '../../../runtime/termux/method_channel_transport.dart';
 import '../../logger/log_service.dart';
-import '../../termux/termux_runtime_bridge.dart';
 import '../detection_result.dart';
 import '../detector.dart';
 
-/// Termux Runtime 检测状态
-enum TermuxRuntimeStatus {
-  /// Termux 完全可用（包已安装 + Intent 可用 + 命令可执行）
-  available,
-
-  /// Termux 已安装但通信失败
-  installedButUnreachable,
-
-  /// Termux 未安装
-  notInstalled,
-}
-
 class TermuxDetector extends Detector {
+  final TermuxTransport _transport;
+
+  TermuxDetector({TermuxTransport? transport})
+    : _transport = transport ?? MethodChannelTermuxTransport();
+
   @override
   String get id => 'termux';
   @override
@@ -44,45 +38,31 @@ class TermuxDetector extends Detector {
   @override
   RuntimeSubCategory? get subCategory => RuntimeSubCategory.coding;
 
-  /// 缺失提示
   @override
   String? get missingHint => '需要安装 Termux（F-Droid 版本），用于提供开发环境';
 
   @override
   Future<DetectionResult> detect() async {
     final start = DateTime.now();
-    final bridge = TermuxRuntimeBridge.instance;
 
     try {
       // 1. 完整诊断
-      final diag = await bridge.diagnose();
+      final diag = await _transport.diagnose();
       final elapsed = DateTime.now().difference(start).inMilliseconds;
 
       // 2. 如果 Termux 完全可用
       if (diag.isAvailable) {
-        // 获取详细环境信息
-        final env = await bridge.getEnvironment();
+        final env = await _transport.getEnvironment();
 
-        // 版本文字
         final versionParts = <String>[];
         if (diag.version != null) versionParts.add(diag.version!);
 
-        // 包管理器
-        String pkgInfo;
-        switch (diag.pkgManager) {
-          case TermuxPackageManagerStatus.pkg:
-            pkgInfo = 'pkg';
-            break;
-          case TermuxPackageManagerStatus.apt:
-            pkgInfo = 'apt';
-            break;
-          case TermuxPackageManagerStatus.dpkg:
-            pkgInfo = 'dpkg';
-            break;
-          case TermuxPackageManagerStatus.unavailable:
-            pkgInfo = '无包管理器';
-            break;
-        }
+        final pkgInfo = switch (diag.pkgManager) {
+          TermuxPkgManager.pkg => 'pkg',
+          TermuxPkgManager.apt => 'apt',
+          TermuxPkgManager.dpkg => 'dpkg',
+          TermuxPkgManager.unavailable => '无包管理器',
+        };
         if (versionParts.isNotEmpty) {
           versionParts.add('PM: $pkgInfo');
         } else {
