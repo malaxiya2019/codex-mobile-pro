@@ -1,4 +1,3 @@
-import 'package:codex_mobile_pro/core/termux/shell_detector.dart';
 import 'package:codex_mobile_pro/features/terminal/services/terminal_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -9,12 +9,64 @@ import '../../../core/logger/log_service.dart';
 import '../../../core/terminal/iterminal_backend.dart';
 import '../../../core/terminal/native_pty_backend.dart';
 import '../../../core/terminal/process_terminal_backend.dart';
-import '../../../core/termux/shell_detector.dart';
 import '../../../runtime/runtime_manager.dart';
 import 'ring_buffer.dart';
 
+// ─── Shell 信息（本地定义，替代旧 ShellDetector）─────────────
+
+
+/// Shell 信息（Android 系统 Shell）
+class _ShellInfo {
+  final String shellPath;
+  final String version;
+  final bool isTermuxAvailable;
+
+  const _ShellInfo()
+      : shellPath = '/system/bin/sh',
+        version = 'Android System Shell',
+        isTermuxAvailable = false;
+
+  bool get isAvailable => true;
+  List<String> get launchArgs => ['-i'];
+  bool get useRunInShell => false;
+  String get friendlyDescription => 'Android 系统 Shell';
+
+  @override
+  String toString() => 'ShellInfo(type=systemSh, path=$shellPath, version=$version)';
+}
+
+/// 默认 Shell 信息
+const _kDefaultShell = _ShellInfo();
+// ─── 终端运行环境 ─────────────────────────────────────────────
+
+/// 构建终端环境变量
+///
+/// 基础环境来源于 RuntimeManager（可包含 Termux/App Runtime 信息），
+/// 配合合理默认值。不再使用旧 ShellDetector.getShellEnvironment()。
+Map<String, String> _buildTerminalEnvironment({
+  required String home,
+  required Map<String, String> runtimeEnv,
+}) {
+  return {
+    'HOME': home,
+    'PATH': '/system/bin:/system/xbin',
+    'SHELL': '/system/bin/sh',
+    'TERM': 'xterm-256color',
+    'PWD': home,
+    'TMPDIR': Directory.systemTemp.path,
+    'LANG': 'en_US.UTF-8',
+    'USER': 'user',
+    'LOGNAME': 'user',
+    ...runtimeEnv, // runtimeEnv 优先（覆盖基础值）
+  };
+}
+
+// ─── 终端会话状态 ─────────────────────────────────────────────
+
 /// 终端会话状态
 enum TerminalSessionStatus { running, exited, error }
+
+// ─── 终端输出行 ───────────────────────────────────────────────
 
 /// 终端输出行
 class TerminalLine {
@@ -29,15 +81,15 @@ class TerminalLine {
   });
 }
 
+// ─── 终端会话 ─────────────────────────────────────────────────
+
 /// 终端会话
 ///
-/// 使用 ShellDetector 自动检测可用 Shell，优先级：
-/// 1. Native PTY（真实伪终端，支持 job control / vim / Ctrl+C）
-/// 2. Process（回退方案，无 TTY）
+/// 使用 RuntimeManager 获取运行环境，不再依赖旧 ShellDetector。
 class TerminalSession {
   final String id;
   String name;
-  final ShellInfo shellInfo;
+  final _ShellInfo shellInfo;
   String cwd;
   TerminalSessionStatus status;
   final RingBuffer<TerminalLine> outputBuffer;
@@ -118,15 +170,15 @@ class TerminalSession {
   /// 使用 Process.start() 启动（回退方案）
   Future<bool> _startWithProcess() async {
     final appDir = await getApplicationDocumentsDirectory();
-    var env = ShellDetector.getShellEnvironment(appDir.path);
-    // 合并 Runtime Manager 提供的环境变量（注入 runtime/bin 到 PATH）
+
+    // 从 RuntimeManager 获取运行环境
+    Map<String, String> runtimeEnv = {};
     try {
-      final runtimeEnv = RuntimeManager.instance.getTerminalEnvironment();
-      if (runtimeEnv.isNotEmpty) {
-        env = {...env, ...runtimeEnv}; // runtimeEnv 优先（覆盖 ShellDetector 的基础值）
-        LogService.info('Terminal', '  已注入 Runtime 环境: PATH=${runtimeEnv['PATH']?.substring(0, 80)}...');
-      }
+      runtimeEnv = RuntimeManager.instance.getTerminalEnvironment();
     } catch (_) {}
+
+    final env = _buildTerminalEnvironment(home: appDir.path, runtimeEnv: runtimeEnv);
+
     LogService.info('Terminal', '  使用 Process 回退');
     LogService.info('Terminal', '  HOME: ${env['HOME']}');
     LogService.info('Terminal', '  SHELL: ${env['SHELL']}');
@@ -175,15 +227,14 @@ class TerminalSession {
   /// 使用 Native PTY 启动
   Future<bool> _startWithNativePty() async {
     final appDir = await getApplicationDocumentsDirectory();
-    var env = ShellDetector.getShellEnvironment(appDir.path);
-    // 合并 Runtime Manager 提供的环境变量（注入 runtime/bin 到 PATH）
+
+    // 从 RuntimeManager 获取运行环境
+    Map<String, String> runtimeEnv = {};
     try {
-      final runtimeEnv = RuntimeManager.instance.getTerminalEnvironment();
-      if (runtimeEnv.isNotEmpty) {
-        env = {...env, ...runtimeEnv}; // runtimeEnv 优先（覆盖 ShellDetector 的基础值）
-        LogService.info('Terminal', '  已注入 Runtime 环境: PATH=${runtimeEnv['PATH']?.substring(0, 80)}...');
-      }
+      runtimeEnv = RuntimeManager.instance.getTerminalEnvironment();
     } catch (_) {}
+
+    final env = _buildTerminalEnvironment(home: appDir.path, runtimeEnv: runtimeEnv);
 
     try {
       _nativeSession = await _backend!.createSession(
@@ -301,13 +352,15 @@ class TerminalSession {
   }
 }
 
+// ─── 终端服务 ─────────────────────────────────────────────────
+
 /// 终端服务
 ///
-/// 管理所有终端会话，通过 ShellDetector 自动选择可用 Shell。
-/// 默认使用 NativePtyBackend（真实 PTY），失败时回退到 ProcessTerminalBackend。
+/// 管理所有终端会话，使用 RuntimeManager 获取运行环境。
+/// 不再依赖旧 ShellDetector。
 class TerminalService {
   final List<TerminalSession> _sessions = [];
-  ShellInfo? _cachedShellInfo;
+  _ShellInfo? _cachedShellInfo;
   ITerminalBackend? _backend;
 
   List<TerminalSession> get sessions => List.unmodifiable(_sessions);
@@ -364,8 +417,8 @@ class TerminalService {
     await initDefaultBackend();
     LogService.info('Terminal', 'createSession 后端: ${_backend?.runtimeType ?? "null"}');
 
-    // 检测可用 Shell
-    _cachedShellInfo ??= await ShellDetector.detect();
+    // 使用默认 Shell（始终为 Android 系统 Shell）
+    _cachedShellInfo ??= _kDefaultShell;
     final shellInfo = _cachedShellInfo!;
 
     // 使用 App 私有目录作为默认工作目录

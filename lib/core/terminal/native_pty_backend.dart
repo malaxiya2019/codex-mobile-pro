@@ -10,7 +10,7 @@ import 'iterminal_backend.dart';
 /// 使用 Native PTY（posix_openpt / fork + execve）创建伪终端，
 /// 通过 EventChannel 接收输出。
 ///
-/// 本后端直接使用 ShellDetector 提供的 shell（如 /system/bin/sh），
+/// 本后端接收外部传入的 shell 路径（如 /system/bin/sh），由 TerminalService 提供，
 /// 不依赖 BusyBox。BusyBox 模式保留用于向后兼容。
 class NativePtyBackend implements ITerminalBackend {
   static const MethodChannel _channel =

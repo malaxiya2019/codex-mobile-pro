@@ -9,8 +9,45 @@ import 'dart:async';
 
 import '../../../core/terminal/iterminal_backend.dart';
 import '../../../core/terminal/process_terminal_backend.dart';
-import '../../../core/termux/shell_detector.dart';
 import 'ring_buffer.dart';
+
+// ─── Shell 类型 ───────────────────────────────────────────────
+
+/// Shell 类型
+enum ShellType {
+  /// Android 系统 Shell（/system/bin/sh）— 唯一可执行的 Shell
+  systemSh,
+}
+
+/// Shell 信息
+class ShellInfo {
+  final ShellType type;
+  final String shellPath;
+  final String version;
+  final bool isTermuxAvailable;
+
+  const ShellInfo({
+    this.type = ShellType.systemSh,
+    this.shellPath = '/system/bin/sh',
+    this.version = 'Android System Shell',
+    this.isTermuxAvailable = false,
+  });
+
+  bool get isAvailable => true;
+
+  /// 终端启动参数 — 交互模式
+  List<String> get launchArgs => ['-i'];
+
+  /// 绝对路径无需 runInShell
+  bool get useRunInShell => false;
+
+  /// 友好的中文描述
+  String get friendlyDescription => 'Android 系统 Shell';
+
+  @override
+  String toString() =>
+      'ShellInfo(type=$type, path=$shellPath, version=$version)';
+}
 
 // ─── 枚举 ─────────────────────────────────────────────────────
 
