@@ -224,6 +224,52 @@ class NativeBusybox {
     }
   }
 
+  /// 在 App 可写目录为 nativeLibraryDir 的 libbusybox.so 创建 symlink。
+  ///
+  /// 返回 `bin/busybox` 链接文件（argv[0] 为 busybox）；失败返回 null。
+  /// 优先 support 目录 → 临时目录 → 系统临时目录；已存在且指向正确的
+  /// 链接幂等复用，指向错误/为普通文件时删除重建。
+  static Future<File?> _linkNativeBusybox(File so) async {
+    final bases = <String>[];
+    try {
+      bases.add((await getApplicationSupportDirectory()).path);
+    } catch (e) {
+      LogService.warning('Busybox', 'getApplicationSupportDirectory 失败: $e');
+    }
+    try {
+      bases.add((await getTemporaryDirectory()).path);
+    } catch (e) {
+      LogService.warning('Busybox', 'getTemporaryDirectory 失败: $e');
+    }
+    bases.add(Directory.systemTemp.path);
+
+    for (final base in bases) {
+      try {
+        final binDir = Directory('$base/bin')..createSync(recursive: true);
+        final linkPath = '${binDir.path}/busybox';
+        final type = FileSystemEntity.typeSync(linkPath, followLinks: false);
+        if (type == FileSystemEntityType.link) {
+          final existing = Link(linkPath);
+          if (existing.targetSync() == so.path) {
+            return File(linkPath); // 幂等复用
+          }
+          existing.deleteSync();
+        } else if (type == FileSystemEntityType.file) {
+          await _deleteBestEffort(File(linkPath));
+        }
+        final link = Link(linkPath);
+        link.createSync(so.path);
+        return File(linkPath);
+      } catch (e) {
+        LogService.warning(
+          'Busybox',
+          '创建 native busybox symlink 失败 ($base): $e',
+        );
+      }
+    }
+    return null;
+  }
+
   /// 确保 busybox 已安装，返回完整路径（失败返回 null）
   ///
   /// 兼容旧调用方；失败详情见 [ensureInstalledDetailed]。
@@ -262,20 +308,39 @@ class NativeBusybox {
     if (nativeDir != null && nativeDir.isNotEmpty) {
       final so = File('$nativeDir/libbusybox.so');
       if (await so.exists()) {
-        final health = await healthCheck(so);
-        if (health.usable) {
-          LogService.info(
+        // busybox 会把 argv[0]（basename）当作 applet 名解析：直接
+        // execve `libbusybox.so` 会得到 "applet not found"（exit 127），
+        // 导致 healthCheck 的 execve 冒烟失败。必须通过名为 `busybox`
+        // 的 symlink 调用（与 Operit 同源方案）：内核解析到
+        // nativeLibraryDir 中系统保证可执行的 ELF，同时 argv[0] 为
+        // `busybox`。symlink 本体位于 App 可写目录，执行权限受
+        // 目标文件所在分区（nativeLibraryDir 可执行）约束。
+        final linked = await _linkNativeBusybox(so);
+        if (linked != null) {
+          final health = await healthCheck(linked);
+          if (health.usable) {
+            LogService.info(
+              'Busybox',
+              '复用 nativeLibraryDir busybox（经 symlink）: '
+              '${linked.path} → ${so.path}',
+            );
+            return BusyboxInstallResult(path: linked.path);
+          }
+          lastError = health.error;
+          lastDetail = health.summary;
+          LogService.warning(
             'Busybox',
-            '复用 nativeLibraryDir busybox（系统可执行区）: ${so.path}',
+            'nativeLibraryDir busybox 不可用（$lastError），回退 assets 安装: '
+            '${linked.path} → ${so.path}\n$lastDetail',
           );
-          return BusyboxInstallResult(path: so.path);
+        } else {
+          lastError = BusyboxErrorCode.installFailed;
+          lastDetail = 'nativeLibraryDir busybox 存在但 symlink 创建失败';
+          LogService.warning(
+            'Busybox',
+            'nativeLibraryDir busybox symlink 创建失败: $so',
+          );
         }
-        lastError = health.error;
-        lastDetail = health.summary;
-        LogService.warning(
-          'Busybox',
-          'nativeLibraryDir busybox 不可用（$lastError），回退 assets 安装: ${so.path}\n$lastDetail',
-        );
       } else {
         LogService.warning(
           'Busybox',

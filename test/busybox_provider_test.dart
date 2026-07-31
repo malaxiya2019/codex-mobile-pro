@@ -337,28 +337,88 @@ void main() {
   });
 
   group('nativeLibraryDir 优先（jniLibs 解压区，系统保证可执行）', () {
-    test('nativeLibraryDir 中存在可用 libbusybox.so → 直接复用该路径',
-        () async {
-      final real = _findRealBusybox();
-      if (real == null) {
-        markTestSkipped('当前平台无可用真实 busybox ELF，跳过');
-        return;
+    /// 构造可执行的 fake busybox（≥ _minPlausibleSize=500KB），
+    /// CI / 本机均可真实跑通 healthCheck 的 execve 冒烟。
+    File makeNativeSo(Directory nativeDir) {
+      final so = File('${nativeDir.path}/libbusybox.so');
+      final fake = createFakeBusybox(tmp);
+      final big = StringBuffer(fake.readAsStringSync());
+      while (big.length < 600 * 1024) {
+        big.writeln('# padding line');
       }
+      so.writeAsStringSync(big.toString());
+      Process.runSync('chmod', ['+x', so.path]);
+      return so;
+    }
+
+    test('nativeLibraryDir 中存在可用 busybox → 经 symlink 复用（argv[0] 必须为 busybox）',
+        () async {
       final nativeDir =
           Directory('${tmp.path}/native-lib')..createSync(recursive: true);
-      final so = File('${nativeDir.path}/libbusybox.so');
-      File(real).copySync(so.path);
+      final so = makeNativeSo(nativeDir);
 
       final r = await NativeBusybox.ensureInstalledDetailed(
         nativeLibraryDir: nativeDir.path,
       );
-      expect(r.success, isTrue);
+      expect(r.success, isTrue, reason: r.detail);
+      final linkPath = r.path;
+      expect(linkPath, isNotNull);
+
+      // 返回的是名为 busybox 的 symlink，指向 nativeLibraryDir 的 .so；
+      // 直接 execve libbusybox.so 会被 busybox 当作 applet 名解析而
+      // 失败（exit 127），必须经 symlink 使 argv[0] == busybox。
       expect(
-        r.path,
-        so.path,
-        reason: '应优先复用 nativeLibraryDir 中的 libbusybox.so，'
-            '而不是复制到 filesDir',
+        FileSystemEntity.typeSync(linkPath!, followLinks: false),
+        FileSystemEntityType.link,
+        reason: '应返回 symlink 而非 .so 本身',
       );
+      expect(Link(linkPath).targetSync(), so.path);
+
+      // symlink 路径 healthCheck 通过（execve 冒烟 argv[0]=busybox）
+      final h = await NativeBusybox.healthCheck(File(linkPath));
+      expect(h.usable, isTrue, reason: h.summary);
+    });
+
+    test('symlink 已存在且指向正确 → 幂等复用（不重建）', () async {
+      final nativeDir =
+          Directory('${tmp.path}/native-lib2')..createSync(recursive: true);
+      final so = makeNativeSo(nativeDir);
+
+      final r1 = await NativeBusybox.ensureInstalledDetailed(
+        nativeLibraryDir: nativeDir.path,
+      );
+      expect(r1.success, isTrue, reason: r1.detail);
+      final r2 = await NativeBusybox.ensureInstalledDetailed(
+        nativeLibraryDir: nativeDir.path,
+      );
+      expect(r2.path, r1.path, reason: '第二次调用应复用同一 symlink');
+      expect(Link(r2.path!).targetSync(), so.path);
+    });
+
+    test('symlink 指向错误目标 → 自动删除并重建', () async {
+      final nativeDir =
+          Directory('${tmp.path}/native-lib3')..createSync(recursive: true);
+      final so = makeNativeSo(nativeDir);
+
+      // 预先在 systemTemp/bin 放置指向错误目标的 symlink
+      final binDir = Directory('${Directory.systemTemp.path}/bin')
+        ..createSync(recursive: true);
+      final wrong = File('${tmp.path}/wrong-target')..writeAsStringSync(
+            '#!/bin/sh\nexit 127\n',
+          );
+      Process.runSync('chmod', ['+x', wrong.path]);
+      final stale = Link('${binDir.path}/busybox');
+      if (stale.existsSync()) {
+        stale.deleteSync();
+      }
+      stale.createSync(wrong.path);
+
+      final r = await NativeBusybox.ensureInstalledDetailed(
+        nativeLibraryDir: nativeDir.path,
+      );
+      expect(r.success, isTrue, reason: r.detail);
+      expect(Link(r.path!).targetSync(), so.path,
+          reason: '错误 symlink 应被重建为指向 nativeLibraryDir');
     });
 
     test('nativeLibraryDir 不存在 libbusybox.so → 正常回退（不裸抛）',
@@ -383,26 +443,6 @@ void main() {
   });
 }
 
-/// 查找当前平台可执行的真实 busybox（Termux/Android 环境；CI 通常没有）。
-///
-/// 必须同时满足：存在 + ELF AArch64（e_machine=183，与
-/// NativeBusybox.healthCheck 的 ABI 检查一致）。CI Ubuntu runner 自带
-/// x86_64 busybox 时 healthCheck 会因 ABI 不匹配失败，因此排除，
-/// 避免 CI 误报。
-String? _findRealBusybox() {
-  try {
-    final r = Process.runSync('sh', ['-c', 'command -v busybox']);
-    if (r.exitCode == 0) {
-      final p = (r.stdout as String).trim();
-      if (p.isNotEmpty && File(p).existsSync()) {
-        final f = File(p);
-        final machine = NativeBusybox.elfMachineOf(f);
-        if (machine == 183) return p;
-      }
-    }
-  } catch (_) {}
-  return null;
-}
 
 /// 构造最小 ELF header（前 20 字节），offset 18-19 为小端 e_machine。
 List<int> _elfHeader(int eMachine) => [
