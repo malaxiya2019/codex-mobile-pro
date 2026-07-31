@@ -41,6 +41,16 @@ enum DeployErrorCode {
   toolInstallationFailed,
   versionMismatch,
 
+  // ─── 工具链安装层（Coding Runtime apt/npm）───
+  /// `apt-get update` 失败（源不可达 / DNS / 网络）
+  aptUpdateFailed,
+
+  /// `apt-get install` 失败（包不存在 / 依赖冲突 / 权限）
+  aptInstallFailed,
+
+  /// npm 全局安装失败
+  npmInstallFailed,
+
   // ─── 并发 / 状态 ───
   deploymentInProgress,
 

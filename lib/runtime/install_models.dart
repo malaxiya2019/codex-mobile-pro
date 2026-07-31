@@ -12,12 +12,29 @@ import 'runtime_dependency.dart';
 /// 安装阶段
 enum InstallPhase {
   pending,
+
+  /// 下载 / 拉取阶段
   downloading,
+
+  /// 解压阶段
   extracting,
+
+  /// 安装执行阶段（apt / npm install）
+  installing,
+
+  /// 配置阶段
   configuring,
+
+  /// 验证阶段
   verifying,
+
+  /// 完成
   completed,
+
+  /// 失败
   failed,
+
+  /// 因依赖失败被阻塞
   blocked,
 }
 
