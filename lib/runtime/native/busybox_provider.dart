@@ -38,6 +38,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert' show utf8;
 import 'dart:io';
 
 import 'package:crypto/crypto.dart' show sha256;
