@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../runtime/provider/runtime_capability.dart';
+import '../../../runtime/provider/runtime_provider.dart';
 import '../../../runtime/provider/termux_provider.dart';
 import '../../../runtime/runtime_manager.dart';
+import '../../../runtime/termux/termux_transport.dart';
 
 /// Termux 通信验证页面
 class TermuxTestPage extends ConsumerStatefulWidget {
