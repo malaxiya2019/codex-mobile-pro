@@ -51,6 +51,13 @@ class RuntimeEnvironment {
   /// proot loader 完整路径
   String get ubuntuLoaderPath => '$ubuntuLibexecDir/proot/loader';
 
+  /// Linux Runtime 安装完成标记（防止半解压 rootfs 被误判为已安装）
+  ///
+  /// 只有完整通过「下载 → 验证 → 流式解压 → 原子替换 → 健康检查」
+  /// 全链路后才会写入此标记。
+  String get installCompleteMarker =>
+      '$ubuntuRootfsDir/.codex_install_complete';
+
   RuntimeEnvironment._();
 
   static Future<RuntimeEnvironment> getInstance() async {
@@ -176,7 +183,20 @@ class RuntimeEnvironment {
   bool isUbuntuInstalled() {
     final prootFile = File(path.join(ubuntuBinDir, 'proot'));
     final rootfsBash = File(path.join(ubuntuRootfsDir, 'usr', 'bin', 'bash'));
-    return prootFile.existsSync() && rootfsBash.existsSync();
+    final marker = File(installCompleteMarker);
+    return prootFile.existsSync() &&
+        rootfsBash.existsSync() &&
+        marker.existsSync();
+  }
+
+  /// 是否存在不完整的 Ubuntu 安装（半解压 rootfs 或缺少完成标记）
+  ///
+  /// 用于 UI 提示「需要重新初始化」而不是误报已就绪。
+  bool get hasPartialUbuntuInstall {
+    final prootFile = File(path.join(ubuntuBinDir, 'proot'));
+    final rootfsBash = File(path.join(ubuntuRootfsDir, 'usr', 'bin', 'bash'));
+    final partial = prootFile.existsSync() || rootfsBash.existsSync();
+    return partial && !isUbuntuInstalled();
   }
 
   /// Linux Runtime 是否已就绪（isUbuntuInstalled 的对外别名）

@@ -94,6 +94,11 @@ class RuntimeArtifact {
   /// 提取时要 strip 的路径组件数
   final int stripComponents;
 
+  /// 解压后 tar 流的总字节数（用于流式解压的真实进度计算）
+  ///
+  /// 仅 rootfs 类 artifact 需要；.deb 等小包可省略（0）。
+  final int expandedBytes;
+
   const RuntimeArtifact({
     required this.name,
     required this.type,
@@ -104,6 +109,7 @@ class RuntimeArtifact {
     this.targetSubDir = '',
     this.includeFiles,
     this.stripComponents = 6,
+    this.expandedBytes = 0,
   });
 
   /// 构建有序的下载 URL 列表：主源 → 镜像 → IP直连占位
@@ -426,6 +432,8 @@ class RuntimeManifest {
           mirrors: MirrorRegistry.mirrorsFor('https://github.com/termux/proot-distro/releases/download/v4.18.0/ubuntu-noble-aarch64-pd-v4.18.0.tar.xz'),
           targetSubDir: 'ubuntu/rootfs',
           stripComponents: 1,
+          // 实测 tar 流大小（xzcat 输出），用于流式解压进度
+          expandedBytes: 314982400,
         ),
         // ─── proot loader 包 ───
         RuntimeArtifact(
