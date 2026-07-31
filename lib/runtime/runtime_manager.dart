@@ -37,6 +37,7 @@ import 'capability/capability_resolver.dart';
 import 'capability/provider_enhancer.dart';
 import 'download_queue.dart';
 import 'provider/android_runtime_provider.dart';
+import 'provider/app_runtime_provider.dart';
 // Phase 2: Provider 导入
 import 'provider/runtime_capability.dart';
 import 'provider/runtime_provider.dart' hide InstallResult, VerificationResult;
@@ -117,6 +118,7 @@ class RuntimeManager {
   RuntimeManager._() {
     // Phase 2: 注册默认 Provider（按优先级排序）
     _providers.addAll([
+      AppRuntimeProvider(),
       AndroidRuntimeProvider(),
       TermuxRuntimeProvider(),
       UbuntuRuntimeProvider(),
