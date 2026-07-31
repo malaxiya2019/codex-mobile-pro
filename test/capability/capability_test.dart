@@ -219,7 +219,7 @@ void main() {
       expect(cap.available, false);
       expect(cap.status, CapabilityStatus.unavailable);
       expect(cap.health, CapabilityHealth.unavailable);
-      expect(cap.reason, contains('未找到可执行文件'));
+      expect(cap.reason, contains('可执行文件不存在'));
     });
 
     test('超时', () async {

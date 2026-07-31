@@ -111,9 +111,16 @@ class FakeProcessRunner extends RuntimeProcessRunner {
     _callCount++;
     _executedRequests.add(request);
 
-    // 构建 key：先尝试完整匹配，再尝试 executable-only
+    // 构建 key：先尝试完整匹配（绝对路径），
+    // 再尝试 basename 匹配（模拟真实 shell 行为：which 解析出绝对路径后，
+    // 执行 --version 的效果与直接执行裸名相同）。
     final fullKey = '${request.executable} ${request.arguments.join(' ')}'.trim();
-    final result = _results[fullKey] ?? _results[request.executable];
+    final basename = request.executable.split('/').last;
+    final baseKey = '$basename ${request.arguments.join(' ')}'.trim();
+    final result = _results[fullKey] ??
+        _results[baseKey] ??
+        _results[request.executable] ??
+        _results[basename];
 
     if (result != null) {
       return RuntimeProcessResult(

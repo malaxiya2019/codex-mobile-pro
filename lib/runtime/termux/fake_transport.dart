@@ -76,8 +76,13 @@ class FakeTermuxTransport implements TermuxTransport {
   Future<TermuxEnvResult> getEnvironment() async => _envResult;
 
   @override
-  Future<String?> which(String binaryName) async =>
-      _whichResults[binaryName] ?? '/data/data/com.termux/files/usr/bin/$binaryName';
+  Future<String?> which(String binaryName) async {
+    // 已预设的值（含 null=未找到）直接返回；未预设才回退到默认 Termux 路径
+    if (_whichResults.containsKey(binaryName)) {
+      return _whichResults[binaryName];
+    }
+    return '/data/data/com.termux/files/usr/bin/$binaryName';
+  }
 
   @override
   Future<TermuxInstallResult> installPackage(

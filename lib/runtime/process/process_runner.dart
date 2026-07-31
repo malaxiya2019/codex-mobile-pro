@@ -104,12 +104,16 @@ class LocalProcessExecution implements IExecutionAdapter {
       final stdoutBuf = StringBuffer();
       final stderrBuf = StringBuffer();
 
-      process.stdout.transform(const SystemEncoding().decoder).listen(
-        (data) => stdoutBuf.write(data),
-      );
-      process.stderr.transform(const SystemEncoding().decoder).listen(
-        (data) => stderrBuf.write(data),
-      );
+      // 保存流完成 Future：进程 exitCode 可能先于管道数据到达，
+      // 必须在返回前等待输出流消费完成，否则会丢失尾部输出。
+      final stdoutDone = process.stdout
+          .transform(const SystemEncoding().decoder)
+          .listen((data) => stdoutBuf.write(data))
+          .asFuture<void>();
+      final stderrDone = process.stderr
+          .transform(const SystemEncoding().decoder)
+          .listen((data) => stderrBuf.write(data))
+          .asFuture<void>();
 
       // ─── 等待进程完成（可被超时/取消中断） ────────────────────
       int exitCode;
@@ -137,6 +141,10 @@ class LocalProcessExecution implements IExecutionAdapter {
       }
 
       timeoutTimer?.cancel();
+
+      // 等待输出流完全消费（进程可能已退出但 stdout 管道仍有数据）
+      await stdoutDone;
+      await stderrDone;
 
       return RuntimeProcessResult(
         exitCode: exitCode,

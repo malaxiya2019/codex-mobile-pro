@@ -48,7 +48,8 @@ void main() {
     });
 
     test('2. environment — 环境变量', () async {
-      final env = await provider.getEnvironment();
+      // 无 Termux 时使用 appHome fallback，保证环境契约完整
+      final env = await provider.getEnvironment(appHome: '/data/local/tmp');
 
       // 应包含基本变量
       expect(env.containsKey('HOME'), true);

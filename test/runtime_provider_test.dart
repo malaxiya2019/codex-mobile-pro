@@ -215,9 +215,10 @@ void main() {
   // ═══════════════════════════════════════════════════════════════
 
   group('RuntimeManager — Provider Orchestration', () {
+    late RuntimeManager mgr;
+
     setUp(() {
-      // 重置单例（仅测试用）
-      // 注意：实际测试中 RuntimeManager 是单例，需要谨慎管理状态
+      mgr = RuntimeManager.instance;
     });
 
     test('默认注册 3 个 Provider', () {
@@ -239,13 +240,13 @@ void main() {
       expect(mgr.registeredProviders.any((p) => p.id == 'test'), true);
     });
 
-    test('getProvidersForCapability 返回 Provider', () {
-      final mgr = RuntimeManager.instance;
+    test('getProvidersForCapability 返回 Provider', () async {
+      // Provider 的 capabilities 在 detect() 后填充
+      await mgr.discoverProviders();
 
-      // Android 提供 systemShell
+      // systemShell 应有 Provider 声明（Android 真机为 android，CI 为 app）
       final providers = mgr.getProvidersForCapability(CapabilityType.systemShell);
       expect(providers, isNotEmpty);
-      expect(providers.any((p) => p.id == 'android'), true);
 
       // Ubuntu 提供 ubuntu
       final ubuntuProviders = mgr.getProvidersForCapability(CapabilityType.ubuntu);
@@ -254,9 +255,9 @@ void main() {
     });
 
     test('getCapability 查找可用 Capability', () async {
-      final mgr = RuntimeManager.instance;
+      await mgr.discoverProviders();
 
-      // systemShell 应该可用（Android 环境）
+      // systemShell 应可解析（Android 真机为 android，CI 为 app）
       final shellCap = await mgr.getCapability(CapabilityType.systemShell);
       expect(shellCap, isNotNull);
       expect(shellCap!.type, CapabilityType.systemShell);
@@ -273,16 +274,20 @@ void main() {
     });
 
     test('resolveFallbackProvider 返回可用 Provider', () async {
-      final mgr = RuntimeManager.instance;
-
-      // systemShell 应该由 Android 提供
+      // systemShell 由平台实际提供方返回（Android 真机为 android，CI 为 app）
       final provider = await mgr.resolveFallbackProvider(CapabilityType.systemShell);
       expect(provider, isNotNull);
-      expect(provider!.id, 'android');
+      expect(
+        provider!.capabilities.any((c) => c.type == CapabilityType.systemShell),
+        true,
+      );
     });
 
-    test('cachedProviderInfos 初始为 null', () {
-      final mgr = RuntimeManager.instance;
+    test('registerProvider 重置 Provider 信息缓存', () async {
+      await mgr.discoverProviders();
+      expect(mgr.cachedProviderInfos, isNotNull);
+
+      mgr.registerProvider(_TestProvider('cache-reset'));
       expect(mgr.cachedProviderInfos, isNull);
     });
   });
