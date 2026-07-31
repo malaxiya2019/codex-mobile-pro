@@ -16,7 +16,7 @@ enum DeployState {
   completed,  // 检测完成
   installing, // 安装中
   verifying,  // 验证中
-  error,      // 出错
+  error,      // 出错（检测失败 或 部署失败）
 }
 
 /// 部署中心状态
@@ -114,8 +114,7 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
 
   /// 检测所有
   Future<void> checkAll() async {
-    state = state.copyWith(
-        state: DeployState.checking);
+    state = state.copyWith(state: DeployState.checking);
 
     try {
       await RuntimeManager.instance.initialize();
@@ -160,6 +159,11 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
   }
 
   /// 一键部署 Coding Runtime
+  ///
+  /// 安装完成后：
+  ///   - 使用 RuntimeManager 内部已刷新过的检测结果（避免重复 detectAll）
+  ///   - 任一工具失败 → 进入 error 状态并展示「阶段 + 原因 + 建议」，
+  ///     不再把失败静默丢进 installResults 让 UI 黑盒。
   Future<void> installCodingRuntime() async {
     final mgr = RuntimeManager.instance;
 
@@ -191,11 +195,8 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
       state = state.copyWith(currentProgress: progress);
     });
 
-    // 执行安装
+    // 执行安装（等待完整结果流，含安装后的 detectAll 补丁）
     final results = await mgr.installCodingRuntime().toList();
-
-    // 安装完成后重新检测
-    await checkAll();
 
     // 构建安装结果 map
     final resultMap = <RuntimeTool, InstallResult>{};
@@ -203,8 +204,24 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
       resultMap[r.tool] = r;
     }
 
+    // 失败 → 展示明确的失败信息（阶段 + 原因 + 建议）
+    final failed = results.where((r) => !r.success).toList();
+    if (failed.isNotEmpty) {
+      state = state.copyWith(
+        state: DeployState.error,
+        detectionResult: mgr.lastDetection,
+        installResults: resultMap,
+        errorMessage: _buildFailureMessage(failed.first),
+        lastChecked: DateTime.now(),
+      );
+      return;
+    }
+
     state = state.copyWith(
+      state: DeployState.completed,
+      detectionResult: mgr.lastDetection,
       installResults: resultMap,
+      lastChecked: DateTime.now(),
     );
   }
 
@@ -239,11 +256,22 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
 
     final result = await mgr.install(tool);
 
-    // 重新检测
-    await checkAll();
-
     final resultMap = Map<RuntimeTool, InstallResult>.from(state.installResults);
     resultMap[tool] = result;
+
+    if (!result.success) {
+      state = state.copyWith(
+        state: DeployState.error,
+        detectionResult: mgr.lastDetection,
+        installResults: resultMap,
+        errorMessage: _buildFailureMessage(result),
+        lastChecked: DateTime.now(),
+      );
+      return;
+    }
+
+    // 成功后重新检测（单工具路径不经过 _startInstallCoding 的 detectAll）
+    await checkAll();
     state = state.copyWith(installResults: resultMap);
   }
 
@@ -273,6 +301,22 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
   void dispose() {
     _progressSub?.cancel();
     super.dispose();
+  }
+
+  /// 构建部署失败信息（阶段 + 原因 + 建议）
+  String _buildFailureMessage(InstallResult result) {
+    final toolName = RuntimeDependency.forTool(result.tool)?.displayName ??
+        result.tool.name;
+    final phase = result.phase.name;
+    final base = result.errorMessage ?? '未知错误';
+
+    // InstallResult.errorMessage 对 DeployError 已含「❌ 原因 + 💡 建议」
+    final buf = StringBuffer('❌ 部署失败（$toolName）');
+    buf.writeln();
+    buf.write('阶段：$phase');
+    buf.writeln();
+    buf.write(base);
+    return buf.toString();
   }
 
   RuntimeDetectionResult _groupResults(List<DetectionResult> results) {

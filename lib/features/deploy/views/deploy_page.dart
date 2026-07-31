@@ -89,6 +89,13 @@ class _DeployPageState extends ConsumerState<DeployPage> {
 
                 const SizedBox(height: 8),
 
+                // ── 部署失败卡片（显示阶段 + 原因 + 建议，不再黑盒） ──
+                if (status.state == DeployState.error &&
+                    status.errorMessage != null)
+                  _buildDeployFailureCard(context, status),
+
+                const SizedBox(height: 8),
+
                 // ── 检测 / 安装进度 ──
                 if (status.state == DeployState.checking)
                   _buildCheckingIndicator(context, status),
@@ -457,6 +464,84 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                   minimumSize: const Size(double.infinity, 40),
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 部署失败卡片
+  ///
+  /// 将安装器的结构化错误（阶段 + 原因 + 建议）展示给用户，
+  /// 并提供「重新检测 / 重新初始化」入口，避免黑盒失败。
+  Widget _buildDeployFailureCard(BuildContext context, DeployStatus status) {
+    final theme = Theme.of(context);
+    final msg = status.errorMessage ?? '未知错误';
+
+    return Card(
+      elevation: 0,
+      color: Colors.red.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.red.shade700, size: 24),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '⚠️ 部署失败',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red.shade800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                msg,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  height: 1.6,
+                  color: Colors.red.shade900,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      ref.read(deployStatusProvider.notifier).checkAll();
+                    },
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('重新检测'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      ref.read(deployStatusProvider.notifier)
+                          .installCodingRuntime();
+                    },
+                    icon: const Icon(Icons.restart_alt, size: 18),
+                    label: const Text('重新初始化'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
