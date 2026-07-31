@@ -459,7 +459,7 @@ class RuntimeManager {
   /// 注册 Provider
   ///
   /// 按优先级排序：
-  ///   android → termux → ubuntu
+  ///   app → android → linux
   void registerProvider(IRuntimeProvider provider) {
     // 如果同 id 已存在，替换
     final existingIndex = _providers.indexWhere((p) => p.id == provider.id);
@@ -502,9 +502,9 @@ class RuntimeManager {
   /// 否则回退到 Provider 静态声明。
   ///
   /// 按 Provider 优先级查找：
-  ///   1. android
-  ///   2. termux
-  ///   3. ubuntu（experimental）
+  ///   1. app
+  ///   2. android
+  ///   3. linux（App 内置 Linux Runtime）
   Future<RuntimeCapability?> getCapability(CapabilityType type) async {
     if (_resolver == null || _enhancer == null) {
       return _getCapabilityLegacy(type);
