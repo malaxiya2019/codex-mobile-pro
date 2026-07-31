@@ -1,24 +1,14 @@
+/// ====================================================================
+/// 环境服务
+///
+/// 统一负责通过 Termux（优先）或 Android 系统 Shell 执行检测命令。
+/// 内部使用 TermuxTransport，不再直接依赖 TermuxService。
+/// ====================================================================
+library;
+
+import '../../runtime/termux/termux_transport.dart';
+import '../../runtime/termux/method_channel_transport.dart';
 import '../logger/log_service.dart';
-import '../termux/termux_service.dart';
-
-/// Termux 环境检查结果
-class TermuxEnvironmentCheck {
-  final bool termuxInstalled;
-  final bool hasTermuxHome;
-  final bool hasTermuxUsr;
-  final String? prefixPath;
-  final String? homePath;
-
-  const TermuxEnvironmentCheck({
-    this.termuxInstalled = false,
-    this.hasTermuxHome = false,
-    this.hasTermuxUsr = false,
-    this.prefixPath,
-    this.homePath,
-  });
-
-  bool get isTermuxAvailable => termuxInstalled;
-}
 
 /// 通过 Shell 执行的命令结果
 class ShellCommandResult {
@@ -43,6 +33,8 @@ class ShellCommandResult {
 ///
 /// 统一负责通过 Termux（优先）或 Android 系统 Shell 执行检测命令。
 class EnvironmentService {
+  static final TermuxTransport _transport = MethodChannelTermuxTransport();
+
   /// Termux 是否可用（缓存）
   static bool? _termuxAvailable;
 
@@ -50,8 +42,8 @@ class EnvironmentService {
   static Future<bool> isTermuxAvailable() async {
     if (_termuxAvailable != null) return _termuxAvailable!;
     try {
-      final env = await TermuxService.checkEnvironment();
-      _termuxAvailable = env.termuxMode;
+      final diag = await _transport.diagnose();
+      _termuxAvailable = diag.isAvailable;
       LogService.info('EnvService', 'Termux 可用: $_termuxAvailable');
       return _termuxAvailable!;
     } catch (_) {
@@ -66,34 +58,6 @@ class EnvironmentService {
     await isTermuxAvailable();
   }
 
-  /// 检查 Shell 环境
-  static Future<TermuxEnvironmentCheck> checkTermux() async {
-    LogService.info('EnvService', '检查 Shell 环境...');
-
-    final available = await isTermuxAvailable();
-    if (available) {
-      LogService.info('EnvService', '  ✅ Termux 可用');
-    } else {
-      LogService.info('EnvService', '  ⚠️ Termux 不可用，使用系统 Shell');
-    }
-
-    // 测试系统 Shell
-    try {
-      final result = await executeInTermux(command: 'echo ok');
-      if (result.isSuccess) {
-        LogService.info('EnvService', '  ✅ Shell 可用 (source=${result.source})');
-      } else {
-        LogService.info('EnvService', '  ❌ Shell 不可用');
-      }
-    } catch (e) {
-      LogService.error('EnvService', '  检查失败: $e');
-    }
-
-    return TermuxEnvironmentCheck(
-      termuxInstalled: available,
-    );
-  }
-
   /// 通过 Termux（优先）或系统 Shell 执行命令
   static Future<ShellCommandResult> executeInTermux({
     required String command,
@@ -104,19 +68,19 @@ class EnvironmentService {
     LogService.info('EnvService', '执行: $command');
 
     try {
-      // 使用 TermuxService.execute() — 自动降级
-      final result = await TermuxService.execute(command);
+      // 使用 TermuxTransport 执行
+      final result = await _transport.execute(command);
 
       final elapsed = DateTime.now().difference(start).inMilliseconds;
       LogService.info('EnvService',
-          '  完成: exit=${result.exitCode}, source=${result.source}, ${elapsed}ms');
+          '  完成: exit=${result.exitCode}, usedTermux=${result.usedTermux}, ${elapsed}ms');
 
       return ShellCommandResult(
         exitCode: result.exitCode,
         stdout: result.stdout.trim(),
         stderr: result.stderr.trim(),
         durationMs: elapsed,
-        source: result.source,
+        source: result.usedTermux ? 'termux' : 'system_sh',
       );
     } catch (e, stack) {
       final elapsed = DateTime.now().difference(start).inMilliseconds;

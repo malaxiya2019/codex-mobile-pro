@@ -1,11 +1,8 @@
 import 'dart:io';
-import 'termux_service.dart';
 
 /// Shell 类型
 enum ShellType {
   /// Android 系统 Shell（/system/bin/sh）— 唯一可执行的 Shell
-  /// App 运行在独立 Linux 用户（u0_a34x），Termux 的 bash（u0_a328）
-  /// 权限为 700，无法被 App 执行。始终使用系统 Shell。
   systemSh,
 }
 
@@ -47,20 +44,12 @@ class ShellDetector {
   /// 检测可用的 Shell
   /// 始终返回 Android 系统 Shell，因为 App 无法执行 Termux 的 bash。
   static Future<ShellInfo> detect() async {
-    // 仅记录 Termux 是否安装供日志参考，不影响 Shell 选择
-    try {
-      await TermuxService.checkEnvironment();
-    } catch (_) {
-      // 忽略，仅用于日志
-    }
-
     return const ShellInfo();
   }
 
   /// 获取终端环境变量
   ///
   /// 始终返回一组完整的环境变量，使用合理默认值。
-  /// 不依赖 Platform.environment，确保在任何环境下返回一致的值。
   /// [appHome] 作为 HOME 的值。
   static Map<String, String> getShellEnvironment(String appHome) {
     return {
