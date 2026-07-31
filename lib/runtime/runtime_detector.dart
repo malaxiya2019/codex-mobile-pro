@@ -19,6 +19,8 @@ import 'package:path/path.dart' as path;
 import '../core/detector/detection_result.dart';
 import '../core/detector/detector.dart';
 import '../core/detector/detector_service.dart';
+import 'process/process_runner.dart';
+import 'process/runner_models.dart';
 import 'runtime_environment.dart';
 
 /// 检测结果（按类别分组）
@@ -85,6 +87,7 @@ class RuntimeDetectionResult {
 /// Runtime 检测器
 class RuntimeDetector {
   final DetectorService _service;
+  final RuntimeProcessRunner _runner = RuntimeProcessRunner();
 
   RuntimeDetector() : _service = DetectorService.create();
 
@@ -227,7 +230,8 @@ class RuntimeDetector {
         final file = File(toolPath);
         if (file.existsSync()) {
           try {
-            final result = await Process.run(toolPath, ['--version']);
+            final req = RuntimeProcessRequest(executable: toolPath, arguments: [r'--version']);
+            final result = await _runner.run(req);
             results.add(VerificationResult(
               tool: name,
               success: result.exitCode == 0,
@@ -259,7 +263,11 @@ class RuntimeDetector {
         ('mimo2codex', ['--version']),
       ]) {
         try {
-          final result = await Process.run(tool, args, runInShell: true);
+          final req = RuntimeProcessRequest(
+              executable: tool, arguments: args, runInShell: true,
+            );
+            final procResult = await _runner.run(req);
+            final result = procResult;
           results.add(VerificationResult(
             tool: tool,
             success: result.exitCode == 0,

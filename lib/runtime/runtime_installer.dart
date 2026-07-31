@@ -6,6 +6,8 @@ import 'package:path/path.dart' as path;
 import '../core/logger/log_service.dart';
 import 'artifact_manager.dart';
 import 'deploy_error.dart';
+import 'process/process_runner.dart';
+import 'process/runner_models.dart';
 import 'runtime_dependency.dart';
 import 'runtime_environment.dart';
 import 'runtime_manifest.dart';
@@ -86,6 +88,7 @@ class InstallException implements Exception { // @deprecated 改用 DeployError
 
 /// Runtime 安装器
 class RuntimeInstaller {
+  final RuntimeProcessRunner _runner = RuntimeProcessRunner();
   final RuntimeEnvironment _env;
   final InstallProgressCallback? _onProgress;
 
@@ -287,11 +290,11 @@ class RuntimeInstaller {
       }
 
       // 2. 检查 node --version
-      final versionResult = await Process.run(
-        nodeBin,
-        ['--version'],
+      final versionResult = await _runner.run(RuntimeProcessRequest(
+        executable: nodeBin,
+        arguments: ['--version'],
         environment: env,
-      );
+      ));
 
       if (versionResult.exitCode != 0) {
         return NodeHealthResult(
@@ -300,28 +303,28 @@ class RuntimeInstaller {
         );
       }
 
-      final version = (versionResult.stdout as String).trim();
+      final version = versionResult.stdout.trim();
 
       // 3. 检查 process.arch
-      final archResult = await Process.run(
-        nodeBin,
-        ['-e', 'console.log(process.arch)'],
+      final archResult = await _runner.run(RuntimeProcessRequest(
+        executable: nodeBin,
+        arguments: ['-e', 'console.log(process.arch)'],
         environment: env,
-      );
+      ));
 
       final arch = archResult.exitCode == 0
-          ? (archResult.stdout as String).trim()
+          ? archResult.stdout.trim()
           : 'unknown';
 
       // 4. 检查 process.platform
-      final platformResult = await Process.run(
-        nodeBin,
-        ['-e', 'console.log(process.platform)'],
+      final platformResult = await _runner.run(RuntimeProcessRequest(
+        executable: nodeBin,
+        arguments: ['-e', 'console.log(process.platform)'],
         environment: env,
-      );
+      ));
 
       final platform = platformResult.exitCode == 0
-          ? (platformResult.stdout as String).trim()
+          ? platformResult.stdout.trim()
           : 'unknown';
 
       // 5. 检查 npm --version
@@ -329,13 +332,13 @@ class RuntimeInstaller {
       String? npmVersion;
 
       if (File(npmBin).existsSync()) {
-        final npmResult = await Process.run(
-          npmBin,
-          ['--version'],
+        final npmResult = await _runner.run(RuntimeProcessRequest(
+          executable: npmBin,
+          arguments: ['--version'],
           environment: env,
-        );
+        ));
         if (npmResult.exitCode == 0) {
-          npmVersion = (npmResult.stdout as String).trim();
+          npmVersion = npmResult.stdout.trim();
         }
       }
 
