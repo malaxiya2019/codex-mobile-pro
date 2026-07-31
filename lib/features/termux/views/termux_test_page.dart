@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/termux/termux_service.dart';
+import '../../../runtime/provider/termux_provider.dart';
+import '../../../runtime/runtime_manager.dart';
 
 /// Termux 通信验证页面
 class TermuxTestPage extends ConsumerStatefulWidget {
@@ -14,7 +15,7 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
   final _outputController = ScrollController();
   final _logs = <String>[];
   bool _isRunning = false;
-  TermuxEnvCheck? _envCheck;
+  ProviderInfo? _providerInfo;
 
   // 基础测试命令
   final _testCommands = [
@@ -92,34 +93,42 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
     _addLog('🔍 检查 Termux 环境...');
     setState(() => _isRunning = true);
     try {
-      _envCheck = await TermuxService.checkEnvironment();
+      final provider = _getTermuxProvider();
+      _providerInfo = await provider.detect();
+      final info = _providerInfo!;
+      final health = info.health;
+      final caps = info.capabilities;
+      final termuxCap = caps.where((c) => c.type == CapabilityType.termux).firstOrNull;
+      final available = termuxCap?.available ?? false;
+      final nodeCap = caps.where((c) => c.type == CapabilityType.node).firstOrNull;
+      final gitCap = caps.where((c) => c.type == CapabilityType.git).firstOrNull;
+
       _addLog('');
-      _addLog('═══ Termux ═══');
-      _addLog('  已安装:  ${_envCheck!.termuxInstalled ? "✅" : "❌"}');
-      _addLog('  bash 文件存在: ${_envCheck!.termuxInstalled}');
-      _addLog('  bash 可读:   ${_envCheck!.termuxWorks}');
-      _addLog('  bash 可执行: ${_envCheck!.termuxWorks}');
-      _addLog('  bash 可运行: ${_envCheck!.termuxWorks ? "✅" : "❌"}');
-      if (_envCheck!.termuxLastStderr.isNotEmpty) {
-        _addLog('  bash 错误:   ${_envCheck!.termuxLastStderr}');
+      _addLog('═══ Termux Runtime Provider ═══');
+      _addLog('  状态:      ${info.status.name}');
+      _addLog('  版本:      ${info.version ?? "N/A"}');
+      _addLog('  描述:      ${info.description ?? "N/A"}');
+      _addLog('  延迟:      ${info.detectionDurationMs}ms');
+      _addLog('');
+      if (health != null) {
+        _addLog('═══ 健康检查 ═══');
+        for (final check in health.checks) {
+          _addLog('  ${check.passed ? "✅" : "❌"} ${check.name}: ${check.detail ?? "N/A"}');
+        }
       }
-      _addLog('  Intent API:  ${_envCheck!.termuxIntentAvailable ? "✅" : "❌"}');
       _addLog('');
-      _addLog('═══ 系统 shell 降级 ═══');
-      _addLog('  sh 存在:    ${_envCheck!.shWorks}');
-      _addLog('  sh 可执行:  ${_envCheck!.shWorks}');
-      _addLog('  sh 可运行:  ${_envCheck!.shWorks ? "✅" : "❌"}');
-      if (_envCheck!.shLastStderr.isNotEmpty) {
-        _addLog('  sh 错误:    ${_envCheck!.shLastStderr}');
+      _addLog('═══ Capabilities ═══');
+      for (final cap in caps) {
+        _addLog('  ${cap.available ? "✅" : "❌"} ${cap.displayName}: ${cap.available ? (cap.version ?? "可用") : (cap.reason ?? "不可用")}');
       }
       _addLog('');
       _addLog('═══ 结论 ═══');
-      if (_envCheck!.termuxMode) {
-        _addLog('  ✅ Termux 原生模式可用');
-      } else if (_envCheck!.fallbackAvailable) {
-        _addLog('  ⚠️  Termux 不可用，使用系统 shell 降级');
+      if (available) {
+        _addLog('  ✅ Termux Runtime 可用');
+        if (nodeCap?.available == true) _addLog('  ✅ Node.js 可用');
+        if (gitCap?.available == true) _addLog('  ✅ Git 可用');
       } else {
-        _addLog('  ❌ 无可用的 shell 环境');
+        _addLog('  ❌ Termux Runtime 不可用: ${termuxCap?.reason ?? "未知"}');
       }
     } catch (e) {
       _addLog('❌ 环境检查失败: $e');
@@ -134,15 +143,15 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
     _addLog('⚡ \$ $command');
     setState(() => _isRunning = true);
     try {
-      final result = await TermuxService.execute(command);
-      _formatResultOutput(result);
+      final result = await _getTermuxProvider().executeInTermux(command);
+      _formatTermuxOutput(result);
     } catch (e) {
       _addLog('❌ 命令执行异常: $e');
     }
     setState(() => _isRunning = false);
   }
 
-  void _formatResultOutput(TermuxResult result) {
+  void _formatTermuxOutput(TermuxExecResult result) {
     if (result.stdout.isNotEmpty) {
       for (final line in result.stdout.split('\n')) {
         if (line.isNotEmpty) _addLog('  $line');
@@ -175,8 +184,8 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
       _addLog('⚡ \$ $cmd');
       setState(() => _isRunning = true);
       try {
-        final result = await TermuxService.execute(cmd);
-        _formatResultOutput(result);
+        final result = await _getTermuxProvider().executeInTermux(cmd);
+        _formatTermuxOutput(result);
         if (result.isSuccess) {
           _passed++;
         } else {
@@ -211,8 +220,8 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
       _addLog('⚡ \$ ${test.command}');
       setState(() => _isRunning = true);
       try {
-        final result = await TermuxService.execute(test.command);
-        _formatResultOutput(result);
+        final result = await _getTermuxProvider().executeInTermux(test.command);
+        _formatTermuxOutput(result);
 
         // 检查是否通过
         bool pass;
@@ -266,7 +275,7 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
     for (int i = 1; i <= totalCalls; i++) {
       final cmd = i.isEven ? 'echo "test_$i"' : 'date +%s';
       try {
-        final result = await TermuxService.execute(cmd);
+        final result = await _getTermuxProvider().executeInTermux(cmd);
         timings.add(result.durationMs);
         totalTime += result.durationMs;
         if (result.durationMs < minTime) minTime = result.durationMs;
@@ -332,7 +341,7 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
     _failedList.clear();
     for (final cmd in _testCommands) {
       try {
-        final result = await TermuxService.execute(cmd);
+        final result = await _getTermuxProvider().executeInTermux(cmd);
         if (result.isSuccess) { _passed++; } else { _failed++; _failedList.add(cmd); }
       } catch (_) { _failed++; }
     }
@@ -347,7 +356,7 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
     _failedList.clear();
     for (final test in _specialCharTests) {
       try {
-        final result = await TermuxService.execute(test.command);
+        final result = await _getTermuxProvider().executeInTermux(test.command);
         bool pass;
         if (result.exitCode == 0) {
           pass = test.expectedOutput == null || result.stdout.trim().contains(test.expectedOutput!);
@@ -368,7 +377,7 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
     _failedList.clear();
     for (int i = 1; i <= 50; i++) {
       try {
-        final result = await TermuxService.execute(i.isEven ? 'echo "test_$i"' : 'date +%s');
+        final result = await _getTermuxProvider().executeInTermux(i.isEven ? 'echo "test_$i"' : 'date +%s');
         if (result.isSuccess) { _passed++; } else { _failed++; _failedList.add('#$i'); }
       } catch (_) { _failed++; }
     }
@@ -564,6 +573,15 @@ class _TermuxTestPageState extends ConsumerState<TermuxTestPage> {
         ],
       ),
     );
+  }
+
+  /// 获取 Termux Runtime Provider（复用实例或每次新建）
+  TermuxRuntimeProvider _getTermuxProvider() {
+    final providers = RuntimeManager.instance.registeredProviders;
+    for (final p in providers) {
+      if (p is TermuxRuntimeProvider) return p;
+    }
+    return TermuxRuntimeProvider();
   }
 }
 
