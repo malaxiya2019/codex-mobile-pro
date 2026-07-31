@@ -79,6 +79,10 @@ class UbuntuRuntimeInstaller {
 
   /// 安装 Ubuntu Runtime（rootfs + proot + sysdata）
   Future<InstallResult> install() async {
+    // 安装锁（try 外声明，finally 释放；防止并发部署 / 重复初始化互相破坏）
+    final lock = InstallLock(
+      File('${_env.ubuntuDir}/${InstallLock.defaultLockName}'),
+    );
     try {
       // 检查架构
       if (!_isSupportedArch()) {
@@ -104,10 +108,7 @@ class UbuntuRuntimeInstaller {
       final ubuntuDir = _env.ubuntuDir;
       await Directory(ubuntuDir).create(recursive: true);
 
-      // 0.5 安装锁（防并发部署 / 重复初始化互相破坏）
-      final lock = InstallLock(
-        File('${_env.ubuntuDir}/${InstallLock.defaultLockName}'),
-      );
+      // 0.5 获取安装锁
       await lock.acquire();
 
       // 0. 磁盘空间预检（在下载前就给出明确提示）

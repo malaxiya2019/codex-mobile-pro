@@ -800,8 +800,9 @@ class BundledBusyboxBackend extends BusyboxBackendBase {
     final explicit = _path;
     if (explicit != null && explicit.trim().isNotEmpty) {
       // 测试注入 / 显式指定路径：直接验证
-      _resolvedPath = explicit.trim();
-      final v = await verifyBusybox(_resolvedPath);
+      final resolved = explicit.trim();
+      _resolvedPath = resolved;
+      final v = await verifyBusybox(resolved);
       _available = v.ok;
       _reason = v.reason;
       _failureCode = v.failureCode ?? DeployErrorCode.dependencyMissing;

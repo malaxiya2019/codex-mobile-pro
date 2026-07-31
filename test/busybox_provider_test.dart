@@ -384,12 +384,21 @@ void main() {
 }
 
 /// 查找当前平台可执行的真实 busybox（Termux/Android 环境；CI 通常没有）。
+///
+/// 必须同时满足：存在 + ELF AArch64（e_machine=183，与
+/// NativeBusybox.healthCheck 的 ABI 检查一致）。CI Ubuntu runner 自带
+/// x86_64 busybox 时 healthCheck 会因 ABI 不匹配失败，因此排除，
+/// 避免 CI 误报。
 String? _findRealBusybox() {
   try {
     final r = Process.runSync('sh', ['-c', 'command -v busybox']);
     if (r.exitCode == 0) {
       final p = (r.stdout as String).trim();
-      if (p.isNotEmpty && File(p).existsSync()) return p;
+      if (p.isNotEmpty && File(p).existsSync()) {
+        final f = File(p);
+        final machine = NativeBusybox.elfMachineOf(f);
+        if (machine == 183) return p;
+      }
     }
   } catch (_) {}
   return null;
