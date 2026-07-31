@@ -18,11 +18,11 @@
 /// ====================================================================
 library;
 
+import '../../core/logger/log_service.dart';
 import '../../runtime/process/process_runner.dart';
 import '../../runtime/process/runner_models.dart';
 import '../../runtime/process/termux_execution.dart';
 import '../../runtime/termux/termux_transport.dart';
-import '../../core/logger/log_service.dart';
 import '../provider/runtime_capability.dart';
 import '../provider/runtime_provider.dart';
 
@@ -57,17 +57,18 @@ class CapabilityResolver {
 
   /// Capability -> 检测规格映射
   static final Map<CapabilityType, _CheckSpec> _checkSpecs = {
-    CapabilityType.node: _CheckSpec('node', ['--version']),
-    CapabilityType.npm: _CheckSpec('npm', ['--version']),
-    CapabilityType.python: _CheckSpec('python3', ['--version']),
-    CapabilityType.git: _CheckSpec('git', ['--version']),
-    CapabilityType.codexCli: _CheckSpec('codex', ['--version']),
-    CapabilityType.mimo2codex: _CheckSpec('mimo2codex', ['--version']),
-    CapabilityType.flutter: _CheckSpec('flutter', ['--version']),
-    CapabilityType.rust: _CheckSpec('rustc', ['--version']),
-    CapabilityType.bash: _CheckSpec('bash', ['--version']),
-    CapabilityType.tar: _CheckSpec('tar', ['--version']),
-    CapabilityType.xz: _CheckSpec('xz', ['--version']),
+    CapabilityType.node: const _CheckSpec('node', ['--version']),
+    CapabilityType.npm: const _CheckSpec('npm', ['--version']),
+    CapabilityType.python: const _CheckSpec('python3', ['--version']),
+    CapabilityType.git: const _CheckSpec('git', ['--version']),
+    CapabilityType.codexCli: const _CheckSpec('codex', ['--version']),
+    CapabilityType.mimo2codex:
+        const _CheckSpec('mimo2codex', ['--version']),
+    CapabilityType.flutter: const _CheckSpec('flutter', ['--version']),
+    CapabilityType.rust: const _CheckSpec('rustc', ['--version']),
+    CapabilityType.bash: const _CheckSpec('bash', ['--version']),
+    CapabilityType.tar: const _CheckSpec('tar', ['--version']),
+    CapabilityType.xz: const _CheckSpec('xz', ['--version']),
   };
 
   /// 缓存容器
@@ -267,9 +268,9 @@ class CapabilityResolver {
     } catch (_) {}
 
     if (executablePath == null) {
-      return _DetectResult(
+      return const _DetectResult(
         success: false,
-        error: '未找到可执行文件: ${spec.binary}',
+        error: '未找到可执行文件',
       );
     }
 
@@ -286,14 +287,14 @@ class CapabilityResolver {
     final runnerResult = await _runner.run(request);
 
     if (runnerResult.timedOut) {
-      return _DetectResult(
+      return const _DetectResult(
         success: false,
         error: '检测超时 (10s)',
       );
     }
 
     if (runnerResult.cancelled) {
-      return _DetectResult(
+      return const _DetectResult(
         success: false,
         error: '检测被取消',
       );
@@ -396,6 +397,9 @@ class CapabilityResolver {
         );
       }
     }
-    return _DetectResult(success: false, error: 'Provider 未声明此能力');
+    return const _DetectResult(
+      success: false,
+      error: 'Provider 未声明此能力',
+    );
   }
 }

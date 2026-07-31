@@ -10,12 +10,13 @@
 ///   6. Provider fallback
 ///   7. RuntimeManager Capability API
 /// ====================================================================
+library;
 
-import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/runtime/capability/capability_resolver.dart';
 import 'package:codex_mobile_pro/runtime/capability/provider_enhancer.dart';
 import 'package:codex_mobile_pro/runtime/provider/runtime_capability.dart';
 import 'package:codex_mobile_pro/runtime/provider/runtime_provider.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 import 'fake_runner.dart';
 import 'mock_provider.dart';
@@ -48,7 +49,7 @@ void main() {
     });
 
     test('unavailable 能力创建', () {
-      final cap = RuntimeCapability(
+      const cap = RuntimeCapability(
         type: CapabilityType.node,
         provider: ProviderType.termux,
         available: false,
@@ -65,11 +66,10 @@ void main() {
     });
 
     test('unknown 状态', () {
-      final cap = RuntimeCapability(
+      const cap = RuntimeCapability(
         type: CapabilityType.git,
         provider: ProviderType.termux,
         available: false,
-        status: CapabilityStatus.unknown,
       );
 
       expect(cap.status, CapabilityStatus.unknown);
@@ -78,7 +78,7 @@ void main() {
     });
 
     test('degraded 状态', () {
-      final cap = RuntimeCapability(
+      const cap = RuntimeCapability(
         type: CapabilityType.codexCli,
         provider: ProviderType.android,
         available: true,
@@ -94,7 +94,7 @@ void main() {
     });
 
     test('installed 但不可用', () {
-      final cap = RuntimeCapability(
+      const cap = RuntimeCapability(
         type: CapabilityType.python,
         provider: ProviderType.termux,
         available: false,
@@ -111,21 +111,21 @@ void main() {
 
     test('displayName 返回中文名称', () {
       expect(
-        RuntimeCapability(type: CapabilityType.node, provider: ProviderType.termux, available: true).displayName,
+        const RuntimeCapability(type: CapabilityType.node, provider: ProviderType.termux, available: true).displayName,
         'Node.js',
       );
       expect(
-        RuntimeCapability(type: CapabilityType.python, provider: ProviderType.termux, available: true).displayName,
+        const RuntimeCapability(type: CapabilityType.python, provider: ProviderType.termux, available: true).displayName,
         'Python 3',
       );
       expect(
-        RuntimeCapability(type: CapabilityType.git, provider: ProviderType.termux, available: true).displayName,
+        const RuntimeCapability(type: CapabilityType.git, provider: ProviderType.termux, available: true).displayName,
         'Git',
       );
     });
 
     test('toString 包含关键信息', () {
-      final cap = RuntimeCapability(
+      const cap = RuntimeCapability(
         type: CapabilityType.node,
         provider: ProviderType.termux,
         available: true,
@@ -142,7 +142,7 @@ void main() {
     });
 
     test('statusDescription available', () {
-      final cap = RuntimeCapability(
+      const cap = RuntimeCapability(
         type: CapabilityType.node,
         provider: ProviderType.termux,
         available: true,
@@ -154,7 +154,7 @@ void main() {
     });
 
     test('statusDescription unavailable with reason', () {
-      final cap = RuntimeCapability(
+      const cap = RuntimeCapability(
         type: CapabilityType.node,
         provider: ProviderType.termux,
         available: false,
@@ -178,7 +178,7 @@ void main() {
     setUp(() {
       fakeRunner = FakeProcessRunner();
       resolver = CapabilityResolver(runner: fakeRunner);
-      provider = MockProvider(MockProviderConfig(
+      provider = MockProvider(const MockProviderConfig(
         id: 'termux',
         name: 'Termux Test',
         type: ProviderType.termux,
@@ -283,7 +283,7 @@ void main() {
     setUp(() {
       fakeRunner = FakeProcessRunner();
       resolver = CapabilityResolver(runner: fakeRunner);
-      provider = MockProvider(MockProviderConfig(
+      provider = MockProvider(const MockProviderConfig(
         id: 'termux',
         name: 'Termux',
         type: ProviderType.termux,
@@ -378,7 +378,7 @@ void main() {
       fakeRunner.whenWhich('node', '/usr/bin/node');
       fakeRunner.whenVersion('node', '22.0.0');
 
-      final provider = MockProvider(MockProviderConfig(
+      final provider = MockProvider(const MockProviderConfig(
         id: 'termux',
         name: 'Termux',
         type: ProviderType.termux,
@@ -403,7 +403,7 @@ void main() {
     test('增强失败时回退到静态声明', () async {
       fakeRunner.whenNotFound('node');
 
-      final provider = MockProvider(MockProviderConfig(
+      final provider = MockProvider(const MockProviderConfig(
         id: 'android',
         name: 'Android',
         type: ProviderType.android,
@@ -425,7 +425,7 @@ void main() {
     });
 
     test('非可执行能力使用 Provider 静态声明', () async {
-      final provider = MockProvider(MockProviderConfig(
+      final provider = MockProvider(const MockProviderConfig(
         id: 'android',
         name: 'Android',
         type: ProviderType.android,
@@ -453,7 +453,7 @@ void main() {
 
   group('Provider fallback — 多 Provider 选择', () {
     test('Termux 可用时优先使用 Termux', () async {
-      final androidProvider = MockProvider(MockProviderConfig(
+      final androidProvider = MockProvider(const MockProviderConfig(
         id: 'android',
         name: 'Android',
         type: ProviderType.android,
@@ -463,18 +463,17 @@ void main() {
         ],
       ));
 
-      final termuxProvider = MockProvider(MockProviderConfig(
+      final termuxProvider = MockProvider(const MockProviderConfig(
         id: 'termux',
         name: 'Termux',
         type: ProviderType.termux,
-        status: ProviderStatus.available,
         capabilities: [
           RuntimeCapability(type: CapabilityType.node, provider: ProviderType.termux, available: true, version: '22.0.0'),
           RuntimeCapability(type: CapabilityType.git, provider: ProviderType.termux, available: true, version: '2.43.0'),
         ],
       ));
 
-      final ubuntuProvider = MockProvider(MockProviderConfig(
+      final ubuntuProvider = MockProvider(const MockProviderConfig(
         id: 'ubuntu',
         name: 'Ubuntu',
         type: ProviderType.ubuntu,
@@ -502,7 +501,7 @@ void main() {
   group('CapabilityCacheEntry — 缓存条目', () {
     test('未过期', () {
       final entry = CapabilityCacheEntry(
-        capability: RuntimeCapability(type: CapabilityType.node, provider: ProviderType.termux, available: true),
+        capability: const RuntimeCapability(type: CapabilityType.node, provider: ProviderType.termux, available: true),
         cachedAt: DateTime.now(),
       );
 
@@ -511,7 +510,7 @@ void main() {
 
     test('已过期', () {
       final entry = CapabilityCacheEntry(
-        capability: RuntimeCapability(type: CapabilityType.node, provider: ProviderType.termux, available: true),
+        capability: const RuntimeCapability(type: CapabilityType.node, provider: ProviderType.termux, available: true),
         cachedAt: DateTime.now().subtract(const Duration(seconds: 31)),
       );
 
@@ -527,10 +526,10 @@ void main() {
     test('node --version 输出解析', () async {
       final runner = FakeProcessRunner();
       runner.whenWhich('node', '/usr/bin/node');
-      runner.when('node --version', FakeCommandResult(exitCode: 0, stdout: 'v22.0.0\n'));
+      runner.when('node --version', const FakeCommandResult(stdout: 'v22.0.0\n'));
 
       final resolver = CapabilityResolver(runner: runner);
-      final provider = MockProvider(MockProviderConfig(
+      final provider = MockProvider(const MockProviderConfig(
         id: 'termux', name: 'Termux', type: ProviderType.termux,
       ));
 
@@ -542,10 +541,10 @@ void main() {
     test('git --version 输出解析', () async {
       final runner = FakeProcessRunner();
       runner.whenWhich('git', '/usr/bin/git');
-      runner.when('git --version', FakeCommandResult(exitCode: 0, stdout: 'git version 2.43.0\n'));
+      runner.when('git --version', const FakeCommandResult(stdout: 'git version 2.43.0\n'));
 
       final resolver = CapabilityResolver(runner: runner);
-      final provider = MockProvider(MockProviderConfig(
+      final provider = MockProvider(const MockProviderConfig(
         id: 'termux', name: 'Termux', type: ProviderType.termux,
       ));
 
