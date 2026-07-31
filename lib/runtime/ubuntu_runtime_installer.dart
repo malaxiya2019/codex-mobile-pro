@@ -362,3 +362,4 @@ class UbuntuRuntimeInstaller {
   /// 在 [cacheDir] 下生成一个轻量 shell 脚本，行为同 `xz` 命令行工具。
   /// 这样 _extractTarXz 的管道代码无需修改。
   /// 尝试通过 BusyBox 解决 xz 缺失
+}
