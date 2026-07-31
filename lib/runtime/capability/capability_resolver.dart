@@ -14,11 +14,14 @@
 ///   - 所有检测命令必须通过 RuntimeProcessRunner，禁止直接 Process.run
 ///   - 检测失败不能 crash，必须返回结构化状态
 ///   - 缓存支持手动刷新和失效
+///   - Provider 特定执行路由（如 Termux）通过 runtimeId 实现
 /// ====================================================================
 library;
 
 import '../../runtime/process/process_runner.dart';
 import '../../runtime/process/runner_models.dart';
+import '../../runtime/process/termux_execution.dart';
+import '../../runtime/termux/termux_transport.dart';
 import '../../core/logger/log_service.dart';
 import '../provider/runtime_capability.dart';
 import '../provider/runtime_provider.dart';
@@ -76,8 +79,34 @@ class CapabilityResolver {
   CapabilityResolver({
     RuntimeProcessRunner? runner,
     Duration? defaultTtl,
-  })  : _runner = runner ?? RuntimeProcessRunner(),
+    TermuxTransport? termuxTransport,
+  })  : _runner = runner ?? _createRunner(termuxTransport),
         _defaultTtl = defaultTtl ?? const Duration(seconds: 30);
+
+  /// 创建带 Termux 适配器的 Runner
+  static RuntimeProcessRunner _createRunner(TermuxTransport? transport) {
+    final runner = RuntimeProcessRunner();
+    if (transport != null) {
+      runner.registerAdapter(TermuxExecutionAdapter(transport: transport));
+    } else {
+      runner.registerAdapter(TermuxExecutionAdapter());
+    }
+    return runner;
+  }
+
+  /// 获取 Provider 对应的 runtimeId
+  static String? _runtimeIdForProvider(ProviderType type) {
+    switch (type) {
+      case ProviderType.termux:
+        return 'termux';
+      case ProviderType.android:
+        return 'android';
+      case ProviderType.ubuntu:
+        return 'ubuntu';
+      case ProviderType.app:
+        return 'app';
+    }
+  }
 
   // ------------------------------------------------------------------
   // 核心检测方法
@@ -104,9 +133,11 @@ class CapabilityResolver {
     // 2. 获取 Provider 状态和环境
     final environment = await provider.getEnvironment();
     final providerInfo = await provider.detect();
+    final runtimeId = _runtimeIdForProvider(provider.type);
 
     // 3. 执行检测
-    final result = await _detect(type, providerInfo, environment);
+    final result = await _detect(type, providerInfo, environment,
+        runtimeId: runtimeId);
 
     // 4. 构建 Capability
     RuntimeCapability capability;
@@ -122,7 +153,6 @@ class CapabilityResolver {
         checkedAt: now,
       );
     } else if (result.success && result.version == null) {
-      // 可执行但无法获取版本（罕见情况）
       capability = RuntimeCapability(
         type: type,
         provider: provider.type,
@@ -153,9 +183,9 @@ class CapabilityResolver {
 
     LogService.debug(
       'CapabilityResolver',
-      '${type.name}: ${capability.available ? "\\u2705" : "\\u274c"}'
+      '${type.name}: ${capability.available ? "✅" : "❌"}'
       '${capability.version != null ? " v${capability.version}" : ""}'
-      '${capability.reason != null ? " \\u2014 ${capability.reason}" : ""}',
+      '${capability.reason != null ? " — ${capability.reason}" : ""}',
     );
 
     return capability;
@@ -220,11 +250,11 @@ class CapabilityResolver {
   Future<_DetectResult> _detect(
     CapabilityType type,
     ProviderInfo providerInfo,
-    Map<String, String> environment,
-  ) async {
+    Map<String, String> environment, {
+    String? runtimeId,
+  }) async {
     final spec = _checkSpecs[type];
     if (spec == null) {
-      // 没有检测规格（如 systemShell、storageAccess 等非可执行能力）
       return _detectWithoutSpec(type, providerInfo, environment);
     }
 
@@ -232,7 +262,8 @@ class CapabilityResolver {
     String? executablePath;
     try {
       executablePath =
-          await _resolveExecutable(spec.binary, environment);
+          await _resolveExecutable(spec.binary, environment,
+              runtimeId: runtimeId);
     } catch (_) {}
 
     if (executablePath == null) {
@@ -242,12 +273,13 @@ class CapabilityResolver {
       );
     }
 
-    // 执行版本检查命令
+    // 执行版本检查命令（使用 Provider 对应的 runtimeId）
     final request = RuntimeProcessRequest(
       executable: executablePath,
       arguments: spec.versionArgs,
       environment: environment,
       timeout: const Duration(seconds: 10),
+      runtimeId: runtimeId,
       label: 'capability-check-${type.name}',
     );
 
@@ -256,7 +288,7 @@ class CapabilityResolver {
     if (runnerResult.timedOut) {
       return _DetectResult(
         success: false,
-        error: '检测超时 (${const Duration(seconds: 10)})',
+        error: '检测超时 (10s)',
       );
     }
 
@@ -294,8 +326,9 @@ class CapabilityResolver {
   /// 解析可执行文件路径
   Future<String?> _resolveExecutable(
     String binary,
-    Map<String, String> environment,
-  ) async {
+    Map<String, String> environment, {
+    String? runtimeId,
+  }) async {
     // 先尝试在 Provider 环境中用 which
     final whichResult = await _runner.run(
       RuntimeProcessRequest(
@@ -303,6 +336,7 @@ class CapabilityResolver {
         arguments: [binary],
         environment: environment,
         timeout: const Duration(seconds: 5),
+        runtimeId: runtimeId,
         label: 'resolve-$binary',
       ),
     );
@@ -324,18 +358,18 @@ class CapabilityResolver {
     if (trimmed.isEmpty) return null;
 
     // 取第一行
-    final firstLine = trimmed.split('\\n').first.trim();
+    final firstLine = trimmed.split('\n').first.trim();
 
     // 尝试提取语义版本号
     final versionMatch =
-        RegExp(r'(\\d+\\.\\d+\\.\\d+)').firstMatch(firstLine);
+        RegExp(r'(\d+\.\d+\.\d+)').firstMatch(firstLine);
     if (versionMatch != null) {
       return versionMatch.group(1);
     }
 
     // 尝试提取 vx.y.z
     final vVersionMatch =
-        RegExp(r'v(\\d+\\.\\d+\\.\\d+)').firstMatch(firstLine);
+        RegExp(r'v(\d+\.\d+\.\d+)').firstMatch(firstLine);
     if (vVersionMatch != null) {
       return 'v${vVersionMatch.group(1)}';
     }

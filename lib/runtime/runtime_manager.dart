@@ -48,6 +48,7 @@ import 'runtime_manifest.dart';
 import 'ubuntu_runtime_installer.dart';
 import 'capability/capability_resolver.dart';
 import 'capability/provider_enhancer.dart';
+import 'termux/method_channel_transport.dart';
 
 /// 管理器状态
 enum RuntimeManagerState {
@@ -140,7 +141,9 @@ class RuntimeManager {
     _queue = DownloadQueueScheduler.instance;
     
     // Phase 4: 初始化 Capability Resolver
-    _resolver = CapabilityResolver();
+    _resolver = CapabilityResolver(
+        termuxTransport: MethodChannelTermuxTransport(),
+      );
     _enhancer = ProviderCapabilityEnhancer(resolver: _resolver);
     final backlogDir = '${_environment!.runtimeDir}/.queue_backlog';
     await _queue!.initialize(backlogDir: backlogDir);
