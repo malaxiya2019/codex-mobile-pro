@@ -178,6 +178,7 @@ Java_com_codexmobile_app_terminal_PtyNative_createProcess(
     JNIEnv *env,
     jobject thiz,
     jstring shell_path,
+    jobjectArray argv_array,
     jobjectArray env_array,
     jstring work_dir,
     jint rows,
@@ -219,12 +220,42 @@ Java_com_codexmobile_app_terminal_PtyNative_createProcess(
 
     // ── 构建 argv ──
     // argv[0] = shell_path
-    // argv[1] = "-i" (交互模式)
-    // argv[2] = NULL
-    char *argv[3];
-    argv[0] = strdup(shell_path_cstr);
-    argv[1] = strdup("-i");
-    argv[2] = NULL;
+    // argv[1..n] = 调用方传入参数（如 PRoot: -r rootfs /bin/bash -l）
+    // 未传参数时回退 "-i"（交互模式，向后兼容）
+    jsize argv_len = 0;
+    if (argv_array != NULL) {
+        argv_len = (*env)->GetArrayLength(env, argv_array);
+    }
+    if (argv_len < 0) argv_len = 0;
+
+    int argv_count = argv_len > 0 ? (int)argv_len + 1 : 2;
+    char **argv = (char **)malloc(sizeof(char *) * (argv_count + 1));
+    if (argv == NULL) {
+        (*env)->ReleaseStringUTFChars(env, shell_path, shell_path_cstr);
+        jintArray error_result = (*env)->NewIntArray(env, 3);
+        jint error_data[3] = {0, 0, -99};
+        (*env)->SetIntArrayRegion(env, error_result, 0, 3, error_data);
+        return error_result;
+    }
+    int argv_idx = 0;
+    argv[argv_idx++] = strdup(shell_path_cstr);
+
+    if (argv_len > 0) {
+        for (int i = 0; i < argv_len; i++) {
+            jstring jarg = (jstring)(*env)->GetObjectArrayElement(env, argv_array, i);
+            if (jarg == NULL) {
+                argv[argv_idx++] = NULL;
+                continue;
+            }
+            const char *arg = (*env)->GetStringUTFChars(env, jarg, NULL);
+            argv[argv_idx++] = strdup(arg);
+            (*env)->ReleaseStringUTFChars(env, jarg, arg);
+            (*env)->DeleteLocalRef(env, jarg);
+        }
+    } else {
+        argv[argv_idx++] = strdup("-i");
+    }
+    argv[argv_idx] = NULL;
 
     // ── 设置 terminal I/O 属性 ──
     struct termios tt;
@@ -262,8 +293,8 @@ Java_com_codexmobile_app_terminal_PtyNative_createProcess(
     if (pid < 0) {
         LOGE("create_pty_process failed: %s", strerror(errno));
         // 清理
-        free(argv[0]);
-        free(argv[1]);
+        for (int i = 0; i < argv_idx; i++) free(argv[i]);
+        free(argv);
         free(work_dir_dup);
         if (envp) {
             for (int i = 0; i < env_len; i++) free(envp[i]);
@@ -281,8 +312,8 @@ Java_com_codexmobile_app_terminal_PtyNative_createProcess(
     LOGD("createProcess success: pid=%d, master_fd=%d", pid, master_fd);
 
     // 释放资源
-    free(argv[0]);
-    free(argv[1]);
+    for (int i = 0; i < argv_idx; i++) free(argv[i]);
+    free(argv);
     free(work_dir_dup);
     if (envp) {
         for (int i = 0; i < env_len; i++) free(envp[i]);

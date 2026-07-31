@@ -41,7 +41,8 @@ class PtySession private constructor(
         /**
          * 创建 PTY 会话
          *
-         * @param shellPath shell 可执行文件路径（如 /data/data/.../bin/busybox）
+         * @param shellPath shell 可执行文件路径（如 PRoot 或 /system/bin/sh）
+         * @param args      shell 启动参数（argv[1..n]，如 PRoot: -r rootfs /bin/bash -l；空数组回退 -i）
          * @param env       环境变量数组（"KEY=VALUE" 格式）
          * @param workDir   工作目录
          * @param rows      终端行数（默认 60）
@@ -51,12 +52,13 @@ class PtySession private constructor(
          */
         fun create(
             shellPath: String,
+            args: Array<String> = emptyArray(),
             env: Array<String> = emptyArray(),
             workDir: String? = null,
             rows: Int = 60,
             cols: Int = 120
         ): PtySession {
-            val result = PtyNative.createProcess(shellPath, env, workDir ?: "", rows, cols)
+            val result = PtyNative.createProcess(shellPath, if (args.isEmpty()) null else args, env, workDir ?: "", rows, cols)
             val pid = result[0]
             val fd = result[1]
             val errorCode = result[2]

@@ -44,6 +44,7 @@ object PtyNative {
      */
     external fun createProcess(
         shellPath: String,
+        argvArray: Array<String>?,
         envArray: Array<String>,
         workDir: String,
         rows: Int,
