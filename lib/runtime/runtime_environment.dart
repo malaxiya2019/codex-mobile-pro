@@ -11,6 +11,7 @@
 library;
 
 import 'dart:io';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'runtime_dependency.dart';
@@ -69,6 +70,16 @@ class RuntimeEnvironment {
     return instance;
   }
 
+  /// 测试用构造：直接指定 App 文件根目录，跳过 path_provider。
+  ///
+  /// 不写入 [_instance]，避免污染单例状态。
+  @visibleForTesting
+  factory RuntimeEnvironment.forTest(String appFilesDir) {
+    final env = RuntimeEnvironment._();
+    env._appFilesDir = appFilesDir;
+    return env;
+  }
+
   Future<void> ensureDirectories() async {
     final dirs = [
       runtimeDir,
@@ -103,8 +114,13 @@ class RuntimeEnvironment {
 
   Map<String, String> _buildDefaultEnvironment() {
     final paths = <String>[
-      binDir, nodeBinDir, gitBinDir, pythonBinDir, npmGlobalBinDir,
-      '/system/bin', '/system/xbin',
+      binDir,
+      nodeBinDir,
+      gitBinDir,
+      pythonBinDir,
+      npmGlobalBinDir,
+      '/system/bin',
+      '/system/xbin',
     ];
     final validPaths = paths.where((p) => Directory(p).existsSync()).toList();
     final pathStr = validPaths.join(':');
@@ -128,9 +144,8 @@ class RuntimeEnvironment {
 
     if (ldLibPath != null) {
       final existing = Platform.environment['LD_LIBRARY_PATH'];
-      env['LD_LIBRARY_PATH'] = existing != null
-          ? '$ldLibPath:$existing'
-          : ldLibPath;
+      env['LD_LIBRARY_PATH'] =
+          existing != null ? '$ldLibPath:$existing' : ldLibPath;
     }
 
     return env;
@@ -150,7 +165,7 @@ class RuntimeEnvironment {
       path.join(rootfsPath, 'usr', 'bin'),
       path.join(rootfsPath, 'sbin'),
       path.join(rootfsPath, 'bin'),
-      ubuntuBinDir,     // proot 安装目录
+      ubuntuBinDir, // proot 安装目录
       '/system/bin',
       '/system/xbin',
     ];

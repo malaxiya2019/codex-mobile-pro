@@ -25,6 +25,14 @@
 /// 依赖：
 ///   - 内置 BusyBox（assets/busybox-arm64，meefik 1.34.1 静态构建）
 ///   - 不依赖 Termux xz / 系统 tar / pkg / apt / dpkg
+///
+/// 2026-08 修复「ProcessException: Permission denied」（busybox xzcat）：
+///   1. Process.start(busybox) 抛 EACCES（可执行位缺失/二进制损坏）时，
+///      不再裸抛，转为结构化 DeployError（permissionDenied/extractionFailed），
+///      携带 busybox 路径 + 镜像路径 + 存在性/大小/父目录/可读性诊断。
+///   2. busybox 复用/重建逻辑（NativeBusybox）在启动前校验可执行位。
+///   3. 解压启动前输出完整诊断日志（cacheDir/imagePath/exists/size/...）。
+///   4. 安装前清理历史 rootfs.tmp-* / rootfs.old-*，防止旧权限异常缓存残留。
 /// ====================================================================
 library;
 
@@ -32,6 +40,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart' show sha256;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as path;
 
 import '../core/logger/log_service.dart';
@@ -49,13 +58,16 @@ class UbuntuRuntimeInstaller {
   final RuntimeEnvironment _env;
   final InstallProgressCallback? _onProgress;
 
+  /// 测试注入的 busybox 路径（非空时优先使用，跳过 NativeBusybox）
+  final String? _busyboxOverride;
+
   /// 解压所需的空间余量（压缩包缓存 + 解压 + 临时文件 / proot / sysdata）
   static const int _spaceMarginBytes = 192 * 1024 * 1024;
 
   /// 流式解压整体超时（防止卡死导致 UI 永久「正在部署」）
   static const Duration _extractionTimeout = Duration(minutes: 20);
 
-  UbuntuRuntimeInstaller(this._env, [this._onProgress]);
+  UbuntuRuntimeInstaller(this._env, [this._onProgress, this._busyboxOverride]);
 
   /// 安装 Ubuntu Runtime（rootfs + proot + sysdata）
   Future<InstallResult> install() async {
@@ -149,9 +161,8 @@ class UbuntuRuntimeInstaller {
   /// 空间查询失败（未知）时跳过，不阻塞部署。
   Future<void> _preCheckDiskSpace(RuntimeManifest manifest) async {
     final rootfsArtifact = manifest.artifacts[0];
-    final required = rootfsArtifact.size +
-        rootfsArtifact.expandedBytes +
-        _spaceMarginBytes;
+    final required =
+        rootfsArtifact.size + rootfsArtifact.expandedBytes + _spaceMarginBytes;
 
     final free = await _freeDiskSpaceBytes(_env.ubuntuDir);
     if (free >= 0 && free < required) {
@@ -195,6 +206,10 @@ class UbuntuRuntimeInstaller {
     final rootfsDir = _env.ubuntuRootfsDir;
     final cacheDir = path.join(_env.ubuntuDir, '.cache');
     await Directory(cacheDir).create(recursive: true);
+
+    // 清理历史半成品/隔离目录（权限异常或中断遗留的 rootfs.tmp-* /
+    // rootfs.old-*），避免旧文件影响本次安装与磁盘空间。
+    await _cleanupStaleInstallDirs();
 
     final ext = rootfsArtifact.url.endsWith('.xz') ? '.tar.xz' : '.tar.gz';
     final cachePath = path.join(cacheDir, '${rootfsArtifact.name}$ext');
@@ -243,7 +258,8 @@ class UbuntuRuntimeInstaller {
         code: DeployErrorCode.sha256Mismatch,
         message: 'rootfs 完整性校验失败',
         detail: '期望 ${rootfsArtifact.sha256}\n实际 $actualSha',
-        userSuggestion: DeployErrorSuggestions.forCode(DeployErrorCode.sha256Mismatch),
+        userSuggestion:
+            DeployErrorSuggestions.forCode(DeployErrorCode.sha256Mismatch),
       );
     }
 
@@ -265,7 +281,7 @@ class UbuntuRuntimeInstaller {
     _report(InstallPhase.extracting, 0.50, '准备解压 Ubuntu rootfs...');
 
     try {
-      await _extractTarXzStreaming(
+      await extractTarXzStreaming(
         tarPath: rootfsPath,
         targetDir: tmpRootfsDir,
         stripComponents: rootfsArtifact.stripComponents,
@@ -295,6 +311,29 @@ class UbuntuRuntimeInstaller {
     }
 
     // 保留 rootfs 缓存（下次跳过下载）
+  }
+
+  /// 清理历史 rootfs 半成品/隔离目录
+  ///
+  /// 匹配 `<ubuntuDir>/rootfs.tmp-*` 与 `<ubuntuDir>/rootfs.old-*`，
+  /// 尽力删除（失败仅记日志）。确保「重新初始化」真正清理旧的
+  /// 损坏/权限异常缓存，而不是只清 UI 状态。
+  Future<void> _cleanupStaleInstallDirs() async {
+    try {
+      final ubuntuDir = Directory(_env.ubuntuDir);
+      if (!await ubuntuDir.exists()) return;
+      await for (final entry in ubuntuDir.list()) {
+        final name = path.basename(entry.path);
+        if ((name.startsWith('rootfs.tmp-') ||
+                name.startsWith('rootfs.old-')) &&
+            entry is Directory) {
+          LogService.info('UbuntuInstaller', '清理历史 rootfs 目录: ${entry.path}');
+          await _deleteDirBestEffort(entry.path);
+        }
+      }
+    } catch (e) {
+      LogService.warning('UbuntuInstaller', '清理历史 rootfs 目录失败(忽略): $e');
+    }
   }
 
   /// 原子替换 rootfs 目录
@@ -328,6 +367,23 @@ class UbuntuRuntimeInstaller {
     }
   }
 
+  /// 解析解压器可执行文件路径
+  ///
+  /// 优先级：
+  ///   1. [_busyboxOverride]（测试 / 回退注入）
+  ///   2. [NativeBusybox.ensureInstalled]（App 内置 busybox，含
+  ///      可执行位校验 / 损坏重建）
+  /// 返回 null 表示没有任何可用解压器。
+  @visibleForTesting
+  Future<String?> resolveBusybox() async {
+    final override = _busyboxOverride;
+    if (override != null && override.trim().isNotEmpty) {
+      LogService.info('UbuntuInstaller', '使用注入的 busybox: $override');
+      return override;
+    }
+    return NativeBusybox.ensureInstalled();
+  }
+
   /// 流式解压 tar.xz（busybox xzcat | busybox tar）
   ///
   /// 不再使用 archive 包全量解码：
@@ -338,32 +394,102 @@ class UbuntuRuntimeInstaller {
   /// busybox tar 在 Android 上无法创建设备节点时会在 stderr 输出
   /// "can't create node" / "Operation not permitted" 并返回 exit=1，
   /// 此属预期（rootfs 的 /dev 由 proot 虚拟化），按警告处理而不是失败。
-  Future<void> _extractTarXzStreaming({
+  ///
+  /// 2026-08 增强（修复「ProcessException: Permission denied」）：
+  ///   - Process.start 抛 ProcessException（EACCES/ENOENT/Exec format
+  ///     error）时转为结构化 DeployError，携带 busybox + 镜像诊断，
+  ///     不再把裸异常抛给 UI。
+  ///   - 启动前输出诊断日志（busybox / 镜像路径 / 存在性 / 大小 /
+  ///     父目录 / 可读性）。
+  ///   - 支持 [_busyboxOverride] 注入（测试 / 回退用）。
+  @visibleForTesting
+  Future<void> extractTarXzStreaming({
     required String tarPath,
     required String targetDir,
     required int stripComponents,
     required int expandedBytes,
     required void Function(int pipedBytes) onProgress,
   }) async {
-    final busyboxPath = await NativeBusybox.ensureInstalled();
+    final busyboxPath = await resolveBusybox();
     if (busyboxPath == null) {
       throw const DeployError(
         code: DeployErrorCode.dependencyMissing,
         message: '内置解压工具（BusyBox）不可用',
-        userSuggestion: '请重启应用后重试；若仍失败请清理应用数据后重新部署',
+        userSuggestion: '请点击「重新初始化」（会重新安装内置解压工具）；'
+            '若仍失败请清理应用数据后重新部署',
       );
     }
 
     await Directory(targetDir).create(recursive: true);
 
+    // ─── 启动前诊断日志（Permission denied 排查用） ────────────
+    final imageFile = File(tarPath);
+    final parentDir = Directory(path.dirname(tarPath));
+    var imageExists = false;
+    var imageSize = -1;
+    var imageReadable = false;
+    try {
+      imageExists = await imageFile.exists();
+      if (imageExists) {
+        imageSize = await imageFile.length();
+        final stat = await imageFile.stat();
+        imageReadable = (stat.mode & 0x04) != 0;
+        if (imageReadable) {
+          try {
+            final raf = await imageFile.open();
+            await raf.readByte();
+            await raf.close();
+          } catch (_) {
+            imageReadable = false;
+          }
+        }
+      }
+    } catch (e) {
+      LogService.warning('UbuntuInstaller', '镜像诊断失败(忽略): $e');
+    }
+    LogService.info(
+      'UbuntuInstaller',
+      'xzcat 启动前诊断: busybox=$busyboxPath | image=$tarPath | '
+          'imageExists=$imageExists | imageSize=$imageSize | '
+          'imageReadable=$imageReadable | '
+          'parentExists=${await parentDir.exists()} | parent=$parentDir',
+    );
+
     // 管道：busybox xzcat rootfs.tar.xz | busybox tar -xf - -C <target> --strip-components=N
-    final xzcat = await Process.start(busyboxPath, ['xzcat', tarPath]);
-    final tar = await Process.start(busyboxPath, [
-      'tar',
-      '-xf', '-',
-      '-C', targetDir,
-      if (stripComponents > 0) '--strip-components=$stripComponents',
-    ]);
+    Process xzcat;
+    Process tar;
+    try {
+      xzcat = await Process.start(busyboxPath, ['xzcat', tarPath]);
+      tar = await Process.start(busyboxPath, [
+        'tar',
+        '-xf',
+        '-',
+        '-C',
+        targetDir,
+        if (stripComponents > 0) '--strip-components=$stripComponents',
+      ]);
+    } on ProcessException catch (e) {
+      // 核心修复：exec 失败（EACCES=13 / ENOENT=2 / Exec format error）
+      // 转结构化 DeployError，而不是让裸异常一路抛到 UI。
+      final errno = e.errorCode;
+      final isPermission = errno == 13 || e.message.contains('ermission');
+      final isNoEnt = errno == 2 || e.message.contains('No such');
+      throw DeployError(
+        code: isPermission
+            ? DeployErrorCode.permissionDenied
+            : DeployErrorCode.extractionFailed,
+        message: isPermission ? '解压工具启动失败（权限被拒绝）' : '解压工具启动失败（${e.message}）',
+        detail: 'busybox=$busyboxPath\n'
+            'error=${e.message} (errno=$errno)\n'
+            'image=$tarPath exists=$imageExists size=$imageSize '
+            'readable=$imageReadable '
+            'parentExists=${await parentDir.exists()}\n'
+            '${isNoEnt ? '解压工具不存在或路径错误。' : ''}'
+            '若为可执行权限问题，点击「重新初始化」将重新安装内置解压工具',
+        userSuggestion: '点击「重新初始化」重试（将重新安装内置解压工具）；'
+            '若反复失败请清理应用数据后重新部署',
+      );
+    }
 
     final stderrBuf = StringBuffer();
     final xzcatErrDone = xzcat.stderr
@@ -422,9 +548,14 @@ class UbuntuRuntimeInstaller {
     await tarErrDone;
 
     final stderrText = stderrBuf.toString().trim();
+    LogService.info(
+      'UbuntuInstaller',
+      '解压进程结束: busybox=$busyboxPath | xzcat exit=$xzcatExit | '
+          'tar exit=$tarExit | piped=$piped bytes | '
+          'stderr=${stderrText.isEmpty ? '(空)' : stderrText}',
+    );
     // 允许设备节点无法创建的警告（rootfs 的 /dev 由 proot 虚拟化）
-    final deviceNodeOnly =
-        stderrText.contains("can't create node") ||
+    final deviceNodeOnly = stderrText.contains("can't create node") ||
         stderrText.contains('Operation not permitted');
 
     if (tarExit != 0 && !deviceNodeOnly) {
@@ -441,7 +572,8 @@ class UbuntuRuntimeInstaller {
         code: DeployErrorCode.extractionFailed,
         message: 'rootfs 解压失败（xzcat exit=$xzcatExit）',
         detail: stderrText.isEmpty ? '(空)' : stderrText,
-        userSuggestion: DeployErrorSuggestions.forCode(DeployErrorCode.extractionFailed),
+        userSuggestion:
+            DeployErrorSuggestions.forCode(DeployErrorCode.extractionFailed),
       );
     }
 
@@ -501,10 +633,16 @@ class UbuntuRuntimeInstaller {
       },
     );
 
-    // 确保 proot binary 有可执行权限
+    // 确保 proot binary 有可执行权限（校验 chmod 结果，避免同类 EACCES）
     final prootBin = File(path.join(prootDir, 'proot'));
     if (await prootBin.exists()) {
-      await Process.run('chmod', ['+x', prootBin.path]);
+      final chmod = await Process.run('chmod', ['+x', prootBin.path]);
+      if (chmod.exitCode != 0) {
+        LogService.warning(
+          'UbuntuInstaller',
+          'proot chmod +x 失败: exit=${chmod.exitCode} stderr=${chmod.stderr}',
+        );
+      }
     }
   }
 
@@ -525,7 +663,8 @@ class UbuntuRuntimeInstaller {
     _report(InstallPhase.verifying, 0.95, '验证 Ubuntu Runtime...');
 
     // 检查 key 文件是否存在
-    final bashFile = File(path.join(_env.ubuntuRootfsDir, 'usr', 'bin', 'bash'));
+    final bashFile =
+        File(path.join(_env.ubuntuRootfsDir, 'usr', 'bin', 'bash'));
     if (!await bashFile.exists()) {
       LogService.error('UbuntuInstaller', 'bash 不存在于 rootfs');
       return false;
@@ -543,7 +682,8 @@ class UbuntuRuntimeInstaller {
       return false;
     }
 
-    final loaderFile = File(path.join(_env.ubuntuLibexecDir, 'proot', 'loader'));
+    final loaderFile =
+        File(path.join(_env.ubuntuLibexecDir, 'proot', 'loader'));
     if (!await loaderFile.exists()) {
       LogService.error('UbuntuInstaller', 'proot loader 不存在');
       return false;
