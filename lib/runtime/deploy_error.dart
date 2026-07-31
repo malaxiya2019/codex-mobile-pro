@@ -41,6 +41,9 @@ enum DeployErrorCode {
   toolInstallationFailed,
   versionMismatch,
 
+  // ─── 并发 / 状态 ───
+  deploymentInProgress,
+
   // ─── 未知 ───
   unknown,
 }
@@ -160,6 +163,8 @@ class DeployErrorSuggestions {
         '系统工具安装失败。请确保 Linux Runtime 已初始化且网络连接正常',
     DeployErrorCode.versionMismatch:
         '版本不匹配。将尝试安装兼容版本',
+    DeployErrorCode.deploymentInProgress:
+        '已有部署任务正在进行中。请等待当前任务完成后重试',
     DeployErrorCode.unknown:
         '未知错误。请查看日志了解更多信息',
   };

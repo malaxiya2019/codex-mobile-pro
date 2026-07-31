@@ -45,7 +45,9 @@ import 'package:path/path.dart' as path;
 
 import '../core/logger/log_service.dart';
 import 'artifact_manager.dart';
+import 'decompressor/decompressor_backend.dart';
 import 'deploy_error.dart';
+import 'install_lock.dart';
 import 'install_models.dart';
 import 'native/busybox_provider.dart';
 import 'runtime_dependency.dart';
@@ -61,13 +63,19 @@ class UbuntuRuntimeInstaller {
   /// 测试注入的 busybox 路径（非空时优先使用，跳过 NativeBusybox）
   final String? _busyboxOverride;
 
+  /// 测试注入的解压器工厂（非空时绕过自动探测，直接返回指定后端）
+  final Future<DecompressorBackend> Function()? _decompressorFactory;
+
   /// 解压所需的空间余量（压缩包缓存 + 解压 + 临时文件 / proot / sysdata）
   static const int _spaceMarginBytes = 192 * 1024 * 1024;
 
-  /// 流式解压整体超时（防止卡死导致 UI 永久「正在部署」）
-  static const Duration _extractionTimeout = Duration(minutes: 20);
 
-  UbuntuRuntimeInstaller(this._env, [this._onProgress, this._busyboxOverride]);
+  UbuntuRuntimeInstaller(
+    this._env, [
+    this._onProgress,
+    this._busyboxOverride,
+    this._decompressorFactory,
+  ]);
 
   /// 安装 Ubuntu Runtime（rootfs + proot + sysdata）
   Future<InstallResult> install() async {
@@ -95,6 +103,12 @@ class UbuntuRuntimeInstaller {
 
       final ubuntuDir = _env.ubuntuDir;
       await Directory(ubuntuDir).create(recursive: true);
+
+      // 0.5 安装锁（防并发部署 / 重复初始化互相破坏）
+      final lock = InstallLock(
+        File('${_env.ubuntuDir}/${InstallLock.defaultLockName}'),
+      );
+      await lock.acquire();
 
       // 0. 磁盘空间预检（在下载前就给出明确提示）
       await _preCheckDiskSpace(manifest);
@@ -148,6 +162,8 @@ class UbuntuRuntimeInstaller {
         errorMessage: '部署失败: $e',
         phase: InstallPhase.failed,
       );
+    } finally {
+      await lock.release();
     }
   }
 
@@ -366,14 +382,14 @@ class UbuntuRuntimeInstaller {
       unawaited(_deleteDirBestEffort(oldDir));
     }
   }
-
-  /// 解析解压器可执行文件路径
+  /// 解析解压器可执行文件路径（兼容旧 API，仅返回 busybox 型路径）
   ///
   /// 优先级：
   ///   1. [_busyboxOverride]（测试 / 回退注入）
-  ///   2. [NativeBusybox.ensureInstalled]（App 内置 busybox，含
-  ///      可执行位校验 / 损坏重建）
-  /// 返回 null 表示没有任何可用解压器。
+  ///   2. DecompressorResolver（Termux xz+tar → Termux busybox →
+  ///      App 内置 BusyBox）
+  /// 返回 null 表示没有可用的 busybox 型解压器（Termux xz+tar 可用时
+  /// 同样返回 null，因为该后端解压不经过 busybox）。
   @visibleForTesting
   Future<String?> resolveBusybox() async {
     final override = _busyboxOverride;
@@ -381,148 +397,69 @@ class UbuntuRuntimeInstaller {
       LogService.info('UbuntuInstaller', '使用注入的 busybox: $override');
       return override;
     }
-    return NativeBusybox.ensureInstalled();
+    final backend = await _resolveBackend();
+    if (backend.available) return backend.busyboxPath;
+    return null;
   }
 
-  /// 解析解压器可执行文件路径（结构化结果，携带精确错误码）
+  /// 解析解压器可执行文件路径（结构化结果，兼容旧 API）
   ///
-  /// 与 [resolveBusybox] 等价，但失败时返回 [BusyboxInstallResult]，
-  /// 携带 [BusyboxErrorCode]（notFound / corrupted / permissionDenied /
-  /// abiMismatch / execFailed / xzcatUnavailable / installFailed），
-  /// 供 [extractTarXzStreaming] 映射为精确的 [DeployError]。
+  /// 与 [resolveBusybox] 等价，但返回 [BusyboxInstallResult]。
   @visibleForTesting
   Future<BusyboxInstallResult> resolveBusyboxDetailed() async {
     final override = _busyboxOverride;
     if (override != null && override.trim().isNotEmpty) {
       return BusyboxInstallResult(path: override);
     }
-    return NativeBusybox.ensureInstalledDetailed();
-  }
-
-  /// 将 [BusyboxInstallResult] 失败映射为结构化 [DeployError]。
-  ///
-  /// 不再把「文件不存在 / 权限拒绝 / ABI 不匹配 / 文件损坏 / applet
-  /// 缺失」统一显示成「BusyBox 不可用」，每个失败点给出精确错误码与
-  /// 用户建议。
-  DeployError _busyboxDeployError(BusyboxInstallResult result) {
-    final detail = result.detail;
-    switch (result.error) {
-      case BusyboxErrorCode.notFound:
-        return DeployError(
-          code: DeployErrorCode.dependencyMissing,
-          message: '内置解压工具（BusyBox）未找到',
-          detail: detail,
-          userSuggestion: '点击「重新初始化」重新安装内置解压工具；'
-              '若反复失败请清理应用数据后重新部署',
-        );
-      case BusyboxErrorCode.corrupted:
-        return DeployError(
-          code: DeployErrorCode.binaryCorrupted,
-          message: '内置解压工具（BusyBox）已损坏',
-          detail: detail,
-          userSuggestion: '点击「重新初始化」将删除损坏文件并重新安装内置解压工具',
-        );
-      case BusyboxErrorCode.permissionDenied:
-        return DeployError(
-          code: DeployErrorCode.permissionDenied,
-          message: '内置解压工具（BusyBox）无执行权限',
-          detail: detail,
-          userSuggestion: '点击「重新初始化」将重建可执行文件；'
-              '若仍失败，说明应用私有目录存在 noexec/SELinux 限制，'
-              '请清理应用数据后重试',
-        );
-      case BusyboxErrorCode.abiMismatch:
-        return DeployError(
-          code: DeployErrorCode.archNotSupported,
-          message: '内置解压工具（BusyBox）架构不匹配',
-          detail: detail,
-          userSuggestion: '设备架构与内置 BusyBox 不匹配（应为 arm64/aarch64），'
-              '请更新应用版本',
-        );
-      case BusyboxErrorCode.execFailed:
-        return DeployError(
-          code: DeployErrorCode.dependencyMissing,
-          message: '内置解压工具（BusyBox）启动失败',
-          detail: detail,
-          userSuggestion: '点击「重新初始化」重试；若反复失败请清理应用数据后重新部署',
-        );
-      case BusyboxErrorCode.xzcatUnavailable:
-        return DeployError(
-          code: DeployErrorCode.dependencyMissing,
-          message: '内置解压工具（BusyBox）缺少 xzcat 组件',
-          detail: detail,
-          userSuggestion: '当前 BusyBox 不完整，点击「重新初始化」重新安装',
-        );
-      case BusyboxErrorCode.installFailed:
-        return DeployError(
-          code: DeployErrorCode.toolInstallationFailed,
-          message: '内置解压工具（BusyBox）安装失败',
-          detail: detail,
-          userSuggestion: '点击「重新初始化」重试；若反复失败请清理应用数据后重新部署',
-        );
-      case BusyboxErrorCode.none:
-        return const DeployError(
-          code: DeployErrorCode.dependencyMissing,
-          message: '内置解压工具（BusyBox）不可用',
-          userSuggestion: '点击「重新初始化」重试',
-        );
+    final backend = await _resolveBackend();
+    if (backend.available && backend.busyboxPath != null) {
+      return BusyboxInstallResult(path: backend.busyboxPath);
     }
-  }
-
-  /// 流式解压 tar.xz（busybox xzcat | busybox tar）
-  ///
-  /// 不再使用 archive 包全量解码：
-  ///   - 内存峰值 = 单次管道块（≤ 64KB），而不是 700MB+
-  ///   - symlink / device 节点由 busybox tar 完整还原
-  ///   - 进度 = 已管道字节 / expandedBytes（真实进度）
-  ///
-  /// busybox tar 在 Android 上无法创建设备节点时会在 stderr 输出
-  /// "can't create node" / "Operation not permitted" 并返回 exit=1，
-  /// 此属预期（rootfs 的 /dev 由 proot 虚拟化），按警告处理而不是失败。
-  ///
-  /// 2026-08 增强（修复「ProcessException: Permission denied」）：
-  ///   - Process.start 抛 ProcessException / PathAccessException
-  ///     （EACCES/ENOENT/Exec format error）时转为结构化 DeployError，
-  ///     携带 busybox + 镜像诊断，不再把裸异常抛给 UI。
-  ///   - 启动前输出诊断日志（busybox / 镜像路径 / 存在性 / 大小 /
-  ///     父目录 / 可读性）。
-  ///   - 支持 [_busyboxOverride] 注入（测试 / 回退用）。
-  ///   - addStream 后显式 close(tar.stdin)，防止 tar 等待 EOF 挂起。
-
-  /// 将解压工具启动失败（ProcessException / PathAccessException）统一
-  /// 转换为结构化 [DeployError]，避免裸异常一路抛到 UI。
-  ///
-  /// - errno 13（EACCES）/ 消息含 "Permission" → permissionDenied
-  /// - errno 2（ENOENT）/ 消息含 "No such" → extractionFailed（附提示）
-  DeployError _processStartDeployError(
-    String message,
-    int? errno, {
-    required String busyboxPath,
-    required String tarPath,
-    required bool imageExists,
-    required int imageSize,
-    required bool imageReadable,
-    required bool parentExists,
-  }) {
-    final isPermission = errno == 13 || message.contains('ermission');
-    final isNoEnt = errno == 2 || message.contains('No such');
-    return DeployError(
-      code: isPermission
-          ? DeployErrorCode.permissionDenied
-          : DeployErrorCode.extractionFailed,
-      message: isPermission ? '解压工具启动失败（权限被拒绝）' : '解压工具启动失败（$message）',
-      detail: 'busybox=$busyboxPath\n'
-          'error=$message (errno=$errno)\n'
-          'image=$tarPath exists=$imageExists size=$imageSize '
-          'readable=$imageReadable '
-          'parentExists=$parentExists\n'
-          '${isNoEnt ? '解压工具不存在或路径错误。' : ''}'
-          '若为可执行权限问题，点击「重新初始化」将重新安装内置解压工具',
-      userSuggestion: '点击「重新初始化」重试（将重新安装内置解压工具）；'
-          '若反复失败请清理应用数据后重新部署',
+    // 失败结果：携带第一个不可用候选的原因
+    String? detail;
+    for (final s in backend.status) {
+      if (!s.available) {
+        detail = s.reason ?? detail;
+        break;
+      }
+    }
+    return BusyboxInstallResult(
+      error: BusyboxErrorCode.notFound,
+      detail: detail ?? backend.reason,
     );
   }
 
+  /// 解析可用解压后端
+  ///
+  /// 优先级：Termux xz+tar → Termux busybox → App 内置 BusyBox。
+  /// [_decompressorFactory]（测试注入）非空时直接使用。
+  Future<DecompressorBackend> _resolveBackend() {
+    final factory = _decompressorFactory;
+    if (factory != null) return factory();
+    return DecompressorResolver.resolve(busyboxOverride: _busyboxOverride);
+  }
+
+  /// 全部后端不可用时的结构化错误（分项展示每个候选状态）
+  DeployError _decompressorUnavailableError(DecompressorBackend backend) {
+    final statusLines = backend.status
+        .map((s) => '  ${s.available ? '✅' : '❌'} ${s.name}'
+            '${s.reason != null ? ' — ${s.reason}' : ''}')
+        .join('\n');
+    return DeployError(
+      code: backend.failureCode,
+      message: '没有可用的解压工具',
+      detail: '已探测：\n$statusLines',
+      userSuggestion: '请确认设备已安装 Termux（提供 xz/tar），'
+          '或点击「重新初始化」重试内置解压工具',
+    );
+  }
+
+  /// 流式解压 tar.xz（经 [DecompressorBackend] 自动选择可用解压器）
+  ///
+  /// 2026-08 止损重构：
+  ///   - 不再把「App 内置 BusyBox」作为 Linux Runtime 的硬依赖；
+  ///   - 解压后端优先级：Termux xz+tar → Termux busybox → 内置 BusyBox；
+  ///   - 全部候选不可用 → 结构化 [DeployError]（分项状态），不裸抛。
   @visibleForTesting
   Future<void> extractTarXzStreaming({
     required String tarPath,
@@ -531,184 +468,21 @@ class UbuntuRuntimeInstaller {
     required int expandedBytes,
     required void Function(int pipedBytes) onProgress,
   }) async {
-    final busyboxResult = await resolveBusyboxDetailed();
-    final busyboxPath = busyboxResult.path;
-    if (busyboxPath == null) {
-      // 精确错误映射：BUSYBOX_NOT_FOUND / CORRUPTED / PERMISSION_DENIED /
-      // ABI_MISMATCH / EXEC_FAILED / XZCAT_UNAVAILABLE / INSTALL_FAILED
-      throw _busyboxDeployError(busyboxResult);
+    final backend = await _resolveBackend();
+    if (!backend.available) {
+      throw _decompressorUnavailableError(backend);
     }
-
     await Directory(targetDir).create(recursive: true);
-
-    // ─── 启动前诊断日志（Permission denied 排查用） ────────────
-    final imageFile = File(tarPath);
-    final parentDir = Directory(path.dirname(tarPath));
-    var imageExists = false;
-    var imageSize = -1;
-    var imageReadable = false;
-    try {
-      imageExists = await imageFile.exists();
-      if (imageExists) {
-        imageSize = await imageFile.length();
-        final stat = await imageFile.stat();
-        imageReadable = (stat.mode & 0x04) != 0;
-        if (imageReadable) {
-          try {
-            final raf = await imageFile.open();
-            await raf.readByte();
-            await raf.close();
-          } catch (_) {
-            imageReadable = false;
-          }
-        }
-      }
-    } catch (e) {
-      LogService.warning('UbuntuInstaller', '镜像诊断失败(忽略): $e');
-    }
-    LogService.info(
-      'UbuntuInstaller',
-      'xzcat 启动前诊断: busybox=$busyboxPath | image=$tarPath | '
-          'imageExists=$imageExists | imageSize=$imageSize | '
-          'imageReadable=$imageReadable | '
-          'parentExists=${await parentDir.exists()} | parent=$parentDir',
+    await backend.extractTarXz(
+      tarPath: tarPath,
+      targetDir: targetDir,
+      stripComponents: stripComponents,
+      expandedBytes: expandedBytes,
+      onProgress: onProgress,
     );
-
-    // 管道：busybox xzcat rootfs.tar.xz | busybox tar -xf - -C <target> --strip-components=N
-    Process xzcat;
-    Process tar;
-    try {
-      xzcat = await Process.start(busyboxPath, ['xzcat', tarPath]);
-      tar = await Process.start(busyboxPath, [
-        'tar',
-        '-xf',
-        '-',
-        '-C',
-        targetDir,
-        if (stripComponents > 0) '--strip-components=$stripComponents',
-      ]);
-    } on ProcessException catch (e) {
-      // 核心修复：exec 失败（EACCES=13 / ENOENT=2 / Exec format error）
-      // 转结构化 DeployError，而不是让裸异常一路抛到 UI。
-      throw _processStartDeployError(
-        e.message,
-        e.errorCode,
-        busyboxPath: busyboxPath,
-        tarPath: tarPath,
-        imageExists: imageExists,
-        imageSize: imageSize,
-        imageReadable: imageReadable,
-        parentExists: await parentDir.exists(),
-      );
-    } on PathAccessException catch (e) {
-      // Linux（CI）上对 chmod 000 / 不存在的可执行文件，Process.start
-      // 可能抛 PathAccessException（open 阶段 EACCES/ENOENT）而非
-      // ProcessException，同样转结构化 DeployError。
-      throw _processStartDeployError(
-        e.message,
-        e.osError?.errorCode,
-        busyboxPath: busyboxPath,
-        tarPath: tarPath,
-        imageExists: imageExists,
-        imageSize: imageSize,
-        imageReadable: imageReadable,
-        parentExists: await parentDir.exists(),
-      );
-    }
-
-    final stderrBuf = StringBuffer();
-    final xzcatErrDone = xzcat.stderr
-        .transform(const SystemEncoding().decoder)
-        .listen((d) => stderrBuf.write(d))
-        .asFuture<void>();
-    final tarErrDone = tar.stderr
-        .transform(const SystemEncoding().decoder)
-        .listen((d) => stderrBuf.write(d))
-        .asFuture<void>();
-
-    int piped = 0;
-
-    // 带背压的流式管道 + 字节计数（addStream 保证不无限缓冲）
-    final counting = xzcat.stdout.transform(
-      StreamTransformer<List<int>, List<int>>.fromHandlers(
-        handleData: (chunk, sink) {
-          piped += chunk.length;
-          onProgress(piped);
-          sink.add(chunk);
-        },
-      ),
-    );
-
-    // 整体超时保护：解压卡死时终止，避免 UI 永久「正在部署」
-    final timeoutCompleter = Completer<void>();
-    final timeoutTimer = Timer(_extractionTimeout, () {
-      if (!timeoutCompleter.isCompleted) timeoutCompleter.complete();
-    });
-
-    try {
-      await Future.any([
-        (() async {
-          await tar.stdin.addStream(counting);
-          // dart:io IOSink.addStream 完成时不会自动关闭 sink；
-          // 不显式 close 会让 tar 永远等待 EOF → exitCode 挂起。
-          await tar.stdin.close();
-        })(),
-        timeoutCompleter.future,
-      ]);
-      if (timeoutCompleter.isCompleted) {
-        throw TimeoutException(
-          'rootfs 解压超时（超过 ${_extractionTimeout.inMinutes} 分钟）',
-        );
-      }
-    } on Object catch (e) {
-      // 终止子进程，避免残留
-      try {
-        xzcat.kill();
-        tar.kill();
-      } catch (_) {}
-      if (e is DeployError) rethrow;
-      rethrow;
-    } finally {
-      timeoutTimer.cancel();
-    }
-
-    final xzcatExit = await xzcat.exitCode;
-    final tarExit = await tar.exitCode;
-    await xzcatErrDone;
-    await tarErrDone;
-
-    final stderrText = stderrBuf.toString().trim();
-    LogService.info(
-      'UbuntuInstaller',
-      '解压进程结束: busybox=$busyboxPath | xzcat exit=$xzcatExit | '
-          'tar exit=$tarExit | piped=$piped bytes | '
-          'stderr=${stderrText.isEmpty ? '(空)' : stderrText}',
-    );
-    // 允许设备节点无法创建的警告（rootfs 的 /dev 由 proot 虚拟化）
-    final deviceNodeOnly = stderrText.contains("can't create node") ||
-        stderrText.contains('Operation not permitted');
-
-    if (tarExit != 0 && !deviceNodeOnly) {
-      throw DeployError(
-        code: DeployErrorCode.extractionFailed,
-        message: 'rootfs 解压失败',
-        detail: 'tar exit=$tarExit, xzcat exit=$xzcatExit\n'
-            'stderr:\n${stderrText.isEmpty ? '(空)' : stderrText}',
-        userSuggestion: '解压中断。已保留完整压缩包缓存，点击「重新初始化」将直接重新解压，无需再次下载',
-      );
-    }
-    if (xzcatExit != 0) {
-      throw DeployError(
-        code: DeployErrorCode.extractionFailed,
-        message: 'rootfs 解压失败（xzcat exit=$xzcatExit）',
-        detail: stderrText.isEmpty ? '(空)' : stderrText,
-        userSuggestion:
-            DeployErrorSuggestions.forCode(DeployErrorCode.extractionFailed),
-      );
-    }
-
     onProgress(expandedBytes);
   }
+
 
   /// 解压后 rootfs 结构验证（只检查目录/文件存在性）
   ///
