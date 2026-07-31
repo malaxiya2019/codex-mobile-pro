@@ -265,7 +265,7 @@ class PtyPlugin(private val context: Context) {
 
         val session = PtySession.create(
             shellPath = shellPath,
-            args = flutterArgs,
+            args = flutterArgs.toTypedArray(),
             env = env,
             workDir = workDir,
             rows = rows,
