@@ -52,6 +52,7 @@ File createFakeBusybox(Directory tmp, {bool executable = true}) {
       'case "\$1" in\n'
       '  xzcat) shift; exec xz -dc "\$@" ;;\n'
       '  tar) shift; exec tar "\$@" ;;\n'
+      '  --list) echo "ash xz xzcat tar true"; exit 0 ;;\n'
       '  *) exit 127 ;;\n'
       'esac\n');
   if (executable) {
@@ -118,12 +119,54 @@ void main() {
       expect(await installer.resolveBusybox(), '/fake/busybox');
     });
 
-    test('注入为空时走 NativeBusybox（测试环境无插件 → 返回 null）', () async {
+    test('注入为空时走 NativeBusybox（无可用解压器 → 返回 null）', () async {
       final env = RuntimeEnvironment.forTest('${tmp.path}/app');
       final installer = UbuntuRuntimeInstaller(env, null, '   ');
-      // path_provider 在 flutter_test 无 mock 时抛 MissingPluginException，
-      // ensureInstalled 捕获后返回 null —— 验证「无解压器」路径不裸抛。
+      // ensureInstalledDetailed 依次尝试 filesDir/cacheDir/系统临时目录；
+      // 在 flutter_test 中 path_provider 抛 MissingPluginException 被捕获，
+      // 系统临时目录安装 ARM64 busybox 时 execve 冒烟失败（CI x86_64 或
+      // 无 Flutter 插件）→ 返回 null —— 验证「无解压器」路径不裸抛。
       expect(await installer.resolveBusybox(), isNull);
+    });
+  });
+
+  group('BusyBox 失败精确错误映射', () {
+    test('resolveBusyboxDetailed 注入路径直接返回', () async {
+      final env = RuntimeEnvironment.forTest('${tmp.path}/app');
+      final installer = UbuntuRuntimeInstaller(env, null, '/fake/busybox');
+      final r = await installer.resolveBusyboxDetailed();
+      expect(r.success, isTrue);
+      expect(r.path, '/fake/busybox');
+    });
+
+    test('无解压器时 extractTarXzStreaming 抛出精确 DeployError（不再统一「BusyBox 不可用」）',
+        () async {
+      final env = RuntimeEnvironment.forTest('${tmp.path}/app');
+      final installer = UbuntuRuntimeInstaller(env, null, '   ');
+      // 注入为空 → NativeBusybox 无法在测试环境提供可用解压器 → 失败。
+      // 验证错误码是精确映射之一（toolInstallationFailed /
+      // dependencyMissing / binaryCorrupted / permissionDenied /
+      // archNotSupported），而不是裸 ProcessException 或统一文案。
+      await expectLater(
+        installer.extractTarXzStreaming(
+          tarPath: '${tmp.path}/x.tar.xz',
+          targetDir: '${tmp.path}/out',
+          stripComponents: 1,
+          expandedBytes: 0,
+          onProgress: (_) {},
+        ),
+        throwsA(isA<DeployError>().having(
+          (e) => e.code,
+          'code ∈ 精确错误码',
+          anyOf(
+            DeployErrorCode.toolInstallationFailed,
+            DeployErrorCode.dependencyMissing,
+            DeployErrorCode.binaryCorrupted,
+            DeployErrorCode.permissionDenied,
+            DeployErrorCode.archNotSupported,
+          ),
+        )),
+      );
     });
   });
 

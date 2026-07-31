@@ -384,6 +384,91 @@ class UbuntuRuntimeInstaller {
     return NativeBusybox.ensureInstalled();
   }
 
+  /// 解析解压器可执行文件路径（结构化结果，携带精确错误码）
+  ///
+  /// 与 [resolveBusybox] 等价，但失败时返回 [BusyboxInstallResult]，
+  /// 携带 [BusyboxErrorCode]（notFound / corrupted / permissionDenied /
+  /// abiMismatch / execFailed / xzcatUnavailable / installFailed），
+  /// 供 [extractTarXzStreaming] 映射为精确的 [DeployError]。
+  @visibleForTesting
+  Future<BusyboxInstallResult> resolveBusyboxDetailed() async {
+    final override = _busyboxOverride;
+    if (override != null && override.trim().isNotEmpty) {
+      return BusyboxInstallResult(path: override);
+    }
+    return NativeBusybox.ensureInstalledDetailed();
+  }
+
+  /// 将 [BusyboxInstallResult] 失败映射为结构化 [DeployError]。
+  ///
+  /// 不再把「文件不存在 / 权限拒绝 / ABI 不匹配 / 文件损坏 / applet
+  /// 缺失」统一显示成「BusyBox 不可用」，每个失败点给出精确错误码与
+  /// 用户建议。
+  DeployError _busyboxDeployError(BusyboxInstallResult result) {
+    final detail = result.detail;
+    switch (result.error) {
+      case BusyboxErrorCode.notFound:
+        return DeployError(
+          code: DeployErrorCode.dependencyMissing,
+          message: '内置解压工具（BusyBox）未找到',
+          detail: detail,
+          userSuggestion: '点击「重新初始化」重新安装内置解压工具；'
+              '若反复失败请清理应用数据后重新部署',
+        );
+      case BusyboxErrorCode.corrupted:
+        return DeployError(
+          code: DeployErrorCode.binaryCorrupted,
+          message: '内置解压工具（BusyBox）已损坏',
+          detail: detail,
+          userSuggestion: '点击「重新初始化」将删除损坏文件并重新安装内置解压工具',
+        );
+      case BusyboxErrorCode.permissionDenied:
+        return DeployError(
+          code: DeployErrorCode.permissionDenied,
+          message: '内置解压工具（BusyBox）无执行权限',
+          detail: detail,
+          userSuggestion: '点击「重新初始化」将重建可执行文件；'
+              '若仍失败，说明应用私有目录存在 noexec/SELinux 限制，'
+              '请清理应用数据后重试',
+        );
+      case BusyboxErrorCode.abiMismatch:
+        return DeployError(
+          code: DeployErrorCode.archNotSupported,
+          message: '内置解压工具（BusyBox）架构不匹配',
+          detail: detail,
+          userSuggestion: '设备架构与内置 BusyBox 不匹配（应为 arm64/aarch64），'
+              '请更新应用版本',
+        );
+      case BusyboxErrorCode.execFailed:
+        return DeployError(
+          code: DeployErrorCode.dependencyMissing,
+          message: '内置解压工具（BusyBox）启动失败',
+          detail: detail,
+          userSuggestion: '点击「重新初始化」重试；若反复失败请清理应用数据后重新部署',
+        );
+      case BusyboxErrorCode.xzcatUnavailable:
+        return DeployError(
+          code: DeployErrorCode.dependencyMissing,
+          message: '内置解压工具（BusyBox）缺少 xzcat 组件',
+          detail: detail,
+          userSuggestion: '当前 BusyBox 不完整，点击「重新初始化」重新安装',
+        );
+      case BusyboxErrorCode.installFailed:
+        return DeployError(
+          code: DeployErrorCode.toolInstallationFailed,
+          message: '内置解压工具（BusyBox）安装失败',
+          detail: detail,
+          userSuggestion: '点击「重新初始化」重试；若反复失败请清理应用数据后重新部署',
+        );
+      case BusyboxErrorCode.none:
+        return const DeployError(
+          code: DeployErrorCode.dependencyMissing,
+          message: '内置解压工具（BusyBox）不可用',
+          userSuggestion: '点击「重新初始化」重试',
+        );
+    }
+  }
+
   /// 流式解压 tar.xz（busybox xzcat | busybox tar）
   ///
   /// 不再使用 archive 包全量解码：
@@ -446,14 +531,12 @@ class UbuntuRuntimeInstaller {
     required int expandedBytes,
     required void Function(int pipedBytes) onProgress,
   }) async {
-    final busyboxPath = await resolveBusybox();
+    final busyboxResult = await resolveBusyboxDetailed();
+    final busyboxPath = busyboxResult.path;
     if (busyboxPath == null) {
-      throw const DeployError(
-        code: DeployErrorCode.dependencyMissing,
-        message: '内置解压工具（BusyBox）不可用',
-        userSuggestion: '请点击「重新初始化」（会重新安装内置解压工具）；'
-            '若仍失败请清理应用数据后重新部署',
-      );
+      // 精确错误映射：BUSYBOX_NOT_FOUND / CORRUPTED / PERMISSION_DENIED /
+      // ABI_MISMATCH / EXEC_FAILED / XZCAT_UNAVAILABLE / INSTALL_FAILED
+      throw _busyboxDeployError(busyboxResult);
     }
 
     await Directory(targetDir).create(recursive: true);

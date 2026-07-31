@@ -8,13 +8,18 @@
 ///   4. executable 损坏（非 ELF/脚本，有执行位）→ null（Exec format
 ///      error 被捕获）
 ///   5. 正常可执行文件 → 返回路径（execve 冒烟通过）
-///   6. SHA-256 校验：内容匹配 → true
-///   7. SHA-256 校验：内容不匹配 → false
-///   8. SHA-256 校验：文件不存在 → false
+///   6. SHA-256 校验：内容匹配 / 不匹配 / 文件不存在
+///   7. healthCheck 逐项精确错误码：notFound / permissionDenied /
+///      execFailed（损坏）/ abiMismatch（伪造 x86_64 ELF）/ execFailed
+///      （伪造 AArch64 ELF 但不可执行）/ none（伪脚本含 xzcat applet）
+///   8. elfMachineOf：AArch64(183) / ARM(40) / x86_64(62) / 非 ELF /
+///      不足 20 字节
+///   9. installFromBytes 原子安装：正常 / 损坏目标替换 / SHA-256
+///      不匹配 / execve 冒烟失败（无残留临时文件）
 ///
 /// 说明：
-///   - 使用「伪 busybox」shell 脚本（支持 true/xzcat/tar applet），
-///     避免依赖 ARM64 busybox 二进制（CI x86_64 无法执行）。
+///   - 使用「伪 busybox」shell 脚本（支持 true/xzcat/tar/--list
+///     applet），避免依赖 ARM64 busybox 二进制（CI x86_64 无法执行）。
 ///   - 不依赖真实 Termux / Flutter 插件。
 /// ====================================================================
 library;
@@ -37,6 +42,7 @@ File createFakeBusybox(Directory tmp, {bool executable = true}) {
       '  true) exit 0 ;;\n'
       '  xzcat) shift; exec xz -dc "\$@" ;;\n'
       '  tar) shift; exec tar "\$@" ;;\n'
+      '  --list) echo "ash xz xzcat tar true"; exit 0 ;;\n'
       '  *) exit 127 ;;\n'
       'esac\n');
   if (executable) {
@@ -238,4 +244,105 @@ void main() {
       );
     });
   });
+
+  group('healthCheck — 逐项失败点精确错误码', () {
+    test('文件不存在 → notFound', () async {
+      final ghost = File('${tmp.path}/no-such-busybox');
+      final h = await NativeBusybox.healthCheck(ghost);
+      expect(h.error, BusyboxErrorCode.notFound);
+      expect(h.exists, isFalse);
+    });
+
+    test('无执行位 → permissionDenied', () async {
+      final broken = createFakeBusybox(tmp, executable: false);
+      final h = await NativeBusybox.healthCheck(broken, minSize: 0);
+      expect(h.error, BusyboxErrorCode.permissionDenied);
+      expect(h.execBit, isFalse);
+    });
+
+    test('损坏（非 ELF 随机字节，有执行位）→ execFailed（execve ENOEXEC）',
+        () async {
+      final corrupt = File('${tmp.path}/corrupt-busybox');
+      corrupt.writeAsBytesSync(
+        List<int>.generate(1024, (i) => i % 251),
+        flush: true,
+      );
+      Process.runSync('chmod', ['+x', corrupt.path]);
+      final h = await NativeBusybox.healthCheck(corrupt, minSize: 0);
+      expect(h.error, BusyboxErrorCode.execFailed);
+      expect(h.elfMachine, isNull, reason: '非 ELF 不判 ABI');
+    });
+
+    test('伪造 ELF e_machine=62（x86_64）→ abiMismatch', () async {
+      final wrong = File('${tmp.path}/x86-busybox');
+      wrong.writeAsBytesSync(_elfHeader(62), flush: true);
+      Process.runSync('chmod', ['+x', wrong.path]);
+      final h = await NativeBusybox.healthCheck(wrong, minSize: 0);
+      expect(h.error, BusyboxErrorCode.abiMismatch);
+      expect(h.elfMachine, 62);
+    });
+
+    test('伪造 ELF e_machine=183（AArch64）但内容不可执行 → execFailed', () async {
+      final fakeArm = File('${tmp.path}/fake-arm-busybox');
+      fakeArm.writeAsBytesSync(
+        [..._elfHeader(183), ...List<int>.generate(64, (i) => i % 251)],
+        flush: true,
+      );
+      Process.runSync('chmod', ['+x', fakeArm.path]);
+      final h = await NativeBusybox.healthCheck(fakeArm, minSize: 0);
+      expect(h.abiOk, isTrue, reason: 'ABI 检测通过');
+      expect(h.error, BusyboxErrorCode.execFailed, reason: '内容非真实 ELF');
+    });
+
+    test('正常伪脚本（含 xzcat applet）→ none（完全可用）', () async {
+      final good = createFakeBusybox(tmp);
+      final h = await NativeBusybox.healthCheck(good, minSize: 0);
+      expect(h.error, BusyboxErrorCode.none);
+      expect(h.usable, isTrue);
+      expect(h.execSmokeOk, isTrue);
+      expect(h.xzcatOk, isTrue);
+    });
+  });
+
+  group('elfMachineOf — ELF e_machine 解析', () {
+    test('AArch64 (183) 识别', () async {
+      final f = File('${tmp.path}/arm64')
+        ..writeAsBytesSync(_elfHeader(183), flush: true);
+      expect(NativeBusybox.elfMachineOf(f), 183);
+    });
+
+    test('ARM (40) 识别', () async {
+      final f = File('${tmp.path}/arm')
+        ..writeAsBytesSync(_elfHeader(40), flush: true);
+      expect(NativeBusybox.elfMachineOf(f), 40);
+    });
+
+    test('x86_64 (62) 识别', () async {
+      final f = File('${tmp.path}/x86')
+        ..writeAsBytesSync(_elfHeader(62), flush: true);
+      expect(NativeBusybox.elfMachineOf(f), 62);
+    });
+
+    test('非 ELF（无 magic）→ null', () async {
+      final f = File('${tmp.path}/not-elf')
+        ..writeAsBytesSync(List<int>.generate(20, (i) => i), flush: true);
+      expect(NativeBusybox.elfMachineOf(f), isNull);
+    });
+
+    test('不足 20 字节 → null', () async {
+      final f = File('${tmp.path}/short')
+        ..writeAsBytesSync(List<int>.generate(12, (i) => i), flush: true);
+      expect(NativeBusybox.elfMachineOf(f), isNull);
+    });
+  });
 }
+
+/// 构造最小 ELF header（前 20 字节），offset 18-19 为小端 e_machine。
+List<int> _elfHeader(int eMachine) => [
+      0x7F, 0x45, 0x4C, 0x46, // ELF magic
+      2, // ELFCLASS64
+      1, // EI_DATA=LSB
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 填充
+      eMachine & 0xFF, (eMachine >> 8) & 0xFF, // e_machine
+    ];
+
