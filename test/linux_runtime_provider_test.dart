@@ -18,6 +18,7 @@ import 'dart:io';
 
 import 'package:codex_mobile_pro/runtime/provider/linux_runtime_provider.dart';
 import 'package:codex_mobile_pro/runtime/provider/runtime_capability.dart';
+import 'package:codex_mobile_pro/runtime/provider/runtime_provider.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// 在临时目录构建一个最小 Linux Runtime 结构

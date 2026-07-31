@@ -150,15 +150,31 @@ class LinuxRuntimeProvider implements IRuntimeProvider {
 
   LinuxRuntimeProvider({LinuxRuntimePaths? paths}) : _paths = paths;
 
+  LinuxRuntimePaths? _cachedPaths;
+
   // ─── 路径解析 ────────────────────────────────────────────────
 
   /// 获取 Linux Runtime 路径（懒加载 RuntimeEnvironment）
   ///
   /// 公开给 LinuxExecutionAdapter / RuntimeManager 使用。
+  /// path_provider 不可用时（如测试环境）回退到系统临时目录，
+  /// 保证 detect/healthCheck 不因环境问题崩溃。
   Future<LinuxRuntimePaths> resolvePaths() async {
     if (_paths != null) return _paths;
-    final env = await RuntimeEnvironment.getInstance();
-    return LinuxRuntimePaths.fromEnvironment(env);
+    if (_cachedPaths != null) return _cachedPaths!;
+    try {
+      final env = await RuntimeEnvironment.getInstance();
+      _cachedPaths = LinuxRuntimePaths.fromEnvironment(env);
+    } catch (e) {
+      LogService.warning('LinuxProvider', 'path_provider 不可用，回退临时目录: $e');
+      final base = Directory.systemTemp.path;
+      _cachedPaths = LinuxRuntimePaths(
+        prootExecutable: '$base/runtime/ubuntu/bin/proot',
+        rootfsDir: '$base/runtime/ubuntu/rootfs',
+        loaderPath: '$base/runtime/ubuntu/libexec/proot/loader',
+      );
+    }
+    return _cachedPaths!;
   }
 
   // ─── IRuntimeProvider ────────────────────────────────────────
