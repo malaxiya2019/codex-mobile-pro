@@ -14,8 +14,8 @@
 /// ====================================================================
 library;
 
-import '../../../runtime/termux/termux_transport.dart';
 import '../../../runtime/termux/method_channel_transport.dart';
+import '../../../runtime/termux/termux_transport.dart';
 import '../../logger/log_service.dart';
 import '../detection_result.dart';
 import '../detector.dart';

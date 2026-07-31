@@ -54,42 +54,36 @@ const _kCapabilityMappings = <_CapabilityToResult>[
     id: 'node',
     name: 'Node.js',
     icon: '🟢',
-    subCategory: RuntimeSubCategory.coding,
   ),
   _CapabilityToResult(
     type: CapabilityType.npm,
     id: 'npm',
     name: 'npm',
     icon: '📦',
-    subCategory: RuntimeSubCategory.coding,
   ),
   _CapabilityToResult(
     type: CapabilityType.git,
     id: 'git',
     name: 'Git',
     icon: '🔀',
-    subCategory: RuntimeSubCategory.coding,
   ),
   _CapabilityToResult(
     type: CapabilityType.python,
     id: 'python',
     name: 'Python 3',
     icon: '🐍',
-    subCategory: RuntimeSubCategory.coding,
   ),
   _CapabilityToResult(
     type: CapabilityType.codexCli,
     id: 'codex',
     name: 'Codex CLI',
     icon: '🤖',
-    subCategory: RuntimeSubCategory.coding,
   ),
   _CapabilityToResult(
     type: CapabilityType.mimo2codex,
     id: 'mimo2codex',
     name: 'mimo2codex',
     icon: '🔮',
-    subCategory: RuntimeSubCategory.coding,
   ),
   _CapabilityToResult(
     type: CapabilityType.flutter,
@@ -311,7 +305,6 @@ class RuntimeDetector {
       icon: '🐧',
       status: status,
       version: version,
-      subCategory: RuntimeSubCategory.coding,
     ));
 
     return results;

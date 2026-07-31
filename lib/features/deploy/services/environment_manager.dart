@@ -1,7 +1,8 @@
 import 'dart:io';
+
 import '../../../core/detector/detection_result.dart';
-import '../../../runtime/runtime_detector.dart';
 import '../../../core/logger/log_service.dart';
+import '../../../runtime/runtime_detector.dart';
 
 /// 环境详细信息
 class EnvironmentDetail {

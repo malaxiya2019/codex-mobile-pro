@@ -16,12 +16,12 @@ import 'ring_buffer.dart';
 
 
 /// Shell 信息（Android 系统 Shell）
-class _ShellInfo {
+class ShellInfo {
   final String shellPath;
   final String version;
   final bool isTermuxAvailable;
 
-  const _ShellInfo()
+  const ShellInfo()
       : shellPath = '/system/bin/sh',
         version = 'Android System Shell',
         isTermuxAvailable = false;
@@ -36,7 +36,7 @@ class _ShellInfo {
 }
 
 /// 默认 Shell 信息
-const _kDefaultShell = _ShellInfo();
+const _kDefaultShell = ShellInfo();
 // ─── 终端运行环境 ─────────────────────────────────────────────
 
 /// 构建终端环境变量
@@ -89,7 +89,7 @@ class TerminalLine {
 class TerminalSession {
   final String id;
   String name;
-  final _ShellInfo shellInfo;
+  final ShellInfo shellInfo;
   String cwd;
   TerminalSessionStatus status;
   final RingBuffer<TerminalLine> outputBuffer;
@@ -360,7 +360,7 @@ class TerminalSession {
 /// 不再依赖旧 ShellDetector。
 class TerminalService {
   final List<TerminalSession> _sessions = [];
-  _ShellInfo? _cachedShellInfo;
+  ShellInfo? _cachedShellInfo;
   ITerminalBackend? _backend;
 
   List<TerminalSession> get sessions => List.unmodifiable(_sessions);
