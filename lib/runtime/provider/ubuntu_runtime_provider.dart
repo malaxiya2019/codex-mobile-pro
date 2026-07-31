@@ -45,9 +45,9 @@ class UbuntuRuntimeProvider implements IRuntimeProvider {
 
     try {
       // ─── 1. 检测 proot ────────────────────────────────────────
-      final prootCheck = _checkProot();
+      final prootCheck = await _checkProot();
       final rootfsCheck = _checkRootfs();
-      final prootDistroCheck = _checkProotDistro();
+      final prootDistroCheck = await _checkProotDistro();
 
       // ─── 2. 确定状态 ──────────────────────────────────────────
       // Ubuntu 始终标记为 experimental
@@ -142,12 +142,20 @@ class UbuntuRuntimeProvider implements IRuntimeProvider {
 
     if (rootfsPath != null) {
       return {
+        'HOME': appHome ?? rootfsPath,
+        'PATH': '$rootfsPath/usr/bin:$rootfsPath/usr/local/bin:/system/bin',
         'PROOT_ROOTFS': rootfsPath,
         'UBUNTU_ROOTFS': rootfsPath,
+        'TMPDIR': '/tmp',
+        'LANG': 'en_US.UTF-8',
+        'LC_ALL': 'en_US.UTF-8',
       };
     }
 
-    return {};
+    return {
+      if (appHome != null) 'HOME': appHome,
+      'PATH': '/system/bin:/system/xbin',
+    };
   }
 
   @override
@@ -159,7 +167,7 @@ class UbuntuRuntimeProvider implements IRuntimeProvider {
   @override
   Future<ProviderHealth> healthCheck() async {
     final start = DateTime.now();
-    final prootCheck = _checkProot();
+    final prootCheck = await _checkProot();
     final rootfsCheck = _checkRootfs();
 
     return ProviderHealth(
@@ -186,7 +194,7 @@ class UbuntuRuntimeProvider implements IRuntimeProvider {
 
   // ─── 内部检测 ────────────────────────────────────────────────
 
-  _CheckResult _checkProot() {
+  Future<_CheckResult> _checkProot() async {
     // 检查常见 proot 位置
     final locations = [
       '/data/data/com.termux/files/usr/bin/proot',
@@ -199,7 +207,7 @@ class UbuntuRuntimeProvider implements IRuntimeProvider {
       if (file.existsSync()) {
         String? version;
         try {
-          final result = Process.runSync(path, ['--version']);
+          final result = await Process.run(path, ['--version']);
           if (result.exitCode == 0) {
             version = (result.stdout as String).split('\n').first.trim();
           }
@@ -241,7 +249,7 @@ class UbuntuRuntimeProvider implements IRuntimeProvider {
     return const _CheckResult(passed: false);
   }
 
-  _CheckResult _checkProotDistro() {
+  Future<_CheckResult> _checkProotDistro() async {
     final locations = [
       '/data/data/com.termux/files/usr/bin/proot-distro',
       '/data/data/com.termux/files/usr/bin/proot-distro.sh',
