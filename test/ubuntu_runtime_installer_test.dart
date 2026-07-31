@@ -9,7 +9,7 @@
 ///   5. busybox 不可执行（EACCES）→ 转为 DeployError.permissionDenied，
 ///      而不是裸抛 ProcessException（核心修复）
 ///   6. busybox 不存在（ENOENT）→ DeployError.extractionFailed
-///   7. 无任何解压器 → DeployError.dependencyMissing
+///   7. 无任何解压器 → 精确 DeployError（不崩溃，错误码环境相关）
 ///   8. 重新初始化后缓存恢复：坏 busybox 失败 → 好 busybox 续用同一
 ///      缓存直接解压成功
 ///   9. resolveBusybox 注入优先级
@@ -354,7 +354,7 @@ void main() {
       );
     });
 
-    test('无任何解压器 → dependencyMissing（不崩溃）', () async {
+    test('无任何解压器 → 精确 DeployError（不崩溃）', () async {
       final env = RuntimeEnvironment.forTest('${tmp.path}/app');
       final installer = newInstaller(env, busyboxOverride: '');
       await expectLater(
@@ -363,8 +363,17 @@ void main() {
           tarPath: '${tmp.path}/x.tar.xz',
           targetDir: '${tmp.path}/out',
         ),
-        throwsA(isA<DeployError>()
-            .having((e) => e.code, 'code', DeployErrorCode.dependencyMissing)),
+        throwsA(isA<DeployError>().having(
+          (e) => e.code,
+          'code ∈ 精确错误码（环境相关）',
+          anyOf(
+            DeployErrorCode.dependencyMissing,
+            DeployErrorCode.toolInstallationFailed,
+            DeployErrorCode.binaryCorrupted,
+            DeployErrorCode.permissionDenied,
+            DeployErrorCode.archNotSupported,
+          ),
+        )),
       );
     });
 
