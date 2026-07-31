@@ -84,6 +84,7 @@ class PtyPlugin(private val context: Context) {
         try {
             when (call.method) {
                 "checkBusybox" -> handleCheckBusybox(result)
+                "getNativeLibDir" -> handleGetNativeLibDir(result)
                 "setupBusybox" -> handleSetupBusybox(result)
                 "createSession" -> handleCreateSession(call, result)
                 "write" -> handleWrite(call, result)
@@ -108,6 +109,33 @@ class PtyPlugin(private val context: Context) {
             "binDir" to (binDir?.absolutePath ?: ""),
             "busyboxPath" to if (ready) File(binDir, BUSYBOX_NAME).absolutePath else ""
         ))
+    }
+
+    // ── Native Library 目录（jniLibs 解压区，系统保证可执行）──
+
+    /**
+     * 返回 nativeLibraryDir（jniLibs 解压目录）。
+     *
+     * App 内置的 libbusybox.so（jniLibs/arm64-v8a）在安装时由
+     * Android 解压到 nativeLibraryDir，该分区由系统管理且保证可执行
+     * （与 Operit 同源方案），不受 filesDir noexec / SELinux 限制。
+     * Flutter 侧 NativeBusybox 优先复用该路径，避免复制到 filesDir
+     * 后 chmod 无效导致的 EACCES。
+     */
+    private fun handleGetNativeLibDir(result: MethodChannel.Result) {
+        try {
+            val nativeLibDir = context.applicationInfo.nativeLibraryDir
+            val busyboxSo = File(nativeLibDir, "libbusybox.so")
+            result.success(mapOf(
+                "nativeLibDir" to nativeLibDir,
+                "busyboxSoExists" to busyboxSo.exists(),
+                "busyboxSoPath" to busyboxSo.absolutePath,
+                "busyboxSoSize" to (if (busyboxSo.exists()) busyboxSo.length() else 0L)
+            ))
+        } catch (e: Exception) {
+            Log.e(TAG, "getNativeLibDir failed", e)
+            result.error("NATIVE_LIB_DIR_FAILED", e.message, null)
+        }
     }
 
     private fun handleSetupBusybox(result: MethodChannel.Result) {

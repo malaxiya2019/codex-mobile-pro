@@ -52,6 +52,24 @@ android {
         }
     }
 
+    // ── jniLibs（App 内置原生工具：busybox）──
+    // useLegacyPackaging = true 保证 .so 在安装时真实解压到
+    // nativeLibraryDir（/data/app/<pkg>/lib/arm64，系统保证可执行），
+    // 供 Dart/Kotlin 以符号链接或直接路径执行 —— 这是 Android 上
+    // 唯一不受 filesDir noexec / SELinux 限制的可执行区域。
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/jni/CMakeLists.txt"
+            version "3.18.1"
+        }
+    }
+
     // ── 从 assets 解压 BusyBox 到 $filesDir（通过 Kotlin 代码完成） ──
     // assets 目录已包含 busybox-arm64 占位文件
 }

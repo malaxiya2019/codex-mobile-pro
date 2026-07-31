@@ -42,7 +42,8 @@ import 'dart:convert' show utf8;
 import 'dart:io';
 
 import 'package:crypto/crypto.dart' show sha256;
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart'
+    show MethodChannel, MissingPluginException, rootBundle;
 import 'package:meta/meta.dart' show visibleForTesting;
 import 'package:path_provider/path_provider.dart';
 
@@ -184,6 +185,45 @@ class NativeBusybox {
   /// execve 冒烟超时（防挂起）
   static const Duration _smokeTimeout = Duration(seconds: 10);
 
+  /// PtyPlugin MethodChannel（与 Kotlin PtyPlugin.kt 对应）
+  static const MethodChannel _nativeChannel =
+      MethodChannel('com.codexmobile.app/terminal/native');
+
+  /// nativeLibraryDir 查询的测试注入点。
+  ///
+  /// 生产环境默认通过 [_nativeChannel] 调 `getNativeLibDir` 获取
+  /// `context.applicationInfo.nativeLibraryDir`（jniLibs 解压区）。
+  /// 纯 Dart 单元测试中 MethodChannel 不可用（MissingPluginException），
+  /// 通过该 override 注入 fake 目录验证优先逻辑。
+  @visibleForTesting
+  static Future<String?> Function()? nativeLibDirQueryOverride;
+
+  /// 查询 nativeLibraryDir（Android jniLibs 解压区）。
+  ///
+  /// 失败（非 Android / MissingPlugin / Kotlin 报错）返回 null，
+  /// 调用方回退到 assets 复制流程，不影响原有可靠性。
+  static Future<String?> _queryNativeLibDir() async {
+    final override = nativeLibDirQueryOverride;
+    if (override != null) {
+      try {
+        return await override();
+      } catch (_) {
+        return null;
+      }
+    }
+    try {
+      final r = await _nativeChannel
+          .invokeMethod<Map<Object?, Object?>>('getNativeLibDir');
+      final dir = r?['nativeLibDir'];
+      return dir is String && dir.isNotEmpty ? dir : null;
+    } on MissingPluginException {
+      return null;
+    } catch (e) {
+      LogService.warning('Busybox', '查询 nativeLibraryDir 失败(忽略): $e');
+      return null;
+    }
+  }
+
   /// 确保 busybox 已安装，返回完整路径（失败返回 null）
   ///
   /// 兼容旧调用方；失败详情见 [ensureInstalledDetailed]。
@@ -207,7 +247,43 @@ class NativeBusybox {
   ///
   /// 注意：外部存储（sdcard FUSE）通常以 noexec 挂载，不能作为
   /// 可执行文件存放位置，因此不参与候选。
-  static Future<BusyboxInstallResult> ensureInstalledDetailed() async {
+  static Future<BusyboxInstallResult> ensureInstalledDetailed({
+    String? nativeLibraryDir,
+  }) async {
+    // ─── 0. nativeLibraryDir 优先（jniLibs 解压区，系统保证可执行） ──
+    // 这是 Android 上唯一不受 filesDir noexec / SELinux 限制的
+    // 可执行区域：libbusybox.so 随 APK 安装由系统解压到
+    // /data/app/<pkg>/lib/arm64，天然带执行权限（与 Operit 同源方案）。
+    // 只要该文件存在且通过完整健康检查，直接复用，不再复制到 filesDir。
+    BusyboxErrorCode lastError = BusyboxErrorCode.installFailed;
+    String? lastDetail;
+
+    final nativeDir = nativeLibraryDir ?? await _queryNativeLibDir();
+    if (nativeDir != null && nativeDir.isNotEmpty) {
+      final so = File('$nativeDir/libbusybox.so');
+      if (await so.exists()) {
+        final health = await healthCheck(so);
+        if (health.usable) {
+          LogService.info(
+            'Busybox',
+            '复用 nativeLibraryDir busybox（系统可执行区）: ${so.path}',
+          );
+          return BusyboxInstallResult(path: so.path);
+        }
+        lastError = health.error;
+        lastDetail = health.summary;
+        LogService.warning(
+          'Busybox',
+          'nativeLibraryDir busybox 不可用（$lastError），回退 assets 安装: ${so.path}\n$lastDetail',
+        );
+      } else {
+        LogService.warning(
+          'Busybox',
+          'nativeLibraryDir 中不存在 libbusybox.so: $nativeDir',
+        );
+      }
+    }
+
     // ─── 候选目录：App 私有内部存储（/data 分区，可执行） ──────
     final candidates = <String>{};
     try {
@@ -221,9 +297,6 @@ class NativeBusybox {
       LogService.warning('Busybox', 'getTemporaryDirectory 失败: $e');
     }
     candidates.add(Directory.systemTemp.path);
-
-    BusyboxErrorCode lastError = BusyboxErrorCode.installFailed;
-    String? lastDetail;
 
     for (final base in candidates) {
       final binDir = Directory('$base/bin');

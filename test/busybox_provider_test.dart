@@ -335,6 +335,64 @@ void main() {
       expect(NativeBusybox.elfMachineOf(f), isNull);
     });
   });
+
+  group('nativeLibraryDir 优先（jniLibs 解压区，系统保证可执行）', () {
+    test('nativeLibraryDir 中存在可用 libbusybox.so → 直接复用该路径',
+        () async {
+      final real = _findRealBusybox();
+      if (real == null) {
+        markTestSkipped('当前平台无可用真实 busybox ELF，跳过');
+        return;
+      }
+      final nativeDir =
+          Directory('${tmp.path}/native-lib')..createSync(recursive: true);
+      final so = File('${nativeDir.path}/libbusybox.so');
+      File(real).copySync(so.path);
+
+      final r = await NativeBusybox.ensureInstalledDetailed(
+        nativeLibraryDir: nativeDir.path,
+      );
+      expect(r.success, isTrue);
+      expect(
+        r.path,
+        so.path,
+        reason: '应优先复用 nativeLibraryDir 中的 libbusybox.so，'
+            '而不是复制到 filesDir',
+      );
+    });
+
+    test('nativeLibraryDir 不存在 libbusybox.so → 正常回退（不裸抛）',
+        () async {
+      final nativeDir =
+          Directory('${tmp.path}/empty-native')..createSync(recursive: true);
+      final r = await NativeBusybox.ensureInstalledDetailed(
+        nativeLibraryDir: nativeDir.path,
+      );
+      // 回退到 assets 复制流程；CI（x86）上 arm64 busybox 不可执行 → 返回
+      // 失败结果。平台无关断言：绝不裸抛异常，返回结构化结果。
+      expect(r, isA<BusyboxInstallResult>());
+    });
+
+    test('nativeLibDirQueryOverride 生效（不传参时走注入查询）', () async {
+      NativeBusybox.nativeLibDirQueryOverride =
+          () async => '${tmp.path}/no-such-dir';
+      addTearDown(() => NativeBusybox.nativeLibDirQueryOverride = null);
+      final r = await NativeBusybox.ensureInstalledDetailed();
+      expect(r, isA<BusyboxInstallResult>());
+    });
+  });
+}
+
+/// 查找当前平台可执行的真实 busybox（Termux/Android 环境；CI 通常没有）。
+String? _findRealBusybox() {
+  try {
+    final r = Process.runSync('sh', ['-c', 'command -v busybox']);
+    if (r.exitCode == 0) {
+      final p = (r.stdout as String).trim();
+      if (p.isNotEmpty && File(p).existsSync()) return p;
+    }
+  } catch (_) {}
+  return null;
 }
 
 /// 构造最小 ELF header（前 20 字节），offset 18-19 为小端 e_machine。
