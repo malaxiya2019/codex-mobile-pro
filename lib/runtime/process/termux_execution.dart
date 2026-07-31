@@ -11,8 +11,8 @@
 /// ====================================================================
 library;
 
-import '../termux/termux_transport.dart';
 import '../termux/method_channel_transport.dart';
+import '../termux/termux_transport.dart';
 import 'runner_models.dart';
 
 /// Termux 执行适配器

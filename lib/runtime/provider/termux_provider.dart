@@ -25,8 +25,8 @@
 library;
 
 import '../../core/logger/log_service.dart';
-import '../termux/termux_transport.dart';
 import '../termux/method_channel_transport.dart';
+import '../termux/termux_transport.dart';
 import 'runtime_capability.dart';
 import 'runtime_provider.dart';
 

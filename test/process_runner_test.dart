@@ -20,6 +20,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:codex_mobile_pro/runtime/process/runner_models.dart';
 import 'package:codex_mobile_pro/runtime/process/process_runner.dart';
 import 'package:codex_mobile_pro/runtime/process/termux_execution.dart';
+import 'package:codex_mobile_pro/runtime/termux/fake_transport.dart';
 
 void main() {
   // ═══════════════════════════════════════════════════════════════
@@ -390,17 +391,24 @@ void main() {
   });
 
   // ═══════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════
   // 5. TermuxExecutionAdapter 测试
   // ═══════════════════════════════════════════════════════════════
 
   group('TermuxExecutionAdapter — Termux 适配器', () {
+    late FakeTermuxTransport fakeTransport;
+
+    setUp(() {
+      fakeTransport = FakeTermuxTransport();
+    });
+
     test('id 返回 termux', () {
-      final adapter = TermuxExecutionAdapter();
+      final adapter = TermuxExecutionAdapter(transport: fakeTransport);
       expect(adapter.id, 'termux');
     });
 
     test('supports runtimeId == termux', () {
-      final adapter = TermuxExecutionAdapter();
+      final adapter = TermuxExecutionAdapter(transport: fakeTransport);
 
       final termuxReq = RuntimeProcessRequest(
         executable: 'node',
@@ -416,7 +424,7 @@ void main() {
     });
 
     test('supports null runtimeId 返回 false', () {
-      final adapter = TermuxExecutionAdapter();
+      final adapter = TermuxExecutionAdapter(transport: fakeTransport);
       final req = RuntimeProcessRequest(executable: 'node');
       expect(adapter.supports(req), false);
     });
@@ -435,7 +443,7 @@ void main() {
 
     test('registerAdapter 添加适配器', () {
       final runner = RuntimeProcessRunner();
-      runner.registerAdapter(TermuxExecutionAdapter());
+      runner.registerAdapter(TermuxExecutionAdapter(transport: FakeTermuxTransport()));
       expect(runner.registeredAdapters.length, 2);
     });
 

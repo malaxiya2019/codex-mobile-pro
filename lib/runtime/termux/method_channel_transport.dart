@@ -73,7 +73,6 @@ class MethodChannelTermuxTransport implements TermuxTransport {
       return TermuxExecResult(
         exitCode: -1,
         stderr: 'Transport 执行失败: $e',
-        durationMs: 0,
       );
     }
   }
@@ -141,15 +140,13 @@ class MethodChannelTermuxTransport implements TermuxTransport {
     final diag = _lastDiagnostics ?? await diagnose();
     if (!diag.isAvailable) {
       return TermuxInstallResult(
-        success: false,
         errorMessage: 'Termux 不可用，无法安装 $packageName',
       );
     }
 
     final manager = await _detectPackageManager(diag.packageInstalled);
     if (manager == TermuxPkgManager.unavailable) {
-      return TermuxInstallResult(
-        success: false,
+      return const TermuxInstallResult(
         errorMessage: '无可用包管理器',
       );
     }
@@ -169,16 +166,14 @@ class MethodChannelTermuxTransport implements TermuxTransport {
   Future<TermuxInstallResult> updatePackageList({int timeoutMs = 60000}) async {
     final diag = _lastDiagnostics ?? await diagnose();
     if (!diag.isAvailable) {
-      return TermuxInstallResult(
-        success: false,
+      return const TermuxInstallResult(
         errorMessage: 'Termux 不可用',
       );
     }
 
     final manager = await _detectPackageManager(diag.packageInstalled);
     if (manager == TermuxPkgManager.unavailable) {
-      return TermuxInstallResult(
-        success: false,
+      return const TermuxInstallResult(
         errorMessage: '无可用包管理器',
       );
     }

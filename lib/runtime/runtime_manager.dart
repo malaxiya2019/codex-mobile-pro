@@ -33,6 +33,8 @@ import 'dart:async';
 
 import '../core/detector/detection_result.dart';
 import '../core/logger/log_service.dart';
+import 'capability/capability_resolver.dart';
+import 'capability/provider_enhancer.dart';
 import 'download_queue.dart';
 import 'provider/android_runtime_provider.dart';
 // Phase 2: Provider 导入
@@ -45,10 +47,8 @@ import 'runtime_detector.dart';
 import 'runtime_environment.dart';
 import 'runtime_installer.dart';
 import 'runtime_manifest.dart';
-import 'ubuntu_runtime_installer.dart';
-import 'capability/capability_resolver.dart';
-import 'capability/provider_enhancer.dart';
 import 'termux/method_channel_transport.dart';
+import 'ubuntu_runtime_installer.dart';
 
 /// 管理器状态
 enum RuntimeManagerState {
