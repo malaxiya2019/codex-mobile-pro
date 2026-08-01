@@ -2,7 +2,7 @@
 /// LinuxExecutionAdapter
 ///
 /// 将 runtimeId='linux' 的请求包装为 PRoot 执行：
-///   proot -r rootfs -w cwd /bin/bash -lc '<command>'
+///   `proot -r rootfs -w cwd /bin/bash -lc '<command>'`
 ///
 /// 职责：
 ///   1. 识别 runtimeId == 'linux' 的请求
@@ -38,6 +38,11 @@ class LinuxExecutionAdapter implements IExecutionAdapter {
 
   @override
   Future<RuntimeProcessResult> execute(RuntimeProcessRequest request) async {
+    // 修复 rootfs DNS（127.0.0.53 stub → 公共 DNS）与 apt IPv4 配置，
+    // 否则 apt-get update 会因域名解析失败而报「Ubuntu apt 源更新失败」。
+    await _provider.ensureResolvConf();
+    await _provider.ensureAptIpv4Only();
+
     final paths = await _provider.resolvePaths();
 
     // ─── Runtime 未就绪 → 结构化错误 ───────────────────────────
@@ -62,6 +67,7 @@ class LinuxExecutionAdapter implements IExecutionAdapter {
     final arguments = <String>[
       '-r',
       paths.rootfsDir,
+      ...LinuxRuntimeProvider.prootBindArguments(),
       if (request.workingDirectory != null) ...[
         '-w',
         request.workingDirectory!,

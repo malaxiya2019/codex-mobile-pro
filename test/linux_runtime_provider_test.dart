@@ -54,7 +54,7 @@ void main() {
 
   group('LinuxRuntimePaths', () {
     test('默认 home/tmp', () {
-      final paths = LinuxRuntimePaths(
+      const paths = LinuxRuntimePaths(
         prootExecutable: '/x/proot',
         rootfsDir: '/x/rootfs',
         loaderPath: '/x/loader',
@@ -89,7 +89,7 @@ void main() {
       File(paths.prootExecutable).createSync(recursive: true);
       final bash = File('${paths.rootfsDir}/usr/bin/bash');
       bash.createSync(recursive: true);
-      File('${paths.loaderPath}').createSync(recursive: true);
+      File(paths.loaderPath).createSync(recursive: true);
       // os-release 版本信息
       final osRelease = File('${paths.rootfsDir}/etc/os-release');
       osRelease.createSync(recursive: true);
@@ -164,10 +164,14 @@ void main() {
       expect(spec.arguments, [
         '-r',
         paths.rootfsDir,
+        '-b', '/proc',
+        '-b', '/dev',
+        '-b', '/sys',
         '/bin/bash',
         '-l',
       ]);
       expect(spec.environment['SHELL'], '/bin/bash');
+      expect(spec.environment['DEBIAN_FRONTEND'], 'noninteractive');
       expect(spec.toProcessRequest().runtimeId, 'linux');
     });
 
@@ -180,6 +184,9 @@ void main() {
       expect(spec.arguments, [
         '-r',
         paths.rootfsDir,
+        '-b', '/proc',
+        '-b', '/dev',
+        '-b', '/sys',
         '/bin/bash',
         '-lc',
         'node --version',
@@ -194,6 +201,9 @@ void main() {
       expect(spec.arguments, [
         '-r',
         paths.rootfsDir,
+        '-b', '/proc',
+        '-b', '/dev',
+        '-b', '/sys',
         '-w',
         '/root/proj',
         '/bin/bash',
@@ -255,6 +265,66 @@ void main() {
       final provider = LinuxRuntimeProvider(paths: paths);
       final health = await provider.healthCheck();
       expect(health.healthy, false);
+    });
+  });
+
+  group('LinuxRuntimeProvider — rootfs DNS 修复', () {
+    test('resolv.conf 缺失 → 写入公共 DNS', () async {
+      final paths = createFakePaths(tmp);
+      final provider = LinuxRuntimeProvider(paths: paths);
+      final ok = await provider.ensureResolvConf();
+      final content = File('${paths.rootfsDir}/etc/resolv.conf').readAsStringSync();
+      expect(ok, true);
+      expect(content, contains('nameserver 8.8.8.8'));
+      expect(content, contains('nameserver 1.1.1.1'));
+    });
+
+    test('resolv.conf 指向 127.0.0.53 stub → 覆盖为公共 DNS', () async {
+      final paths = createFakePaths(tmp);
+      final resolv = File('${paths.rootfsDir}/etc/resolv.conf')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('nameserver 127.0.0.53\noptions edns0\n');
+
+      final provider = LinuxRuntimeProvider(paths: paths);
+      final ok = await provider.ensureResolvConf();
+      expect(ok, true);
+      final content = resolv.readAsStringSync();
+      expect(content, contains('nameserver 8.8.8.8'));
+      expect(content, isNot(contains('127.0.0.53')));
+    });
+
+    test('resolv.conf 已可用（公共 DNS）→ 幂等不重写', () async {
+      final paths = createFakePaths(tmp);
+      final resolv = File('${paths.rootfsDir}/etc/resolv.conf')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('nameserver 8.8.8.8\n');
+
+      final provider = LinuxRuntimeProvider(paths: paths);
+      final ok = await provider.ensureResolvConf();
+      expect(ok, true);
+      expect(resolv.readAsStringSync(), 'nameserver 8.8.8.8\n');
+    });
+
+    test('apt ForceIPv4 配置写入', () async {
+      final paths = createFakePaths(tmp);
+      final provider = LinuxRuntimeProvider(paths: paths);
+      await provider.ensureAptIpv4Only();
+      final conf = File(
+        '${paths.rootfsDir}/etc/apt/apt.conf.d/99codex-force-ipv4',
+      );
+      expect(conf.existsSync(), true);
+      expect(conf.readAsStringSync(), contains('Acquire::ForceIPv4 "true";'));
+    });
+
+    test('apt ForceIPv4 幂等（已存在不重写）', () async {
+      final paths = createFakePaths(tmp);
+      final conf = File('${paths.rootfsDir}/etc/apt/apt.conf.d/99codex-force-ipv4')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('Acquire::ForceIPv4 "true";\n');
+
+      final provider = LinuxRuntimeProvider(paths: paths);
+      await provider.ensureAptIpv4Only();
+      expect(conf.readAsStringSync(), 'Acquire::ForceIPv4 "true";\n');
     });
   });
 }

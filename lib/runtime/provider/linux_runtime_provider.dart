@@ -269,6 +269,73 @@ class LinuxRuntimeProvider implements IRuntimeProvider {
     }
   }
 
+  /// PRoot 绑定挂载参数（apt/dpkg 依赖 /proc /dev /sys 基础设施）
+  ///
+  /// Android 宿主目录直接映射进 rootfs；与 Termux 标准 proot 用法一致。
+  static List<String> prootBindArguments() => const [
+    '-b', '/proc',
+    '-b', '/dev',
+    '-b', '/sys',
+  ];
+
+  /// rootfs 内 resolv.conf 当前是否可用（不指向 systemd-resolved stub）
+  static bool resolvConfUsable(String content) {
+    final trimmed = content.trim();
+    if (trimmed.isEmpty) return false;
+    // 127.0.0.53 是 systemd-resolved stub，Android/PRoot 内不存在该服务
+    if (trimmed.contains('127.0.0.53')) return false;
+    if (!trimmed.contains('nameserver')) return false;
+    return true;
+  }
+
+  /// 修复 rootfs 的 DNS 配置（幂等，best-effort）
+  ///
+  /// rootfs 解压后 /etc/resolv.conf 常保留构建机的
+  /// `nameserver 127.0.0.53`（systemd-resolved stub），Android 上
+  /// 无此服务 → apt-get update 无法解析域名而失败。
+  /// 不可用则写入公共 DNS（IPv4，避免 Android IPv6 路由问题）。
+  Future<bool> ensureResolvConf() async {
+    try {
+      final paths = await resolvePaths();
+      final resolv = File('${paths.rootfsDir}/etc/resolv.conf');
+      if (await resolv.exists()) {
+        final content = await resolv.readAsString();
+        if (resolvConfUsable(content)) return true;
+      }
+      await resolv.parent.create(recursive: true);
+      await resolv.writeAsString(
+        '# codex-mobile-pro: Android 环境公共 DNS（覆盖构建机 stub）\n'
+        'nameserver 8.8.8.8\n'
+        'nameserver 1.1.1.1\n',
+      );
+      LogService.info(
+        'LinuxRuntime',
+        '已修复 rootfs /etc/resolv.conf（写入公共 DNS）',
+      );
+      return true;
+    } catch (e) {
+      LogService.warning('LinuxRuntime', '修复 resolv.conf 失败(忽略): $e');
+      return false;
+    }
+  }
+
+  /// 配置 apt 强制 IPv4（幂等，best-effort）
+  ///
+  /// Android 网络 IPv6 常不可达；apt 若优先尝试 IPv6 会长时间卡住。
+  Future<void> ensureAptIpv4Only() async {
+    try {
+      final paths = await resolvePaths();
+      final conf = File(
+        '${paths.rootfsDir}/etc/apt/apt.conf.d/99codex-force-ipv4',
+      );
+      if (await conf.exists()) return;
+      await conf.parent.create(recursive: true);
+      await conf.writeAsString('Acquire::ForceIPv4 "true";\n');
+    } catch (e) {
+      LogService.warning('LinuxRuntime', '配置 apt ForceIPv4 失败(忽略): $e');
+    }
+  }
+
   @override
   Future<Map<String, String>> getEnvironment({String? appHome}) async {
     final paths = await resolvePaths();
@@ -290,6 +357,7 @@ class LinuxRuntimeProvider implements IRuntimeProvider {
       'LC_ALL': 'en_US.UTF-8',
       'USER': 'root',
       'LOGNAME': 'root',
+      'DEBIAN_FRONTEND': 'noninteractive',
       'PROOT_LOADER': paths.loaderPath,
       'PROOT_ROOTFS': paths.rootfsDir,
     };
@@ -378,7 +446,7 @@ class LinuxRuntimeProvider implements IRuntimeProvider {
 
   /// 构建单条命令执行规格
   ///
-  /// 返回：proot -r rootfs -w cwd /bin/bash -lc '<command>'
+  /// 返回：`proot -r rootfs -w cwd /bin/bash -lc '<command>'`
   Future<LinuxProcessSpec> buildCommandSpec(
     List<String> command, {
     String? workingDirectory,
@@ -405,6 +473,7 @@ class LinuxRuntimeProvider implements IRuntimeProvider {
     final arguments = <String>[
       '-r',
       paths.rootfsDir,
+      ...prootBindArguments(),
       if (workingDirectory != null) ...[
         '-w',
         workingDirectory,

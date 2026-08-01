@@ -323,6 +323,12 @@ class UbuntuRuntimeInstaller {
 
       // 原子替换：旧 rootfs → .old-*，新 rootfs → 正式目录
       await _atomicReplaceRootfs(tmpRootfsDir, rootfsDir);
+
+      // 部署后一次性写入可用的 DNS 与 apt 网络配置：
+      // rootfs 自带 /etc/resolv.conf 指向构建机的 127.0.0.53
+      // （systemd-resolved stub），Android 上无此服务，apt-get update
+      // 会因域名解析失败而报错。此处覆盖为公共 DNS 并强制 apt IPv4。
+      await _writeRootfsNetworkConfig(rootfsDir);
     } catch (e) {
       // 失败清理：删除半成品（保留已验证的 .tar.xz 缓存供下次续用）
       await _deleteDirBestEffort(tmpRootfsDir);
@@ -490,6 +496,47 @@ class UbuntuRuntimeInstaller {
   /// 解压后 rootfs 结构验证（只检查目录/文件存在性）
   ///
   /// 注意：不执行 Ubuntu 内部命令（解压阶段禁止运行 rootfs 内程序）。
+  /// 向 rootfs 写入可用的网络配置（DNS + apt 强制 IPv4）
+  ///
+  /// 幂等：已写入正确的 resolv.conf 则跳过。best-effort，失败仅记日志
+  /// （运行时 LinuxExecutionAdapter 仍会幂等修复）。
+  Future<void> _writeRootfsNetworkConfig(String rootfsDir) async {
+    try {
+      // 1) resolv.conf：仅当缺失/为空/指向 systemd-resolved stub 时覆盖
+      final resolv = File('$rootfsDir/etc/resolv.conf');
+      var needsWrite = true;
+      if (await resolv.exists()) {
+        final content = await resolv.readAsString();
+        final trimmed = content.trim();
+        needsWrite =
+            trimmed.isEmpty ||
+            trimmed.contains('127.0.0.53') ||
+            !trimmed.contains('nameserver');
+      }
+      if (needsWrite) {
+        await resolv.parent.create(recursive: true);
+        await resolv.writeAsString(
+          '# codex-mobile-pro: Android 环境公共 DNS（覆盖构建机 stub）\n'
+          'nameserver 8.8.8.8\n'
+          'nameserver 1.1.1.1\n',
+        );
+        LogService.info('UbuntuInstaller', '已写入 rootfs DNS 配置');
+      }
+
+      // 2) apt 强制 IPv4（Android IPv6 常不可达，避免 apt 长时间卡住）
+      final aptConf = File(
+        '$rootfsDir/etc/apt/apt.conf.d/99codex-force-ipv4',
+      );
+      if (!await aptConf.exists()) {
+        await aptConf.parent.create(recursive: true);
+        await aptConf.writeAsString('Acquire::ForceIPv4 "true";\n');
+        LogService.info('UbuntuInstaller', '已写入 apt ForceIPv4 配置');
+      }
+    } catch (e) {
+      LogService.warning('UbuntuInstaller', '写入 rootfs 网络配置失败(忽略): $e');
+    }
+  }
+
   void _verifyRootfsStructure(String rootfsDir) {
     final required = <String>[
       'etc',
