@@ -60,6 +60,7 @@ const _kCapabilityMappings = <_CapabilityToResult>[
     id: 'npm',
     name: 'npm',
     icon: '📦',
+    missingHint: 'npm（随 Node.js 一并安装，无需单独安装）',
   ),
   _CapabilityToResult(
     type: CapabilityType.git,
@@ -197,9 +198,24 @@ class RuntimeDetector {
     CapabilityResolver? capabilityResolver,
     RuntimeProcessRunner? runner,
   })  : _runtimeManager = runtimeManager ?? RuntimeManager.instance,
-        _capabilityResolver = capabilityResolver ?? CapabilityResolver(),
-        _runner = runner ?? RuntimeProcessRunner(),
+        _capabilityResolver = capabilityResolver ?? _sharedCapabilityResolver(),
+        _runner = runner ?? _sharedProcessRunner(),
         _systemService = DetectorService.createSystemDetectors();
+
+  /// 复用 RuntimeManager 共享 resolver（已注册 LinuxExecutionAdapter）。
+  ///
+  /// 保证无参构造（如 checkOne 中 `RuntimeDetector()`）与安装链路
+  /// 走同一执行通道（runtimeId='linux' → PRoot），避免宿主直连 rootfs ELF。
+  static CapabilityResolver _sharedCapabilityResolver() {
+    final shared = RuntimeManager.instance.capabilityResolver;
+    return shared ?? CapabilityResolver();
+  }
+
+  /// 复用 RuntimeManager 共享 runner（已注册 LinuxExecutionAdapter）。
+  static RuntimeProcessRunner _sharedProcessRunner() {
+    final shared = RuntimeManager.instance.processRunner;
+    return shared ?? RuntimeProcessRunner();
+  }
 
   /// 执行所有检测并按类别分组
   ///
@@ -248,8 +264,18 @@ class RuntimeDetector {
       return results;
     }
 
+    // Coding 工具（node/npm/git/python/codex/mimo2codex/flutter）全部位于
+    // Ubuntu rootfs 内，只有 Linux Runtime Provider 能给出真实状态。
+    // 对 app/android 也跑一遍只会产生「宿主找不到 → 可安装」的噪音卡片，
+    // 且 CapabilityResolver 按 type 缓存会跨 Provider 互相污染。
+    // → Linux Provider 存在时只检测它；否则回退全部 Provider。
+    final linuxProviders =
+        providers.where((p) => p.type == ProviderType.linux).toList();
+    final effectiveProviders =
+        linuxProviders.isNotEmpty ? linuxProviders : providers;
+
     // 对每个 Provider 检测能力
-    for (final provider in providers) {
+    for (final provider in effectiveProviders) {
       for (final mapping in _kCapabilityMappings) {
         final start = DateTime.now();
         final cap = await _capabilityResolver.checkCapability(
@@ -328,8 +354,14 @@ class RuntimeDetector {
     for (final mapping in _kCapabilityMappings) {
       if (mapping.id != id) continue;
 
+      // 与 _detectCapabilities 保持一致：Coding 工具只由
+      // Linux Runtime Provider 提供真实检测，避免 app/android 噪音。
       final providers = _runtimeManager.registeredProviders;
-      for (final provider in providers) {
+      final linuxProviders =
+          providers.where((p) => p.type == ProviderType.linux).toList();
+      final effective =
+          linuxProviders.isNotEmpty ? linuxProviders : providers;
+      for (final provider in effective) {
         final cap = await _capabilityResolver.checkCapability(
           mapping.type,
           provider,
@@ -414,6 +446,7 @@ class RuntimeDetector {
             final req = RuntimeProcessRequest(
               executable: toolPath,
               arguments: ['--version'],
+              runtimeId: 'linux',
             );
             final result = await _runner.run(req);
             results.add(VerificationResult(

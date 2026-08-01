@@ -70,7 +70,16 @@ class CapabilityResolver {
   };
 
   /// 缓存容器
-  final Map<CapabilityType, CapabilityCacheEntry> _cache = {};
+  ///
+  /// key = '${providerType.name}:${type.name}'。
+  /// 必须带 Provider 维度：同一工具在不同 Provider（app/android/linux）下
+  /// 检测结果不同，若只按 type 缓存会互相污染（如 app 的失败结果
+  /// 覆盖 linux 的真实结果，导致 rootfs 已装工具被误报为「可安装」）。
+  final Map<String, CapabilityCacheEntry> _cache = {};
+
+  /// 缓存 key：Provider 维度 + Capability 维度
+  static String _cacheKey(CapabilityType type, ProviderType providerType) =>
+      '${providerType.name}:${type.name}';
 
   /// 默认缓存 TTL
   final Duration _defaultTtl;
@@ -107,9 +116,9 @@ class CapabilityResolver {
     IRuntimeProvider provider, {
     bool forceRefresh = false,
   }) async {
-    // 1. 检查缓存
+    // 1. 检查缓存（Provider 维度）
     if (!forceRefresh) {
-      final cached = _getFromCache(type);
+      final cached = _getFromCache(type, provider.type);
       if (cached != null) return cached;
     }
 
@@ -160,8 +169,8 @@ class CapabilityResolver {
       );
     }
 
-    // 5. 写入缓存
-    _cache[type] = CapabilityCacheEntry(
+    // 5. 写入缓存（Provider 维度）
+    _cache[_cacheKey(type, provider.type)] = CapabilityCacheEntry(
       capability: capability,
       cachedAt: now,
     );
@@ -195,11 +204,15 @@ class CapabilityResolver {
   // 缓存管理
   // ------------------------------------------------------------------
 
-  RuntimeCapability? _getFromCache(CapabilityType type) {
-    final entry = _cache[type];
+  RuntimeCapability? _getFromCache(
+    CapabilityType type,
+    ProviderType providerType,
+  ) {
+    final key = _cacheKey(type, providerType);
+    final entry = _cache[key];
     if (entry == null) return null;
     if (entry.isExpired(_defaultTtl)) {
-      _cache.remove(type);
+      _cache.remove(key);
       return null;
     }
     return entry.capability;
@@ -213,9 +226,9 @@ class CapabilityResolver {
     return checkCapability(type, provider, forceRefresh: true);
   }
 
-  /// 失效指定 Capability 缓存
+  /// 失效指定 Capability 缓存（所有 Provider 维度）
   void invalidate(CapabilityType type) {
-    _cache.remove(type);
+    _cache.removeWhere((key, _) => key.endsWith(':${type.name}'));
   }
 
   /// 失效所有缓存
@@ -224,8 +237,13 @@ class CapabilityResolver {
   }
 
   /// 获取缓存条目（用于调试/诊断）
+  ///
+  /// 缓存含 Provider 维度，此方法返回第一个匹配 [type] 的条目。
   CapabilityCacheEntry? getCacheEntry(CapabilityType type) {
-    return _cache[type];
+    for (final entry in _cache.values) {
+      if (entry.capability.type == type) return entry;
+    }
+    return null;
   }
 
   // ------------------------------------------------------------------

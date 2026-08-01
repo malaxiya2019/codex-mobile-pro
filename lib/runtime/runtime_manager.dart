@@ -141,14 +141,11 @@ class RuntimeManager {
     LogService.info('RuntimeMgr', '初始化 Runtime Manager...');
     _environment = await RuntimeEnvironment.getInstance();
     await _environment!.ensureDirectories();
-    _detector = RuntimeDetector();
-    _ubuntuInstaller = UbuntuRuntimeInstaller(_environment!, _onInstallProgress);
-    _orchestrator = ToolchainOrchestrator()..bindProgress(_onInstallProgress);
 
-    // 初始化下载队列
-    _queue = DownloadQueueScheduler.instance;
-
-    // 初始化 Capability Resolver（Linux 执行经 PRoot 适配器）
+    // 初始化 Capability Resolver（Linux 执行经 PRoot 适配器）。
+    // 必须先于 _detector 创建：检测器复用同一 runner/resolver，
+    // 否则检测请求（runtimeId='linux'）无法路由到 LinuxExecutionAdapter，
+    // 会导致 rootfs 内已装工具被误报为「可安装」。
     final runner = RuntimeProcessRunner();
     _runner = runner;
     final linux = linuxProvider;
@@ -157,6 +154,16 @@ class RuntimeManager {
     }
     _resolver = CapabilityResolver(runner: runner);
     _enhancer = ProviderCapabilityEnhancer(resolver: _resolver);
+
+    _detector = RuntimeDetector(
+      runner: runner,
+      capabilityResolver: _resolver,
+    );
+    _ubuntuInstaller = UbuntuRuntimeInstaller(_environment!, _onInstallProgress);
+    _orchestrator = ToolchainOrchestrator()..bindProgress(_onInstallProgress);
+
+    // 初始化下载队列
+    _queue = DownloadQueueScheduler.instance;
     final backlogDir = '${_environment!.runtimeDir}/.queue_backlog';
     await _queue!.initialize(backlogDir: backlogDir);
     final recovered = await _queue!.recoverBacklog();
@@ -381,6 +388,17 @@ class RuntimeManager {
     }
     return _environment!.buildTerminalEnvironment();
   }
+
+  /// 共享 Capability Resolver（已注册 LinuxExecutionAdapter）
+  ///
+  /// 供 RuntimeDetector 复用：保证检测与安装走同一执行链路（PRoot）。
+  /// 未 initialize 时为 null，调用方应回退到独立实例。
+  CapabilityResolver? get capabilityResolver => _resolver;
+
+  /// 共享 Process Runner（已注册 LinuxExecutionAdapter）
+  ///
+  /// 供 RuntimeDetector 复用：保证检测与安装走同一执行链路（PRoot）。
+  RuntimeProcessRunner? get processRunner => _runner;
 
   /// 获取 Linux Runtime Provider（终端 shell 来源）
   LinuxRuntimeProvider? get linuxProvider {

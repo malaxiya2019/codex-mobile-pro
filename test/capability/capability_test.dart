@@ -356,6 +356,30 @@ void main() {
       await shortResolver.checkCapability(CapabilityType.node, provider);
       expect(fakeRunner.callCount, greaterThan(firstCalls));
     });
+
+    test('缓存按 Provider 隔离 — 不同 Provider 同 type 分别检测', () async {
+      final androidProvider = MockProvider(const MockProviderConfig(
+        id: 'android',
+        name: 'Android',
+        type: ProviderType.android,
+      ));
+
+      // Linux 首次检测
+      await resolver.checkCapability(CapabilityType.node, provider);
+      final firstCalls = fakeRunner.callCount;
+
+      // 同一 Provider 命中缓存，不重复执行
+      await resolver.checkCapability(CapabilityType.node, provider);
+      expect(fakeRunner.callCount, firstCalls);
+
+      // 不同 Provider 必须重新检测：app/android 的失败结果
+      // 不得污染 linux 的真实结果（反之亦然）
+      await resolver.checkCapability(CapabilityType.node, androidProvider);
+      expect(fakeRunner.callCount, greaterThan(firstCalls));
+
+      // 互不污染：各自结果独立缓存
+      expect(resolver.getCacheEntry(CapabilityType.node), isNotNull);
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════
