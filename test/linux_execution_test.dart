@@ -146,4 +146,66 @@ void main() {
       expect(result.error, contains('[诊断] bash='));
     });
   });
+  group('LinuxExecutionAdapter 宿主端临时目录（PROOT_TMP_DIR）', () {
+    test('PRoot 进程环境包含 PROOT_TMP_DIR=<rootfs>/tmp 且 rootfs/tmp 被创建', () async {
+      final paths = readyPaths(tmp);
+      // 明确删除 rootfs/tmp，验证 execute 会自动重建
+      final rootfsTmp = Directory('${paths.rootfsDir}/tmp');
+      if (rootfsTmp.existsSync()) rootfsTmp.deleteSync(recursive: true);
+
+      final capture = _CaptureAdapter();
+      final adapter = LinuxExecutionAdapter(
+        LinuxRuntimeProvider(paths: paths),
+        inner: capture,
+      );
+
+      final result = await adapter.execute(
+        const RuntimeProcessRequest(
+          runtimeId: 'linux',
+          executable: '/usr/bin/node',
+          arguments: ['--version'],
+        ),
+      );
+
+      expect(result.exitCode, 0);
+      final env = capture.lastRequest!.environment!;
+      // 宿主端 PRoot 专用临时目录：必须指向真实存在的 rootfs/tmp
+      expect(env['PROOT_TMP_DIR'], '${paths.rootfsDir}/tmp');
+      expect(Directory(env['PROOT_TMP_DIR']!).existsSync(), isTrue,
+          reason: 'PROOT_TMP_DIR 指向的目录必须真实存在');
+      // guest 内 TMPDIR 保持 /tmp（不改变 Ubuntu 内 apt/dpkg/npm 行为）
+      expect(env['TMPDIR'], '/tmp');
+      // PRoot 自身 argv 不含 PROOT_TMP_DIR（那是宿主进程环境变量）
+      final args = capture.lastRequest!.arguments.join(' ');
+      expect(args, isNot(contains('PROOT_TMP_DIR')));
+    });
+  });
+}
+
+/// 捕获 wrapped request（验证 PROOT_TMP_DIR 等环境注入）
+class _CaptureAdapter implements IExecutionAdapter {
+  RuntimeProcessRequest? lastRequest;
+
+  @override
+  String get id => 'capture';
+
+  @override
+  bool supports(RuntimeProcessRequest request) => true;
+
+  @override
+  Future<RuntimeProcessResult> execute(RuntimeProcessRequest request) async {
+    lastRequest = request;
+    return RuntimeProcessResult(exitCode: 0, stdout: 'ok', request: request);
+  }
+}
+
+/// 完整就绪的最小 Linux Runtime（proot + loader + rootfs bash + rootfs/tmp）
+LinuxRuntimePaths readyPaths(Directory root) {
+  final paths = fakePaths(root);
+  File(paths.prootExecutable).writeAsStringSync('proot');
+  File(paths.loaderPath).writeAsStringSync('loader');
+  final bashDir = Directory('${paths.rootfsDir}/usr/bin');
+  bashDir.createSync(recursive: true);
+  File('${bashDir.path}/bash').writeAsStringSync('bash');
+  return paths;
 }

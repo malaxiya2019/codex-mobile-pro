@@ -89,7 +89,23 @@ class LinuxExecutionAdapter implements IExecutionAdapter {
     ];
 
     // ─── 环境合并：Linux 基础环境 + 请求覆盖 ───────────────────
+    //
+    // PRoot 宿主端临时目录修复：
+    //   - buildEnvironment 中 TMPDIR=/tmp 是 guest（Ubuntu）内路径，正确。
+    //   - 但宿主（Android）不存在 /tmp，PRoot 进程自身启动时会在 TMPDIR
+    //     创建 f2fs bug probe / unix socket，导致
+    //     `Unable to create temp directory for f2fs bug probe` warning。
+    //   - 解决方案：为 PRoot 进程设置 PROOT_TMP_DIR=<rootfs>/tmp（宿主
+    //     绝对路径，真实存在），PRoot 专用变量只影响 PRoot 自身，不传给
+    //     guest，apt/dpkg/npm 在 Ubuntu 内仍使用 TMPDIR=/tmp。
+    final hostTmpDir = '${paths.rootfsDir}/tmp';
+    try {
+      await Directory(hostTmpDir).create(recursive: true);
+    } catch (e) {
+      LogService.warning('LinuxExec', 'rootfs /tmp 创建失败: $e');
+    }
     final environment = _provider.buildEnvironment(paths);
+    environment['PROOT_TMP_DIR'] = hostTmpDir;
     if (request.environment != null) {
       environment.addAll(request.environment!);
     }

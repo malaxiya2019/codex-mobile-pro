@@ -472,12 +472,18 @@ class RuntimeManager {
   }
 
   /// 构建工具链安装上下文（Linux Runtime → PRoot → Ubuntu rootfs）
-  ToolchainContext _buildToolchainContext() {
+  ///
+  /// 公开供 EnvironmentDoctor / 修复流程复用同一执行通道，
+  /// 确保「修复环境」与「一键部署」使用完全一致的上下文。
+  ToolchainContext buildToolchainContext() {
     return ToolchainContext(
       runner: _runner ?? RuntimeProcessRunner(),
       linux: linuxProvider,
     );
   }
+
+  /// 构建工具链安装上下文（私有别名，保持既有调用点不变）
+  ToolchainContext _buildToolchainContext() => buildToolchainContext();
 
   /// 安装进度回调
   void _onInstallProgress(

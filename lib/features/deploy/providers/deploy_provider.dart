@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/detector/detection_result.dart';
 import '../../../core/detector/detectors/network_detector.dart';
 import '../../../runtime/environment_doctor.dart';
+import '../../../runtime/installers/apt_toolchain_installers.dart';
 import '../../../runtime/install_models.dart';
 import '../../../runtime/runtime_dependency.dart';
 import '../../../runtime/runtime_detector.dart';
@@ -299,17 +300,56 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
         linux: mgr.linuxProvider,
       );
       final report = await doctor.runFullRepair();
-      // 修复完成后刷新检测结果
+      final checks = [...report.checks];
+
+      // dpkg/apt 恢复后：npm 若仍 broken/missing 且 node 已装 → 补装 npm。
+      // 复用 NodeJsInstaller（node 已装但 npm 缺失 → 仅 apt install npm，
+      // 不重装 nodejs）。dpkg/apt 未恢复时跳过，避免再次失败。
+      if (report.allPassed) {
+        try {
+          final ctx = mgr.buildToolchainContext();
+          final nodeVer = await ctx.versionOf('/usr/bin/node');
+          final npmVer = await ctx.versionOf('/usr/bin/npm');
+          if (nodeVer != null && npmVer == null) {
+            final result = await NodeJsInstaller().install(ctx);
+            checks.add(DoctorCheck(
+              name: 'npm',
+              passed: result.success,
+              repaired: true,
+              detail: result.success
+                  ? 'npm 补装成功（node 已安装，npm 缺失/broken）'
+                  : 'npm 补装失败: ${result.errorMessage}',
+            ));
+          } else {
+            checks.add(DoctorCheck(
+              name: 'npm',
+              passed: npmVer != null,
+              detail: npmVer != null
+                  ? 'npm 可用: $npmVer'
+                  : 'node 未安装，跳过 npm 补装',
+            ));
+          }
+        } catch (e) {
+          checks.add(DoctorCheck(
+            name: 'npm',
+            passed: false,
+            detail: 'npm 检测异常: $e',
+          ));
+        }
+      }
+
+      final fullReport = DoctorReport(checks);
+      // 修复完成后刷新检测结果（Capability Registry 重建）
       await checkAll();
       state = state.copyWith(
-        state: report.allPassed
+        state: fullReport.allPassed
             ? DeployState.completed
             : DeployState.error,
-        errorMessage: report.allPassed
+        errorMessage: fullReport.allPassed
             ? null
-            : '环境修复未完全成功:\n${report.summary}',
+            : '环境修复未完全成功:\n${fullReport.summary}',
       );
-      return report;
+      return fullReport;
     } catch (e) {
       state = state.copyWith(
         state: DeployState.error,
@@ -354,11 +394,32 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
   }
 
   /// 构建部署失败信息（阶段 + 原因 + 建议）
+  ///
+  /// npm 是随 Node.js 安装的组件（无独立 RuntimeTool）。
+  /// npm 单独补装失败（errorMessage 含 npm 且不含 nodejs）时，
+  /// 分类为「失败组件：npm / Node.js：已安装」，避免误显示
+  /// 「部署失败（Node.js）」把已安装的 Node.js 判为失败。
   String _buildFailureMessage(InstallResult result) {
     final toolName = RuntimeDependency.forTool(result.tool)?.displayName ??
         result.tool.name;
     final phase = result.phase.name;
     final base = result.errorMessage ?? '未知错误';
+    final lower = base.toLowerCase();
+
+    // npm-only 补装失败：node 已安装，仅 npm 组件失败
+    final isNpmOnlyFailure = result.tool == RuntimeTool.node &&
+        lower.contains('npm') &&
+        !lower.contains('nodejs');
+    if (isNpmOnlyFailure) {
+      final buf = StringBuffer('❌ Coding Runtime 部署失败');
+      buf.writeln();
+      buf.write('失败组件：npm');
+      buf.writeln();
+      buf.write('Node.js：已安装');
+      buf.writeln();
+      buf.write('原因：$base');
+      return buf.toString();
+    }
 
     // InstallResult.errorMessage 对 DeployError 已含「❌ 原因 + 💡 建议」
     final buf = StringBuffer('❌ 部署失败（$toolName）');
