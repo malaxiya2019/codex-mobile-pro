@@ -133,7 +133,7 @@ jobs:
 
       - name: Verify APK signature (must match fixed keystore)
         run: |
-          EXPECTED="b1307e1488fe7cad36f0cac5ab2d1f0ce581e0c06afc74d391584a6bf2b93d3"
+          EXPECTED="b1307e1488fe7cad36f0cac5ab2d1f0ce581e0c06afc74d391584a6bf2b93dd3"
           SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
           APKSIGNER=$(ls "$SDK_ROOT"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
           if [ -z "$APKSIGNER" ]; then
