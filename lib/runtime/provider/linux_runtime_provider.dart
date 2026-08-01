@@ -33,6 +33,7 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 
 import '../../core/logger/log_service.dart';
+import '../native/native_proot.dart';
 import '../process/runner_models.dart';
 import '../runtime_environment.dart';
 import 'runtime_capability.dart';
@@ -55,12 +56,20 @@ class LinuxRuntimePaths {
   /// rootfs 内 TMPDIR（/tmp）
   final String tmpDir;
 
+  /// 路径是否来自 Android nativeLibraryDir（jniLibs 解压区）。
+  ///
+  /// native 路径在 [NativeProot.ensureInstalled] 中已通过完整最小
+  /// 自动检测（存在 / 可启动 / `--version` 成功 / loader 存在），
+  /// detect() 无需重复冒烟；fallback（rootfs 内 proot）为 false。
+  final bool fromNativeLibrary;
+
   const LinuxRuntimePaths({
     required this.prootExecutable,
     required this.rootfsDir,
     required this.loaderPath,
     this.homeDir = '/root',
     this.tmpDir = '/tmp',
+    this.fromNativeLibrary = false,
   });
 
   /// 从 RuntimeEnvironment 派生默认路径
@@ -162,18 +171,59 @@ class LinuxRuntimeProvider implements IRuntimeProvider {
   Future<LinuxRuntimePaths> resolvePaths() async {
     if (_paths != null) return _paths;
     if (_cachedPaths != null) return _cachedPaths!;
+
+    // 先解析 rootfs（native 与 fallback 共用同一 rootfs 来源）
+    String rootfsDir;
     try {
       final env = await RuntimeEnvironment.getInstance();
-      _cachedPaths = LinuxRuntimePaths.fromEnvironment(env);
+      rootfsDir = env.ubuntuRootfsDir;
     } catch (e) {
       LogService.warning('LinuxProvider', 'path_provider 不可用，回退临时目录: $e');
-      final base = Directory.systemTemp.path;
-      _cachedPaths = LinuxRuntimePaths(
-        prootExecutable: '$base/runtime/ubuntu/bin/proot',
-        rootfsDir: '$base/runtime/ubuntu/rootfs',
-        loaderPath: '$base/runtime/ubuntu/libexec/proot/loader',
+      rootfsDir = '${Directory.systemTemp.path}/runtime/ubuntu/rootfs';
+    }
+
+    // 1. 优先 nativeLibraryDir（jniLibs 交付的自包含 proot + loader，
+    //    已通过 --version 冒烟；不依赖 Termux 动态库）。
+    //    proot = nativeLibraryDir/proot（libproot.so）
+    //    loader = nativeLibraryDir/loader（libloader.so）
+    //    rootfs = app_flutter/runtime/ubuntu/rootfs（保持不变）
+    try {
+      final native = await NativeProot.ensureInstalled();
+      if (native != null) {
+        _cachedPaths = LinuxRuntimePaths(
+          prootExecutable: native.prootExecutable,
+          rootfsDir: rootfsDir,
+          loaderPath: native.loaderPath,
+          fromNativeLibrary: true,
+        );
+        LogService.info(
+          'LinuxProvider',
+          '使用 nativeLibraryDir proot: ${native.prootExecutable}',
+        );
+        return _cachedPaths!;
+      }
+    } catch (e) {
+      LogService.warning(
+        'LinuxProvider',
+        'nativeLibraryDir proot 不可用，回退 rootfs 内 proot: $e',
       );
     }
+
+    // 2. fallback：rootfs 内 proot（旧安装流程产物）
+    _cachedPaths = LinuxRuntimePaths(
+      prootExecutable: path.join(
+        Directory(rootfsDir).parent.path,
+        'bin',
+        'proot',
+      ),
+      rootfsDir: rootfsDir,
+      loaderPath: path.join(
+        Directory(rootfsDir).parent.path,
+        'libexec',
+        'proot',
+        'loader',
+      ),
+    );
     return _cachedPaths!;
   }
 
@@ -232,7 +282,10 @@ class LinuxRuntimeProvider implements IRuntimeProvider {
           DiagnosticCheck(
             name: 'PRoot',
             passed: prootReady,
-            detail: prootReady ? paths.prootExecutable : '未安装',
+            detail: prootReady
+                ? paths.prootExecutable +
+                    (paths.fromNativeLibrary ? ' (nativeLibraryDir)' : '')
+                : '未安装',
           ),
           DiagnosticCheck(
             name: 'Ubuntu rootfs',
