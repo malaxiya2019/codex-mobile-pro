@@ -8,7 +8,7 @@
 ///   4. apt install 失败 → FAILED（aptInstallFailed）
 ///   5. Git / Python 安装与验证
 ///   6. Codex CLI / mimo2codex 通过 npm 全局安装
-///   7. npm 缺失 → 依赖 blocked
+///   7. npm 缺失 → Codex CLI 安装失败（npm 缺失），不再误判依赖 Node.js blocked
 ///   8. Linux Runtime 未就绪 → blocked
 ///   9. 无安装器 → 真正的 UNSUPPORTED（非「未实现」占位）
 ///  10. 部分失败恢复（partial resume）：首次 Node 失败 → 修复后重试
@@ -524,6 +524,37 @@ void main() {
     });
 
     test('installOne：依赖未安装（Node）→ codex blocked', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+
+      final result =
+          await f.orchestrator.installOne(RuntimeTool.codexCli, f.ctx);
+
+      expect(result.success, isFalse);
+      expect(result.phase, InstallPhase.blocked);
+      expect(result.errorMessage, contains('Node.js'));
+    });
+
+    test('installOne：node 本体可用但 npm 缺失 → codex 不被 blocked（真实 npm 错误）',
+        () async {
+      // 真机状态复刻：node 18.19.1 可用（--version 成功），npm 未配置（exit=127）。
+      // 依赖检查只看 node 本体 → PASS；npm 真实缺失由 CodexCliInstaller 暴露。
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+
+      final result =
+          await f.orchestrator.installOne(RuntimeTool.codexCli, f.ctx);
+
+      // 不得误判「依赖 Node.js 未安装」而 blocked
+      expect(result.phase, isNot(InstallPhase.blocked));
+      expect(result.errorMessage, isNot(contains('Node.js 未安装')));
+      // CodexCliInstaller 给出真实的 npm 缺失错误
+      expect(result.success, isFalse);
+      expect(result.errorMessage, contains('npm'));
+    });
+
+    test('installOne：node 完全缺失 → codex blocked（依赖真实未安装）', () async {
       final f = ToolchainFixture();
       addTearDown(f.dispose);
 

@@ -217,14 +217,30 @@ class RuntimeManager {
         final dep = RuntimeDependency.forTool(tool);
         if (dep == null || dep.category != RuntimeCategory.coding) continue;
 
-        // 跳过已安装的
+        // 跳过已安装的（文件存在性）
         if (await _environment!.isToolInstalled(tool)) {
-          controller.add(InstallResult(
-            tool: tool,
-            success: true,
-            version: '已安装',
-          ));
-          continue;
+          // node 特判：安装完成 = node + npm 均可用。
+          // 真机曾出现 node 已装但 /usr/bin/npm 为 broken symlink（exit=127），
+          // 若在此 SKIP，NodeJsInstaller 永远不执行，npm 永不补装。
+          // → npm 缺失时不跳过，交给 NodeJsInstaller.install() 补装。
+          if (tool == RuntimeTool.node) {
+            final ctx = _buildToolchainContext();
+            if (await ctx.versionOf('/usr/bin/npm') != null) {
+              controller.add(InstallResult(
+                tool: tool,
+                success: true,
+                version: '已安装',
+              ));
+              continue;
+            }
+          } else {
+            controller.add(InstallResult(
+              tool: tool,
+              success: true,
+              version: '已安装',
+            ));
+            continue;
+          }
         }
 
         // 检查依赖是否已在本次安装中失败

@@ -98,11 +98,17 @@ class ToolchainOrchestrator {
     }
 
     // 2. 其他依赖检查（Node 等）
+    //
+    // 依赖满足判据 = 依赖工具「本体可执行」（installedVersion 非 null）。
+    // 不使用 isInstalled()（完整安装态）：npm 未配置 ≠ Node.js 未安装，
+    // 否则 Codex CLI 会被误判「依赖 Node.js 未安装」而 blocked。
+    // npm 真实缺失时由安装器（CodexCliInstaller）给出明确的 npm 缺失错误。
     if (dep != null) {
       for (final d in dep.dependencies) {
         if (d == RuntimeTool.ubuntu) continue;
         final depInstaller = _byTool[d];
-        if (depInstaller != null && !await depInstaller.isInstalled(ctx)) {
+        if (depInstaller != null &&
+            await depInstaller.installedVersion(ctx) == null) {
           return InstallResult(
             tool: tool,
             success: false,
