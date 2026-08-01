@@ -39,7 +39,50 @@ import 'runner_models.dart';
 ///   - Android System Runtime（/system/bin/sh, /system/bin/curl）
 ///   - App Bundled Runtime（已安装的 node/python/git）
 /// ====================================================================
+/// execute 结束原因（决定 kill 后 bounded cleanup 路径）
+enum _ExitReason { exit, timeout, cancel }
+
+/// ====================================================================
+/// LocalProcessExecution
+///
+/// 在本地进程中直接执行命令。
+/// 包装 dart:io Process.run / Process.start。
+///
+/// 适用于：
+///   - Android System Runtime（/system/bin/sh, /system/bin/curl）
+///   - App Bundled Runtime（已安装的 node/python/git）
+///
+/// 超时/取消安全（修复 Coding Runtime 30% 永久卡死）：
+///   PRoot 场景中 apt-get 卡 TCP connect（D 状态不可中断），
+///   kill PRoot 后 tracee 可能仍存活并持有 stdout/stderr 管道写端，
+///   导致 stream 永不 done。因此：
+///   1. timeout/cancel 后立即进入 bounded cleanup；
+///   2. stdout/stderr drain 有最大等待时间（cleanupTimeout）；
+///   3. cleanup 超时后强制返回，绝不无限等待；
+///   4. 结果明确区分 command timeout / process cleanup timeout / cancel。
+/// ====================================================================
 class LocalProcessExecution implements IExecutionAdapter {
+  /// 超时/取消 kill 后，等待 stdout/stderr 管道排空的最长时间。
+  ///
+  /// 超过该时间判定为 process cleanup timeout：cancel 监听并强制返回。
+  /// 测试可注入短时长，避免真实等待 10 秒。
+  final Duration cleanupTimeout;
+
+  /// kill（SIGTERM）后等待进程退出的时间；超时则升级 SIGKILL。
+  final Duration killWaitTimeout;
+
+  /// 外部取消信号（测试注入）。null 表示无外部取消（保持原行为）。
+  final Future<void>? cancelSignal;
+
+  LocalProcessExecution({
+    this.cleanupTimeout = const Duration(seconds: 10),
+    this.killWaitTimeout = const Duration(seconds: 3),
+    this.cancelSignal,
+  });
+
+  /// 永不完成的 Future（无外部取消信号时的占位）
+  static final Future<void> _neverCancel = Completer<void>().future;
+
   @override
   String get id => 'local';
 
@@ -85,66 +128,73 @@ class LocalProcessExecution implements IExecutionAdapter {
         workingDirectory: request.workingDirectory,
       );
 
-      // ─── 超时处理 ────────────────────────────────────────────
-      Completer<void>? timeoutCompleter;
-      Timer? timeoutTimer;
+      // ─── 结束原因竞态：exit / timeout / cancel 谁先完成 ──────
+      final reasonCompleter = Completer<_ExitReason>();
+      process.exitCode.then((_) {
+        if (!reasonCompleter.isCompleted) {
+          reasonCompleter.complete(_ExitReason.exit);
+        }
+      });
 
+      Timer? timeoutTimer;
       if (request.timeout != null) {
-        timeoutCompleter = Completer<void>();
         timeoutTimer = Timer(request.timeout!, () {
-          timeoutCompleter?.complete();
+          if (!reasonCompleter.isCompleted) {
+            reasonCompleter.complete(_ExitReason.timeout);
+          }
         });
       }
 
-      // ─── 取消处理 ────────────────────────────────────────────
-      final cancelCompleter = Completer<void>();
-      final cancelFuture = cancelCompleter.future;
+      final cancelFuture = cancelSignal ?? _neverCancel;
+      cancelFuture.then((_) {
+        if (!reasonCompleter.isCompleted) {
+          reasonCompleter.complete(_ExitReason.cancel);
+        }
+      });
 
-      // ─── 收集输出 ────────────────────────────────────────────
+      // ─── 收集输出（保存 subscription：cleanup 超时需 cancel） ─
       final stdoutBuf = StringBuffer();
       final stderrBuf = StringBuffer();
-
-      // 保存流完成 Future：进程 exitCode 可能先于管道数据到达，
-      // 必须在返回前等待输出流消费完成，否则会丢失尾部输出。
-      final stdoutDone = process.stdout
+      final stdoutSub = process.stdout
           .transform(const SystemEncoding().decoder)
-          .listen((data) => stdoutBuf.write(data))
-          .asFuture<void>();
-      final stderrDone = process.stderr
+          .listen((data) => stdoutBuf.write(data));
+      final stderrSub = process.stderr
           .transform(const SystemEncoding().decoder)
-          .listen((data) => stderrBuf.write(data))
-          .asFuture<void>();
+          .listen((data) => stderrBuf.write(data));
+      final stdoutDone = stdoutSub.asFuture<void>();
+      final stderrDone = stderrSub.asFuture<void>();
 
       // ─── 等待进程完成（可被超时/取消中断） ────────────────────
+      final reason = await reasonCompleter.future;
+
       int exitCode;
       bool timedOut = false;
       bool cancelled = false;
 
-      await Future.any([
-        process.exitCode,
-        if (timeoutCompleter != null) timeoutCompleter.future,
-        cancelFuture,
-      ]);
-
-      if (timeoutCompleter != null && timeoutCompleter.isCompleted) {
-        // 超时 → kill 进程
+      if (reason == _ExitReason.timeout) {
+        // command timeout → kill，短等待后升级 SIGKILL
         timedOut = true;
-        process.kill();
         exitCode = -2;
-      } else if (cancelCompleter.isCompleted) {
-        // 取消 → kill 进程
+        await _killAndWait(process);
+      } else if (reason == _ExitReason.cancel) {
+        // cancellation → kill，短等待后升级 SIGKILL
         cancelled = true;
-        process.kill();
         exitCode = -3;
+        await _killAndWait(process);
       } else {
         exitCode = await process.exitCode;
       }
 
       timeoutTimer?.cancel();
 
-      // 等待输出流完全消费（进程可能已退出但 stdout 管道仍有数据）
-      await stdoutDone;
-      await stderrDone;
+      // ─── bounded cleanup ─────────────────────────────────────
+      // 超时/取消后 tracee 可能仍持有管道写端 → stream 永不 done。
+      // 并行 drain，各自限时；超时则 cancel 对应监听强制结束。
+      final drainTimedOut = await Future.wait([
+        _drainWithTimeout(stdoutDone, stdoutSub, cleanupTimeout),
+        _drainWithTimeout(stderrDone, stderrSub, cleanupTimeout),
+      ]);
+      final cleanupTimedOut = drainTimedOut.contains(true);
 
       return RuntimeProcessResult(
         exitCode: exitCode,
@@ -153,6 +203,13 @@ class LocalProcessExecution implements IExecutionAdapter {
         duration: DateTime.now().difference(start),
         timedOut: timedOut,
         cancelled: cancelled,
+        cleanupTimedOut: cleanupTimedOut,
+        error: cleanupTimedOut
+            ? '进程已${timedOut ? "超时" : cancelled ? "取消" : "退出"}，'
+                '但 stdout/stderr 管道未在 '
+                '${cleanupTimeout.inSeconds}s 内关闭'
+                '（可能子进程仍存活并持有管道），已强制结束清理'
+            : null,
         request: request,
       );
     } on ProcessException catch (e) {
@@ -176,6 +233,36 @@ class LocalProcessExecution implements IExecutionAdapter {
         duration: DateTime.now().difference(start),
         request: request,
       );
+    }
+  }
+
+  /// kill 进程（SIGTERM），短等待后升级 SIGKILL。
+  ///
+  /// tracee 处于 D 状态时 SIGKILL 也会排队，真正的兜底是后续
+  /// bounded drain（_drainWithTimeout），这里只负责尽力终止。
+  Future<void> _killAndWait(Process process) async {
+    process.kill(); // SIGTERM
+    try {
+      await process.exitCode.timeout(killWaitTimeout);
+    } on TimeoutException {
+      process.kill(ProcessSignal.sigkill);
+    }
+  }
+
+  /// bounded drain：等待 stream 完成，超时则 cancel 监听。
+  ///
+  /// 返回 true 表示 cleanup 超时（stream 未在 [timeout] 内完成）。
+  static Future<bool> _drainWithTimeout(
+    Future<void> done,
+    StreamSubscription<String> sub,
+    Duration timeout,
+  ) async {
+    try {
+      await done.timeout(timeout);
+      return false;
+    } on TimeoutException {
+      await sub.cancel();
+      return true;
     }
   }
 

@@ -164,6 +164,8 @@ void main() {
       expect(spec.arguments, [
         '-r',
         paths.rootfsDir,
+        '--link2symlink',
+        '--change-id=0:0',
         '-b', '/proc',
         '-b', '/dev',
         '-b', '/sys',
@@ -184,6 +186,8 @@ void main() {
       expect(spec.arguments, [
         '-r',
         paths.rootfsDir,
+        '--link2symlink',
+        '--change-id=0:0',
         '-b', '/proc',
         '-b', '/dev',
         '-b', '/sys',
@@ -201,6 +205,8 @@ void main() {
       expect(spec.arguments, [
         '-r',
         paths.rootfsDir,
+        '--link2symlink',
+        '--change-id=0:0',
         '-b', '/proc',
         '-b', '/dev',
         '-b', '/sys',

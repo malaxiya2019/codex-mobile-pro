@@ -14,6 +14,7 @@
 /// ====================================================================
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -525,6 +526,157 @@ void main() {
       if (result.isSuccess) {
         expect(result.stdout.trim(), 'test_value');
       }
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // 8. LocalProcessExecution — timeout/cancel bounded cleanup
+  // ═══════════════════════════════════════════════════════════════
+
+  group('LocalProcessExecution — 超时/取消 bounded cleanup', () {
+    // 短 cleanupTimeout / killWaitTimeout，避免真实等待 10s/3s
+    LocalProcessExecution quickExecution({Future<void>? cancelSignal}) {
+      return LocalProcessExecution(
+        cleanupTimeout: const Duration(milliseconds: 300),
+        killWaitTimeout: const Duration(milliseconds: 100),
+        cancelSignal: cancelSignal,
+      );
+    }
+
+    test('正常 command → 正常 exit', () async {
+      final execution = LocalProcessExecution();
+      final result = await execution.execute(
+        RuntimeProcessRequest(executable: 'echo', arguments: ['bounded-ok']),
+      );
+
+      expect(result.isSuccess, true);
+      expect(result.exitCode, 0);
+      expect(result.stdout.trim(), 'bounded-ok');
+      expect(result.timedOut, false);
+      expect(result.cleanupTimedOut, false);
+    });
+
+    test('stdout/stderr 正常结束', () async {
+      final execution = LocalProcessExecution();
+      final result = await execution.execute(
+        RuntimeProcessRequest(
+          executable: 'sh',
+          arguments: ['-c', 'echo out; echo err >&2'],
+        ),
+      );
+
+      expect(result.isSuccess, true);
+      expect(result.stdout, contains('out'));
+      expect(result.stderr, contains('err'));
+      expect(result.cleanupTimedOut, false);
+    });
+
+    test('command timeout → execute 最终返回 timedOut', () async {
+      final execution = quickExecution();
+      final result = await execution.execute(
+        RuntimeProcessRequest(
+          executable: 'sleep',
+          arguments: ['30'],
+          timeout: const Duration(milliseconds: 200),
+        ),
+      );
+
+      expect(result.timedOut, true);
+      expect(result.exitCode, -2);
+      expect(result.cancelled, false);
+      expect(result.cleanupTimedOut, false);
+    });
+
+    test('kill 后 stdout 不结束 → bounded cleanup 后仍返回', () async {
+      final execution = quickExecution();
+      final result = await execution.execute(
+        RuntimeProcessRequest(
+          executable: 'sh',
+          arguments: ['-c', 'echo hi; sleep 2 & wait'],
+          timeout: const Duration(milliseconds: 200),
+        ),
+      );
+
+      // 必须返回（绝不永久阻塞）
+      expect(result, isA<RuntimeProcessResult>());
+      expect(result.timedOut, true);
+      expect(
+        result.cleanupTimedOut,
+        true,
+        reason: 'sleep 子进程仍持有 stdout 管道写端，stream 永不 done',
+      );
+      // 保留 kill 前已消费的输出
+      expect(result.stdout, contains('hi'));
+    });
+
+    test('stderr 不结束 → bounded cleanup 后仍返回', () async {
+      final execution = quickExecution();
+      final result = await execution.execute(
+        RuntimeProcessRequest(
+          executable: 'sh',
+          arguments: ['-c', 'echo err >&2; sleep 2 & wait'],
+          timeout: const Duration(milliseconds: 200),
+        ),
+      );
+
+      expect(result, isA<RuntimeProcessResult>());
+      expect(result.timedOut, true);
+      expect(result.cleanupTimedOut, true);
+      expect(result.stderr, contains('err'));
+    });
+
+    test('cancel → execute 最终返回 cancelled', () async {
+      final completer = Completer<void>();
+      final execution = quickExecution(cancelSignal: completer.future);
+
+      final future = execution.execute(
+        RuntimeProcessRequest(
+          executable: 'sh',
+          arguments: ['-c', 'sleep 30'],
+          timeout: const Duration(seconds: 30),
+        ),
+      );
+
+      // 等待 execute 内部完成注册后触发取消
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      completer.complete();
+
+      final result = await future;
+      expect(result.cancelled, true);
+      expect(result.exitCode, -3);
+      expect(result.timedOut, false);
+    });
+
+    test('timeout 错误包含 timeout 信息', () async {
+      final execution = quickExecution();
+      final result = await execution.execute(
+        RuntimeProcessRequest(
+          executable: 'sleep',
+          arguments: ['30'],
+          timeout: const Duration(milliseconds: 200),
+        ),
+      );
+
+      expect(result.timedOut, true);
+      expect(result.exitCode, -2);
+    });
+
+    test('cleanup timeout 携带诊断且不会永久阻塞', () async {
+      final execution = quickExecution();
+      final sw = Stopwatch()..start();
+      final result = await execution.execute(
+        RuntimeProcessRequest(
+          executable: 'sh',
+          arguments: ['-c', 'echo hi; sleep 2 & wait'],
+          timeout: const Duration(milliseconds: 200),
+        ),
+      );
+      sw.stop();
+
+      expect(result.cleanupTimedOut, true);
+      expect(result.error, contains('管道'));
+      // bounded cleanup 最多 300ms（并行 drain），整体远小于 5s
+      expect(sw.elapsed, lessThan(const Duration(seconds: 5)));
     });
   });
 }

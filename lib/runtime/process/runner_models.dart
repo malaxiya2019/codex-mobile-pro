@@ -137,6 +137,11 @@ class RuntimeProcessResult {
   /// 是否被取消
   final bool cancelled;
 
+  /// 超时/取消后，stdout/stderr 管道未在 cleanupTimeout 内排空
+  /// （tracee 仍持有写端，如 apt-get 卡 TCP connect 的 D 状态），
+  /// 清理被强制终止。true = process cleanup timeout。
+  final bool cleanupTimedOut;
+
   /// 进程信号（如果被信号终止）
   final String? signal;
 
@@ -153,6 +158,7 @@ class RuntimeProcessResult {
     this.duration = Duration.zero,
     this.timedOut = false,
     this.cancelled = false,
+    this.cleanupTimedOut = false,
     this.signal,
     this.error,
     required this.request,
@@ -172,6 +178,7 @@ class RuntimeProcessResult {
       'ProcessResult(exitCode: $exitCode, duration: $duration, '
       'stdout: ${stdout.length}ch, stderr: ${stderr.length}ch, '
       'timedOut: $timedOut, cancelled: $cancelled'
+      '${cleanupTimedOut ? ", cleanupTimedOut: true" : ""}'
       '${error != null ? ", error: $error" : ""}'
       '${signal != null ? ", signal: $signal" : ""})';
 }

@@ -322,10 +322,18 @@ class LinuxRuntimeProvider implements IRuntimeProvider {
     }
   }
 
-  /// PRoot 绑定挂载参数（apt/dpkg 依赖 /proc /dev /sys 基础设施）
+  /// PRoot fake-root + 绑定挂载参数
   ///
-  /// Android 宿主目录直接映射进 rootfs；与 Termux 标准 proot 用法一致。
+  /// apt/dpkg 依赖 /proc /dev /sys 基础设施，Android 宿主目录直接
+  /// 映射进 rootfs；与 Termux 标准 proot 用法一致。
+  ///
+  /// Android /data 不支持 Ubuntu dpkg 所需的 hardlink 行为：
+  ///   - `--link2symlink`：硬链接 → 符号链接，解决 dpkg backup/link()
+  ///   - `--change-id=0:0`：guest 内 fake root（uid/gid 映射为 0）
+  /// 真机等价环境已验证：加入这两个参数后 apt install 可完整成功。
   static List<String> prootBindArguments() => const [
+    '--link2symlink',
+    '--change-id=0:0',
     '-b', '/proc',
     '-b', '/dev',
     '-b', '/sys',

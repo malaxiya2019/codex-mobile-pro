@@ -126,6 +126,7 @@ class LinuxExecutionAdapter implements IExecutionAdapter {
         duration: result.duration,
         timedOut: result.timedOut,
         cancelled: result.cancelled,
+        cleanupTimedOut: result.cleanupTimedOut,
         request: request,
       );
     }
