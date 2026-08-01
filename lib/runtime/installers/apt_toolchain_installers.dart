@@ -30,7 +30,11 @@ class NodeJsInstaller extends ToolchainInstaller {
 
   @override
   Future<bool> isInstalled(ToolchainContext ctx) async {
-    return await ctx.versionOf('/usr/bin/node') != null;
+    // node 与 npm 都必须可用才算已安装。
+    // 真机曾出现 node 已装但 /usr/bin/npm 为 broken symlink
+    // （目标 /usr/share/nodejs/npm/bin/npm-cli.js 缺失），此时必须重新安装。
+    return await ctx.versionOf('/usr/bin/node') != null &&
+        await ctx.versionOf('/usr/bin/npm') != null;
   }
 
   @override
@@ -40,19 +44,32 @@ class NodeJsInstaller extends ToolchainInstaller {
 
   @override
   Future<InstallResult> install(ToolchainContext ctx) async {
-    // 1. 已安装 → SKIP
+    // 1. 已安装（node + npm 均可用）→ SKIP
     final nodeVer = await installedVersion(ctx);
-    if (nodeVer != null) {
+    final npmVer = await ctx.versionOf('/usr/bin/npm');
+    if (nodeVer != null && npmVer != null) {
       report(ctx, InstallPhase.completed, 1.0, '已安装，跳过');
       return success(nodeVer, skipped: true);
     }
 
-    // 2. apt 安装 nodejs + npm
-    report(ctx, InstallPhase.installing, 0.3, 'apt 安装 nodejs + npm...');
-    try {
-      await ctx.aptInstall(['nodejs', 'npm']);
-    } catch (e) {
-      return failure(e);
+    // 2. 补装缺失部分：
+    //    - node/npm 均缺失 → apt install nodejs npm（全新安装）
+    //    - node 已装但 npm 缺失/broken → 仅 apt install npm 修复，
+    //      不重装 nodejs（真机 npm exit=127 正是此场景）
+    if (nodeVer != null && npmVer == null) {
+      report(ctx, InstallPhase.installing, 0.3, 'npm 缺失，补装 npm...');
+      try {
+        await ctx.aptInstall(['npm']);
+      } catch (e) {
+        return failure(e);
+      }
+    } else {
+      report(ctx, InstallPhase.installing, 0.3, 'apt 安装 nodejs + npm...');
+      try {
+        await ctx.aptInstall(['nodejs', 'npm']);
+      } catch (e) {
+        return failure(e);
+      }
     }
 
     // 3. 验证

@@ -243,6 +243,31 @@ void main() {
           reason: '已安装时不得重复 apt install');
     });
 
+    test('node 已装但 npm 缺失/broken → 仅 apt install npm 修复', () async {
+      // 真机根因复刻：nodejs 已安装但 /usr/bin/npm 是 broken symlink
+      // （目标 /usr/share/nodejs/npm/bin/npm-cli.js 缺失）→ npm --version exit=127
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+      // npm 未设置 → FakeAdapter 对 npm --version 返回 exit 127
+
+      final installer = NodeJsInstaller();
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      // 必须只补装 npm，不重装 nodejs
+      expect(f.adapter.log, contains('/usr/bin/apt-get install -y npm'));
+      expect(
+        f.adapter.log.where(
+            (l) => l.contains('apt-get install') && l.contains('nodejs')),
+        isEmpty,
+        reason: 'node 已装时不得重新安装 nodejs',
+      );
+      expect(f.adapter.installedVersions['/usr/bin/node'], 'v18.19.1');
+      expect(f.adapter.installedVersions['/usr/bin/npm'], '9.2.0');
+      expect(result.version, contains('node'));
+    });
+
     test('缺失 → apt install → 验证 → INSTALLED', () async {
       final f = ToolchainFixture();
       addTearDown(f.dispose);
