@@ -28,6 +28,9 @@ LinuxRuntimePaths fakePaths(Directory root) {
   rootfsDir.createSync(recursive: true);
   binDir.createSync(recursive: true);
   libexecDir.createSync(recursive: true);
+  // loader 父目录（libexec/proot）也必须存在，否则写 loader 文件时
+  // PathNotFoundException (errno=2)
+  Directory('${libexecDir.path}/proot').createSync(recursive: true);
 
   return LinuxRuntimePaths(
     prootExecutable: '${binDir.path}/proot',
