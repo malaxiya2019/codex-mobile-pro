@@ -120,7 +120,11 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
       await RuntimeManager.instance.initialize();
       final result = await RuntimeManager.instance.detectAll();
 
-      state = state.copyWith(
+      // 检测成功必须显式清空旧 errorMessage：
+      // copyWith 的 `??` 语义无法清空（传 null 会保留旧值），
+      // 否则「检测成功」后 UI 仍显示上次失败的错误。
+      // 直接构造新状态：errorMessage 取默认 null，清空旧错误
+      state = DeployStatus(
         state: DeployState.completed,
         detectionResult: result,
         lastChecked: DateTime.now(),

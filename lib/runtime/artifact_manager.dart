@@ -425,7 +425,12 @@ class ArtifactManager {
     required String expectedSha256,
     required void Function(int downloaded, int total) onProgress,
   }) async {
-    final client = HttpClient();
+    // Android 上 HttpClient 默认无 connectionTimeout：IPv6 黑洞 /
+    // 半开连接会让下载挂起数分钟（Termux curl 与 App 行为差异的主因）。
+    // 显式设置连接与空闲超时，让每次尝试在 20s 内给出明确失败。
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 20)
+      ..idleTimeout = const Duration(seconds: 30);
     try {
       final request = await client.getUrl(Uri.parse(url));
 

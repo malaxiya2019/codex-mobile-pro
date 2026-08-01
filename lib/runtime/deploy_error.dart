@@ -93,8 +93,15 @@ class DeployError implements Exception {
       );
 
   /// 用户友好的完整错误信息
+  ///
+  /// 包含 message + detail（每个下载源的真实失败原因）+ 建议。
+  /// detail 不得被吞掉：否则「所有下载源均失败」无法诊断根因。
   String get userFriendly {
     final buf = StringBuffer('❌ $message');
+    if (detail != null && detail!.isNotEmpty) {
+      buf.writeln();
+      buf.write('\n📋 详细：$detail');
+    }
     if (userSuggestion != null) {
       buf.writeln();
       buf.write('\n💡 建议：$userSuggestion');

@@ -212,12 +212,6 @@ class MirrorRegistry {
         region: 'cn',
         priority: 60,
       ),
-      _MirrorRule(
-        mirrorHost: 'mirror.ghproxy.com',
-        pathPrefix: '/https://github.com',
-        region: 'cn',
-        priority: 55,
-      ),
     ],
     'raw.githubusercontent.com': [
       _MirrorRule(
@@ -225,12 +219,6 @@ class MirrorRegistry {
         pathPrefix: '/https://raw.githubusercontent.com',
         region: 'cn',
         priority: 60,
-      ),
-      _MirrorRule(
-        mirrorHost: 'mirror.ghproxy.com',
-        pathPrefix: '/https://raw.githubusercontent.com',
-        region: 'cn',
-        priority: 55,
       ),
     ],
     'objects.githubusercontent.com': [

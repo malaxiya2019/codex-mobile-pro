@@ -195,13 +195,49 @@ class DnsResolver {
     );
   }
 
-  /// 使用系统 ping 解析域名
+  /// 使用系统 DNS 解析域名
+  ///
+  /// 优先 Dart 原生 `InternetAddress.lookup`（Android 上走系统
+  /// resolver，返回真实 A/AAAA，无需依赖 ping 可用性）；
+  /// 解析失败时降级到 `ping` 探测（Termux/部分 Android 可用）。
+  ///
+  /// 2026-08 真机修复背景：App 内 `Process.run('ping')` 在部分
+  /// Android 版本受网络权限/ICMP 限制，导致系统 DNS 层误报失败，
+  /// 而 Termux 的 curl 正常——两者行为差异是「App 内 3 个下载源
+  /// 全失败、Termux 却能下载」的关键。
   static Future<DnsResolution> _resolveSystemDns(
     String host, {
     int timeoutMs = 3000,
   }) async {
     final start = DateTime.now();
 
+    // ─── 首选：Dart 原生系统 DNS ───────────────────────────────
+    try {
+      final addresses = await InternetAddress.lookup(host)
+          .timeout(Duration(milliseconds: timeoutMs));
+      if (addresses.isNotEmpty) {
+        // 优先 IPv4，避免 IPv6 黑洞导致后续连接挂起
+        InternetAddress? ipv4;
+        for (final a in addresses) {
+          if (a.type == InternetAddressType.IPv4) {
+            ipv4 = a;
+            break;
+          }
+        }
+        final ip = (ipv4 ?? addresses.first).address;
+        return DnsResolution(
+          host: host,
+          ip: ip,
+          resolved: true,
+          durationMs: DateTime.now().difference(start).inMilliseconds,
+          resolverName: 'system-dns',
+        );
+      }
+    } catch (_) {
+      // 降级到 ping
+    }
+
+    // ─── 降级：ping 探测 ───────────────────────────────────────
     try {
       final result = await Process.run(
         'ping',
