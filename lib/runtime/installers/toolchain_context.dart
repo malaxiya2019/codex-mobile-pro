@@ -32,6 +32,9 @@ class ToolchainContext {
   /// 同一轮安装中 `apt-get update` 是否已成功执行（幂等）
   bool aptUpdated = false;
 
+  /// 同一轮安装中 `dpkg` 是否已确认健康（幂等）
+  bool dpkgHealthy = false;
+
   ToolchainContext({
     required RuntimeProcessRunner runner,
     LinuxRuntimeProvider? linux,
@@ -109,6 +112,85 @@ class ToolchainContext {
     return null;
   }
 
+  /// 确保 dpkg 状态健康（幂等：同轮已确认则不重复执行）。
+  ///
+  /// 真机曾出现 dpkg interrupted（apt 安装中断遗留），此时 apt-get
+  /// install 会直接报 `dpkg was interrupted` 而失败。修复方式：
+  ///   dpkg --audit → 发现 interrupted → dpkg --configure -a → 复验。
+  /// 禁止删除 /var/lib/dpkg/lock 等危险方式绕过。
+  ///
+  /// 失败抛 DeployError(aptInstallFailed)（与安装同错误族），
+  /// 保留真实 exit/stdout/stderr 便于诊断。
+  Future<void> ensureDpkgHealthy() async {
+    if (dpkgHealthy) return;
+
+    // 1. 审计
+    final audit = await runInRootfs(
+      '/usr/bin/dpkg',
+      arguments: const ['--audit'],
+      timeout: const Duration(seconds: 60),
+      label: 'dpkg:audit',
+    );
+    final auditText = '${audit.stderr}\n${audit.stdout}';
+    final interrupted = audit.exitCode != 0 ||
+        auditText.toLowerCase().contains('interrupted') ||
+        auditText.toLowerCase().contains('in a mess') ||
+        auditText.toLowerCase().contains('serious problems') ||
+        auditText.toLowerCase().contains('requires manual intervention');
+
+    if (!interrupted) {
+      dpkgHealthy = true;
+      return;
+    }
+
+    // 2. 修复
+    LogService.warning(
+      'Toolchain',
+      'dpkg interrupted 检测到，执行 dpkg --configure -a',
+    );
+    final fix = await runInRootfs(
+      '/usr/bin/dpkg',
+      arguments: const ['--configure', '-a'],
+      timeout: const Duration(minutes: 5),
+      label: 'dpkg:configure-a',
+    );
+    if (!fix.isSuccess) {
+      throw DeployError(
+        code: DeployErrorCode.aptInstallFailed,
+        message: 'dpkg 修复失败（interrupted 状态无法恢复）',
+        detail: 'exit=${fix.exitCode}\n'
+            'stdout: ${fix.stdout.trim()}\n'
+            'stderr: ${fix.stderr.trim()}',
+        userSuggestion: '尝试重新初始化 Linux Runtime 后重试',
+        context: {'command': 'dpkg --configure -a'},
+      );
+    }
+
+    // 3. 复验
+    final reAudit = await runInRootfs(
+      '/usr/bin/dpkg',
+      arguments: const ['--audit'],
+      timeout: const Duration(seconds: 60),
+      label: 'dpkg:reaudit',
+    );
+    final reText = '${reAudit.stderr}\n${reAudit.stdout}';
+    final stillInterrupted = reAudit.exitCode != 0 ||
+        reText.toLowerCase().contains('interrupted') ||
+        reText.toLowerCase().contains('in a mess');
+    if (stillInterrupted) {
+      throw DeployError(
+        code: DeployErrorCode.aptInstallFailed,
+        message: 'dpkg 修复后仍存在 interrupted 状态',
+        detail: reText,
+        userSuggestion: '尝试重新初始化 Linux Runtime 后重试',
+        context: {'command': 'dpkg --audit'},
+      );
+    }
+
+    LogService.info('Toolchain', 'dpkg interrupted 已修复');
+    dpkgHealthy = true;
+  }
+
   /// 执行 `apt-get update`（幂等：同轮已成功则不重复执行）。
   ///
   /// 失败时若判定为网络获取失败（TCP/HTTP 无法连接镜像），自动按
@@ -136,6 +218,7 @@ class ToolchainContext {
     List<String> packages, {
     Duration? timeout,
   }) async {
+    await ensureDpkgHealthy();
     await ensureAptUpdated();
     await _runWithAptSourceFallback(
       arguments: ['install', '-y', ...packages],

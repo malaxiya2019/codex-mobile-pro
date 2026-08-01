@@ -221,25 +221,49 @@ void main() {
       expect(cap.reason, contains('可执行文件不存在'));
     });
 
-    test('超时', () async {
+    test('超时（which 命中 → broken）', () async {
       fakeRunner.whenWhich('node', '/usr/bin/node');
       fakeRunner.whenTimeout('node --version');
 
       final cap = await resolver.checkCapability(CapabilityType.node, provider);
 
       expect(cap.available, false);
-      expect(cap.status, CapabilityStatus.unavailable);
+      expect(cap.status, CapabilityStatus.degraded);
+      expect(cap.health, CapabilityHealth.degraded);
+      expect(cap.executable, '/usr/bin/node');
+      expect(cap.installed, true);
       expect(cap.reason, contains('超时'));
     });
 
-    test('权限不足', () async {
+    test('权限不足（which 命中 → broken）', () async {
       fakeRunner.whenWhich('node', '/usr/bin/node');
       fakeRunner.whenPermissionDenied('node');
 
       final cap = await resolver.checkCapability(CapabilityType.node, provider);
 
       expect(cap.available, false);
+      expect(cap.status, CapabilityStatus.degraded);
+      expect(cap.health, CapabilityHealth.degraded);
+      expect(cap.executable, '/usr/bin/node');
+      expect(cap.installed, true);
       expect(cap.reason, contains('权限不足'));
+    });
+
+    test('非零退出码（which 命中 → broken，如 npm exit=127）', () async {
+      fakeRunner.whenWhich('npm', '/usr/bin/npm');
+      fakeRunner.when('npm --version', const FakeCommandResult(
+        exitCode: 127,
+        stderr: '/usr/bin/env: node: No such file or directory',
+      ));
+
+      final cap = await resolver.checkCapability(CapabilityType.npm, provider);
+
+      expect(cap.available, false);
+      expect(cap.status, CapabilityStatus.degraded);
+      expect(cap.health, CapabilityHealth.degraded);
+      expect(cap.executable, '/usr/bin/npm');
+      expect(cap.installed, true);
+      expect(cap.reason, contains('非零退出码'));
     });
 
     test('非可执行能力 — systemShell', () async {

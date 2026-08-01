@@ -47,6 +47,18 @@ class _DetectResult {
   });
 }
 
+/// 可执行文件解析结果
+///
+/// [byWhich] 表示路径是否由 which 真实命中：
+///   - true  → 二进制已安装（PATH 中存在）→ 执行失败属于 broken
+///   - false → which 未命中，仅作为执行名 fallback → 失败属于 missing
+class _ResolvedExecutable {
+  final String? path;
+  final bool byWhich;
+
+  const _ResolvedExecutable(this.path, this.byWhich);
+}
+
 /// ====================================================================
 /// CapabilityResolver
 /// ====================================================================
@@ -157,6 +169,19 @@ class CapabilityResolver {
         reason: '可执行但无法获取版本',
         checkedAt: now,
       );
+    } else if (result.executable != null) {
+      // 可执行文件已解析成功但执行失败 → broken（已安装但异常）。
+      // 不能判定为 missing（否则 UI 显示「可安装」且安装按钮禁用）。
+      capability = RuntimeCapability(
+        type: type,
+        provider: provider.type,
+        available: false,
+        status: CapabilityStatus.degraded,
+        health: CapabilityHealth.degraded,
+        reason: result.error ?? '已安装但执行失败',
+        executable: result.executable,
+        checkedAt: now,
+      );
     } else {
       capability = RuntimeCapability(
         type: type,
@@ -263,10 +288,13 @@ class CapabilityResolver {
 
     // 解析可执行文件路径
     String? executablePath;
+    var installedByWhich = false;
     try {
-      executablePath =
+      final resolved =
           await _resolveExecutable(spec.binary, environment,
               runtimeId: runtimeId);
+      executablePath = resolved.path;
+      installedByWhich = resolved.byWhich;
     } catch (_) {}
 
     if (executablePath == null) {
@@ -288,17 +316,22 @@ class CapabilityResolver {
 
     final runnerResult = await _runner.run(request);
 
+    // 可执行文件已解析成功（which 命中），但执行失败：
+    // 属于「已安装但异常」（broken），必须携带 executable 供上层区分，
+    // 避免被误判为「未安装 → 可安装」。
     if (runnerResult.timedOut) {
-      return const _DetectResult(
+      return _DetectResult(
         success: false,
         error: '检测超时 (10s)',
+        executable: installedByWhich ? executablePath : null,
       );
     }
 
     if (runnerResult.cancelled) {
-      return const _DetectResult(
+      return _DetectResult(
         success: false,
         error: '检测被取消',
+        executable: installedByWhich ? executablePath : null,
       );
     }
 
@@ -306,6 +339,7 @@ class CapabilityResolver {
       return _DetectResult(
         success: false,
         error: runnerResult.error ?? '启动失败',
+        executable: installedByWhich ? executablePath : null,
       );
     }
 
@@ -313,6 +347,7 @@ class CapabilityResolver {
       return _DetectResult(
         success: false,
         error: '命令返回非零退出码 (exit=${runnerResult.exitCode})',
+        executable: installedByWhich ? executablePath : null,
       );
     }
 
@@ -327,7 +362,11 @@ class CapabilityResolver {
   }
 
   /// 解析可执行文件路径
-  Future<String?> _resolveExecutable(
+  ///
+  /// 返回 [_ResolvedExecutable]：
+  ///   - which 命中 → path=真实路径, byWhich=true
+  ///   - which 未命中 → path=binary 名称（执行名 fallback）, byWhich=false
+  Future<_ResolvedExecutable> _resolveExecutable(
     String binary,
     Map<String, String> environment, {
     String? runtimeId,
@@ -347,12 +386,12 @@ class CapabilityResolver {
     if (whichResult.isSuccess) {
       final path = whichResult.stdout.trim();
       if (path.isNotEmpty && !path.contains('not found')) {
-        return path;
+        return _ResolvedExecutable(path, true);
       }
     }
 
-    // fallback: 直接使用 binary 名称
-    return binary;
+    // fallback: 直接使用 binary 名称（保持原执行行为）
+    return _ResolvedExecutable(binary, false);
   }
 
   /// 从命令行输出中解析版本号

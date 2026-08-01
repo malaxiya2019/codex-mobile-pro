@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/detector/detection_result.dart';
 import '../../../core/detector/detectors/network_detector.dart';
+import '../../../runtime/environment_doctor.dart';
 import '../../../runtime/install_models.dart';
 import '../../../runtime/runtime_dependency.dart';
 import '../../../runtime/runtime_detector.dart';
@@ -16,6 +17,7 @@ enum DeployState {
   completed,  // 检测完成
   installing, // 安装中
   verifying,  // 验证中
+  repairing,  // 修复环境中
   error,      // 出错（检测失败 或 部署失败）
 }
 
@@ -65,6 +67,7 @@ class DeployStatus {
     if (state == DeployState.checking) return '正在检测...';
     if (state == DeployState.installing) return currentProgress?.message ?? '安装中...';
     if (state == DeployState.verifying) return '验证环境中...';
+    if (state == DeployState.repairing) return '修复环境中...';
     if (state == DeployState.error) return '出错: $errorMessage';
 
     if (detectionResult != null) return detectionResult!.summary;
@@ -73,6 +76,9 @@ class DeployStatus {
 
   /// 是否有安装中的进度
   bool get isInstalling => state == DeployState.installing;
+
+  /// 是否正在修复环境
+  bool get isRepairing => state == DeployState.repairing;
 
   /// 网络是否正常（用于安装前预检）
   bool get networkOk {
@@ -277,6 +283,46 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
     // 成功后重新检测（单工具路径不经过 _startInstallCoding 的 detectAll）
     await checkAll();
     state = state.copyWith(installResults: resultMap);
+  }
+
+  /// 🔧 一键修复环境
+  ///
+  /// 统一环境诊断/修复：
+  ///   PRoot → /tmp → dpkg interrupted → apt → 重新检测。
+  /// 修复失败不会置空已有检测结果，仅进入 error 并展示报告摘要。
+  Future<DoctorReport> repairEnvironment() async {
+    state = state.copyWith(state: DeployState.repairing);
+    try {
+      final mgr = RuntimeManager.instance;
+      final doctor = EnvironmentDoctor(
+        runner: mgr.processRunner,
+        linux: mgr.linuxProvider,
+      );
+      final report = await doctor.runFullRepair();
+      // 修复完成后刷新检测结果
+      await checkAll();
+      state = state.copyWith(
+        state: report.allPassed
+            ? DeployState.completed
+            : DeployState.error,
+        errorMessage: report.allPassed
+            ? null
+            : '环境修复未完全成功:\n${report.summary}',
+      );
+      return report;
+    } catch (e) {
+      state = state.copyWith(
+        state: DeployState.error,
+        errorMessage: '环境修复失败: $e',
+      );
+      return DoctorReport([
+        DoctorCheck(
+          name: 'doctor',
+          passed: false,
+          detail: '异常: $e',
+        ),
+      ]);
+    }
   }
 
   /// 验证环境

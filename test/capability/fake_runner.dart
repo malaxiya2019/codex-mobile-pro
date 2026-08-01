@@ -38,6 +38,7 @@ class FakeCommandResult {
 ///   final result = await runner.run(RuntimeProcessRequest(executable: 'node', arguments: ['--version']));
 class FakeProcessRunner extends RuntimeProcessRunner {
   final Map<String, FakeCommandResult> _results = {};
+  final Map<String, List<FakeCommandResult>> _sequences = {};
   final List<RuntimeProcessRequest> _executedRequests = [];
   int _callCount = 0;
 
@@ -92,9 +93,19 @@ class FakeProcessRunner extends RuntimeProcessRunner {
     );
   }
 
+  /// 注册序列响应（按调用顺序依次返回，耗尽后返回最后一个）
+  ///
+  /// 用于模拟「第一次失败、修复后复验成功」等场景。
+  void whenSequence(String executableOrKey, List<FakeCommandResult> results) {
+    // 序列覆盖同名单值预设（避免 _results 优先级更高导致序列不生效）
+    _results.remove(executableOrKey);
+    _sequences[executableOrKey] = List.of(results);
+  }
+
   /// 清空所有预设
   void reset() {
     _results.clear();
+    _sequences.clear();
     _executedRequests.clear();
     _callCount = 0;
   }
@@ -114,7 +125,8 @@ class FakeProcessRunner extends RuntimeProcessRunner {
     // 构建 key：先尝试完整匹配（绝对路径），
     // 再尝试 basename 匹配（模拟真实 shell 行为：which 解析出绝对路径后，
     // 执行 --version 的效果与直接执行裸名相同）。
-    final fullKey = '${request.executable} ${request.arguments.join(' ')}'.trim();
+    final fullKey =
+        '${request.executable} ${request.arguments.join(' ')}'.trim();
     final basename = request.executable.split('/').last;
     final baseKey = '$basename ${request.arguments.join(' ')}'.trim();
     final result = _results[fullKey] ??
@@ -123,19 +135,35 @@ class FakeProcessRunner extends RuntimeProcessRunner {
         _results[basename];
 
     if (result != null) {
-      return RuntimeProcessResult(
-        exitCode: result.exitCode,
-        stdout: result.stdout,
-        stderr: result.stderr,
-        duration: const Duration(milliseconds: 5),
-        timedOut: result.timedOut,
-        cancelled: result.cancelled,
-        error: result.error,
-        request: request,
-      );
+      return _toResult(result, request);
+    }
+
+    // 序列响应
+    final seq = _sequences[fullKey] ??
+        _sequences[baseKey] ??
+        _sequences[request.executable] ??
+        _sequences[basename];
+    if (seq != null && seq.isNotEmpty) {
+      final seqResult = seq.length == 1 ? seq.first : seq.removeAt(0);
+      return _toResult(seqResult, request);
     }
 
     // 未预设 → 真实执行（仅用于集成测试）
     return super.run(request);
+  }
+
+  /// 将预设结果转换为 RuntimeProcessResult
+  RuntimeProcessResult _toResult(
+      FakeCommandResult result, RuntimeProcessRequest request) {
+    return RuntimeProcessResult(
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      duration: const Duration(milliseconds: 5),
+      timedOut: result.timedOut,
+      cancelled: result.cancelled,
+      error: result.error,
+      request: request,
+    );
   }
 }

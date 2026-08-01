@@ -57,6 +57,12 @@ class FakeToolchainAdapter implements IExecutionAdapter {
   bool failAptUpdateStart = false;
   bool failAptInstall = false;
   bool failNpmInstall = false;
+
+  /// 模拟 dpkg interrupted（dpkg --audit 报错，--configure -a 修复后恢复）
+  bool dpkgInterrupted = false;
+
+  /// 模拟 dpkg --configure -a 永远失败（不可恢复场景）
+  bool dpkgConfigureAlwaysFails = false;
   final List<String> log = [];
 
   @override
@@ -73,6 +79,34 @@ class FakeToolchainAdapter implements IExecutionAdapter {
     final exe = request.executable;
     final args = request.arguments;
     log.add('$exe ${args.join(' ')}');
+
+    // dpkg 健康（Phase 8：aptInstall 前置 dpkg --audit 检查）
+    if (exe == '/usr/bin/dpkg') {
+      if (args.contains('--audit')) {
+        if (dpkgInterrupted) {
+          return RuntimeProcessResult(
+            exitCode: 1,
+            stderr: 'dpkg: error: dpkg was interrupted, you must manually '
+                "run 'dpkg --configure -a' to correct the problem.",
+            request: request,
+          );
+        }
+        return _ok(request);
+      }
+      if (args.contains('--configure')) {
+        if (dpkgConfigureAlwaysFails) {
+          return RuntimeProcessResult(
+            exitCode: 1,
+            stderr: 'dpkg: error: cannot open lock file - open (13: '
+                'Permission denied)',
+            request: request,
+          );
+        }
+        dpkgInterrupted = false; // 修复完成
+        return _ok(request);
+      }
+      return _ok(request);
+    }
 
     if (exe == '/usr/bin/apt-get') {
       if (args.contains('update')) {
@@ -384,6 +418,39 @@ void main() {
           .where((l) => l.contains('/usr/bin/apt-get install'))
           .length;
       expect(installCalls, greaterThanOrEqualTo(2));
+    });
+
+    test('apt install 前置 dpkg interrupted → 自动 dpkg --configure -a → 安装成功',
+        () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.dpkgInterrupted = true; // 真机遗留状态：dpkg interrupted
+
+      final installer = NodeJsInstaller();
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue, reason: '${result.errorMessage}');
+      // 修复动作必须真实执行（不删除 lock）
+      final fixCalls = f.adapter.log
+          .where((l) => l.contains('/usr/bin/dpkg --configure -a'))
+          .length;
+      expect(fixCalls, greaterThanOrEqualTo(1));
+      expect(f.adapter.dpkgInterrupted, isFalse, reason: '修复后应恢复健康');
+    });
+
+    test('apt install 前置 dpkg interrupted 且修复失败 → 结构化错误', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.dpkgInterrupted = true;
+      // configure -a 永远失败（模拟 lock 无法获取等不可恢复场景）
+      f.adapter.dpkgConfigureAlwaysFails = true;
+
+      final installer = NodeJsInstaller();
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isFalse);
+      expect(result.phase, InstallPhase.failed);
+      expect(result.errorMessage, contains('dpkg'));
     });
 
     test('apt install 非网络失败（unable to locate）→ 不切换源、不误报网络分类', () async {

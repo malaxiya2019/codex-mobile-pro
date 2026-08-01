@@ -318,6 +318,11 @@ class _DeployPageState extends ConsumerState<DeployPage> {
       iconData = Icons.verified;
       title = '验证环境中';
       subtitle = '请稍候...';
+    } else if (status.state == DeployState.repairing) {
+      cardColor = Colors.blue;
+      iconData = Icons.build_circle;
+      title = '🔧 修复环境中';
+      subtitle = 'PRoot → /tmp → dpkg → apt，请稍候...';
     } else if (status.state == DeployState.completed &&
         status.detectionResult != null) {
       final detection = status.detectionResult!;
@@ -696,12 +701,33 @@ class _DeployPageState extends ConsumerState<DeployPage> {
         if (codingMissing > 0 && !status.isInstalling)
           const SizedBox(height: 8),
 
+        // 修复环境（PRoot / tmp / dpkg / apt 一键修复）
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: status.isInstalling || status.isRepairing
+                ? null
+                : () {
+                    ref
+                        .read(deployStatusProvider.notifier)
+                        .repairEnvironment();
+                  },
+            icon: const Icon(Icons.build_circle, size: 18),
+            label: const Text('🔧 修复环境'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 44),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
         // 验证 & 重新检测
         Row(
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: status.isInstalling
+                onPressed: status.isInstalling || status.isRepairing
                     ? null
                     : () async {
                         final results = await ref
@@ -719,7 +745,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
             const SizedBox(width: 12),
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: status.isInstalling
+                onPressed: status.isInstalling || status.isRepairing
                     ? null
                     : () {
                         ref.read(deployStatusProvider.notifier).checkAll();
@@ -873,7 +899,8 @@ class _DeployPageState extends ConsumerState<DeployPage> {
     // 判断是否显示安装按钮
     final showInstall = result.status == DetectionStatus.missing &&
         _canInstall(result.id) &&
-        !status.isInstalling;
+        !status.isInstalling &&
+        !status.isRepairing;
 
     return Card(
       elevation: 0,
@@ -1014,6 +1041,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
     switch (id) {
       case 'ubuntu':
       case 'node':
+      case 'npm':
       case 'git':
       case 'python':
       case 'codex':

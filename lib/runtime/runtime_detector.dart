@@ -103,14 +103,25 @@ DetectionResult _capabilityToResult(
     RuntimeCapability cap,
     int durationMs,
     ) {
+  // broken：可执行文件已解析成功（已安装）但执行失败 → error 状态。
+  // 不能判定为 missing（否则 UI 显示「可安装」且安装按钮禁用）。
+  // 例如 npm 随 Node.js 安装但 exit=127（dpkg interrupted 遗留）。
+  final status = cap.available
+      ? DetectionStatus.installed
+      : (cap.health == CapabilityHealth.degraded && cap.executable != null)
+          ? DetectionStatus.error
+          : DetectionStatus.missing;
+
   return DetectionResult(
     id: mapping.id,
     name: mapping.name,
     icon: mapping.icon,
-    status: cap.available ? DetectionStatus.installed : DetectionStatus.missing,
+    status: status,
     version: cap.version,
     path: cap.executable ?? cap.path,
-    errorMessage: cap.reason,
+    errorMessage: status == DetectionStatus.error
+        ? '已安装但执行失败: ${cap.reason ?? "未知错误"}'
+        : cap.reason,
     durationMs: durationMs,
     category: mapping.category,
     subCategory: mapping.subCategory,
