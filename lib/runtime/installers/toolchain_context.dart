@@ -124,6 +124,7 @@ class ToolchainContext {
         code: DeployErrorCode.aptUpdateFailed,
         message: 'Ubuntu apt 源更新失败',
         detail: 'exit=${result.exitCode}\n'
+            '${result.error != null ? "启动错误: ${result.error}\n" : ""}'
             'stdout: ${result.stdout.trim()}\n'
             'stderr: ${result.stderr.trim()}',
         userSuggestion: '请检查网络后重试；若持续失败可切换 Ubuntu 镜像源',
@@ -152,6 +153,7 @@ class ToolchainContext {
         code: DeployErrorCode.aptInstallFailed,
         message: 'Ubuntu 包安装失败: ${packages.join(', ')}',
         detail: 'exit=${result.exitCode}\n'
+            '${result.error != null ? "启动错误: ${result.error}\n" : ""}'
             'stdout: ${result.stdout.trim()}\n'
             'stderr: ${result.stderr.trim()}',
         userSuggestion: '可尝试重新初始化后重试，或检查 apt 源是否可用',
@@ -181,6 +183,7 @@ class ToolchainContext {
         code: DeployErrorCode.npmInstallFailed,
         message: 'npm 全局安装失败: ${packages.join(', ')}',
         detail: 'exit=${result.exitCode}\n'
+            '${result.error != null ? "启动错误: ${result.error}\n" : ""}'
             'stdout: ${result.stdout.trim()}\n'
             'stderr: ${result.stderr.trim()}',
         userSuggestion: '请检查网络后重试',

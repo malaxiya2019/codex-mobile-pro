@@ -180,13 +180,17 @@ class LocalProcessExecution implements IExecutionAdapter {
   }
 
   /// 将 ProcessException 转为人类可读的消息
+  ///
+  /// 注意：Dart 3.12 起 ProcessException 不再暴露 osError/errno，
+  /// 因此保留完整 toString（含 Command 行）作为诊断上下文，
+  /// 便于真机区分「无执行权限」「文件不存在」「ABI 不匹配」。
   static String _processExceptionMessage(ProcessException e) {
     final msg = e.toString();
     if (msg.contains('No such file or directory')) {
-      return '可执行文件不存在: ${e.executable}';
+      return '可执行文件不存在: ${e.executable}\n$msg';
     }
     if (msg.contains('Permission denied')) {
-      return '权限不足: ${e.executable}';
+      return '权限不足: ${e.executable}\n$msg';
     }
     return msg;
   }

@@ -17,6 +17,7 @@ library;
 
 import 'dart:io';
 
+import '../../core/logger/log_service.dart';
 import '../provider/linux_runtime_provider.dart';
 import 'process_runner.dart';
 import 'runner_models.dart';
@@ -45,16 +46,26 @@ class LinuxExecutionAdapter implements IExecutionAdapter {
 
     final paths = await _provider.resolvePaths();
 
-    // ─── Runtime 未就绪 → 结构化错误 ───────────────────────────
-    final prootReady = File(paths.prootExecutable).existsSync();
-    final bashReady = File(
+    // ─── 关键文件状态（诊断用，不依赖 existsSync 猜测）──────────
+    final prootStat = _statInfo(paths.prootExecutable);
+    final loaderStat = _statInfo(paths.loaderPath);
+    final bashPath = _firstExisting([
       '${paths.rootfsDir}/usr/bin/bash',
-    ).existsSync() ||
-        File('${paths.rootfsDir}/bin/bash').existsSync();
-    if (!prootReady || !bashReady) {
+      '${paths.rootfsDir}/bin/bash',
+    ]);
+    final bashStat = bashPath != null ? _statInfo(bashPath) : '缺失';
+
+    // ─── Runtime 未就绪 → 结构化错误（附真实文件状态）──────────
+    final prootReady = prootStat != null;
+    final loaderReady = loaderStat != null;
+    final bashReady = bashPath != null;
+    if (!prootReady || !bashReady || !loaderReady) {
       return RuntimeProcessResult(
         exitCode: -1,
-        error: 'Linux Runtime 未初始化（proot=$prootReady, rootfs=$bashReady）',
+        error: 'Linux Runtime 未初始化\n'
+            '[proot] $prootStat\n'
+            '[loader] $loaderStat\n'
+            '[bash] $bashStat',
         request: request,
       );
     }
@@ -92,7 +103,55 @@ class LinuxExecutionAdapter implements IExecutionAdapter {
       label: 'proot:${request.label ?? request.executable}',
     );
 
-    return _inner.execute(wrapped);
+    final result = await _inner.execute(wrapped);
+
+    // ─── 启动失败 → 记录完整诊断，避免真实原因被吞 ──────────────
+    if (result.failedToStart) {
+      LogService.error(
+        'LinuxExec',
+        'PRoot 启动失败: ${result.error}\n'
+        'argv=${wrapped.executable} ${wrapped.arguments.join(' ')}\n'
+        '[proot] $prootStat\n'
+        '[loader] $loaderStat\n'
+        '[bash] $bashStat',
+      );
+      return RuntimeProcessResult(
+        exitCode: result.exitCode,
+        error: '${result.error}\n'
+            '[诊断] proot=$prootStat\n'
+            '[诊断] loader=$loaderStat\n'
+            '[诊断] bash=$bashStat',
+        stdout: result.stdout,
+        stderr: result.stderr,
+        duration: result.duration,
+        timedOut: result.timedOut,
+        cancelled: result.cancelled,
+        request: request,
+      );
+    }
+    return result;
+  }
+
+  /// 返回文件状态摘要（type/size/mode/exec 位）；不存在返回 null
+  static String? _statInfo(String p) {
+    try {
+      final stat = FileStat.statSync(p);
+      if (stat.type == FileSystemEntityType.notFound) return null;
+      final mode = stat.mode;
+      final exec = (mode & 0x49) != 0; // owner/group/other exec 任一
+      return 'type=${stat.type} size=${stat.size} '
+          'mode=${mode.toRadixString(8)} exec=$exec';
+    } catch (e) {
+      return 'stat失败: $e';
+    }
+  }
+
+  /// 返回第一个存在的路径（按顺序）
+  static String? _firstExisting(List<String> candidates) {
+    for (final c in candidates) {
+      if (File(c).existsSync()) return c;
+    }
+    return null;
   }
 
   /// 将 rootfs 绝对路径转换为 proot 内部路径

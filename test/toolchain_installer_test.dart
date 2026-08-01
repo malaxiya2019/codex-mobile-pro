@@ -43,6 +43,9 @@ import 'package:flutter_test/flutter_test.dart';
 class FakeToolchainAdapter implements IExecutionAdapter {
   final Map<String, String> installedVersions = {};
   bool failAptUpdate = false;
+
+  /// apt-get update 模拟「进程启动失败」（ProcessException → exit=-1 空输出）
+  bool failAptUpdateStart = false;
   bool failAptInstall = false;
   bool failNpmInstall = false;
   final List<String> log = [];
@@ -64,6 +67,14 @@ class FakeToolchainAdapter implements IExecutionAdapter {
 
     if (exe == '/usr/bin/apt-get') {
       if (args.contains('update')) {
+        if (failAptUpdateStart) {
+          // 模拟 Process.start 抛 ProcessException（PRoot 无法启动）
+          return RuntimeProcessResult(
+            exitCode: -1,
+            error: '权限不足: /tmp/proot (errno=13)',
+            request: request,
+          );
+        }
         if (failAptUpdate) {
           return RuntimeProcessResult(
             exitCode: 100,
@@ -215,6 +226,23 @@ void main() {
       expect(result.success, isFalse);
       expect(result.phase, InstallPhase.failed);
       expect(result.errorMessage, contains('apt'));
+    });
+
+    test('apt-get update 启动失败(exit=-1) → detail 暴露真实启动错误', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.failAptUpdateStart = true;
+
+      final installer = NodeJsInstaller();
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isFalse);
+      expect(result.phase, InstallPhase.failed);
+      // 回归：ProcessException 真实原因（result.error）必须可见，
+      // 不能只剩无信息量的 exit=-1 stdout="" stderr=""
+      expect(result.errorMessage, contains('apt'));
+      expect(result.errorMessage, contains('权限不足'));
+      expect(result.errorMessage, contains('errno=13'));
     });
 
     test('apt install 失败 → FAILED（aptInstallFailed，非“暂不支持”）',
