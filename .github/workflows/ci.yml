@@ -131,6 +131,25 @@ jobs:
         # 配合固定 keystore 实现无缝覆盖升级（无需卸载重装）。
         run: flutter build apk --debug --build-number=${{ github.run_number }} --build-name=1.0.0
 
+      - name: Verify APK signature (must match fixed keystore)
+        run: |
+          EXPECTED="b1307e1488fe7cad36f0cac5ab2d1f0ce581e0c06afc74d391584a6bf2b93d3"
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          APKSIGNER=$(ls "$SDK_ROOT"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "⚠️  apksigner 未找到，跳过签名校验"
+            exit 0
+          fi
+          ACTUAL=$("$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-debug.apk \
+            | grep "certificate SHA-256 digest" | awk '{print $NF}')
+          echo "expected: $EXPECTED"
+          echo "actual:   $ACTUAL"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "❌ APK 签名证书与固定 keystore 不匹配！覆盖安装会失败。"
+            exit 1
+          fi
+          echo "✅ APK 签名证书匹配固定 keystore"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

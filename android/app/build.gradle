@@ -5,6 +5,20 @@ plugins {
 }
 
 android {
+    // ── 固定 debug 签名（仓库 android/debug.keystore）──
+    // 之前依赖 AGP 默认 ~/.android/debug.keystore，在 GitHub CI 上
+    // AGP 每次构建都会自动生成随机 keystore，导致每个 APK 签名都不同，
+    // 必须卸载才能安装新版。这里显式指定 storeFile，确保所有构建
+    // （本地/CI）使用同一证书，支持覆盖安装升级。
+    signingConfigs {
+        debug {
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+            storeFile file('../debug.keystore')
+            storePassword 'android'
+        }
+    }
+
     namespace "com.codexmobile.app"
     compileSdk 36
     ndkVersion flutter.ndkVersion
