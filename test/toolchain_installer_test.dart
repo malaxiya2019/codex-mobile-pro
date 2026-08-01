@@ -44,6 +44,15 @@ class FakeToolchainAdapter implements IExecutionAdapter {
   final Map<String, String> installedVersions = {};
   bool failAptUpdate = false;
 
+  /// 前 N 次 apt-get update 模拟「网络获取失败」（Failed to fetch → exit=100），
+  /// 用于验证自动切换备用 apt 源后成功。
+  int failAptUpdateAttempts = 0;
+  int _aptUpdateCalls = 0;
+
+  /// 前 N 次 apt-get install 模拟「下载 .deb 失败」（Failed to fetch → exit=100）。
+  int failAptInstallAttempts = 0;
+  int _aptInstallCalls = 0;
+
   /// apt-get update 模拟「进程启动失败」（ProcessException → exit=-1 空输出）
   bool failAptUpdateStart = false;
   bool failAptInstall = false;
@@ -75,16 +84,40 @@ class FakeToolchainAdapter implements IExecutionAdapter {
             request: request,
           );
         }
-        if (failAptUpdate) {
+        _aptUpdateCalls++;
+        if (failAptUpdate || _aptUpdateCalls <= failAptUpdateAttempts) {
+          // 真实根因复刻：TCP 无法连接 ports.ubuntu.com:80 → exit=100
           return RuntimeProcessResult(
             exitCode: 100,
-            stderr: 'E: Failed to fetch ... 404',
+            stderr:
+                'Err:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease\n'
+                '  Unable to connect to ports.ubuntu.com:http: '
+                '[IP: 91.189.92.19 80]\n'
+                'E: Failed to fetch '
+                'http://ports.ubuntu.com/ubuntu-ports/dists/noble/InRelease '
+                'Unable to connect to ports.ubuntu.com:http: [IP: 91.189.92.19 80]\n'
+                'E: Unable to fetch some archives',
             request: request,
           );
         }
         return _ok(request);
       }
       if (args.contains('install')) {
+        _aptInstallCalls++;
+        if (failAptInstallAttempts > 0 &&
+            _aptInstallCalls <= failAptInstallAttempts) {
+          // 下载 .deb 阶段网络失败（与 update 已成功并不矛盾：同主机间歇性 TCP）
+          return RuntimeProcessResult(
+            exitCode: 100,
+            stderr: 'E: Failed to fetch '
+                'http://ports.ubuntu.com/ubuntu-ports/pool/main/n/nodejs/'
+                'nodejs_18.19.1+dfsg-6ubuntu4_arm64.deb '
+                'Unable to connect to ports.ubuntu.com:http: [IP: 91.189.92.19 80]\n'
+                'E: Unable to fetch some archives, maybe run apt-get update '
+                'or try with --fix-missing?',
+            request: request,
+          );
+        }
         if (failAptInstall) {
           return RuntimeProcessResult(
             exitCode: 100,
@@ -103,9 +136,11 @@ class FakeToolchainAdapter implements IExecutionAdapter {
               installedVersions['/usr/bin/git'] = '2.43.0';
             case 'python3':
               installedVersions['/usr/bin/python3'] = '3.12.3';
-              installedVersions['/usr/bin/pip3'] = 'pip 24.0 from /usr/lib/python3/dist-packages (python 3.12)';
+              installedVersions['/usr/bin/pip3'] =
+                  'pip 24.0 from /usr/lib/python3/dist-packages (python 3.12)';
             case 'python3-pip':
-              installedVersions['/usr/bin/pip3'] = 'pip 24.0 from /usr/lib/python3/dist-packages (python 3.12)';
+              installedVersions['/usr/bin/pip3'] =
+                  'pip 24.0 from /usr/lib/python3/dist-packages (python 3.12)';
           }
         }
         return _ok(request);
@@ -132,7 +167,9 @@ class FakeToolchainAdapter implements IExecutionAdapter {
       }
       // npm --version
       final v = installedVersions['/usr/bin/npm'];
-      return v != null ? _ok(request, v) : RuntimeProcessResult(exitCode: 127, request: request);
+      return v != null
+          ? _ok(request, v)
+          : RuntimeProcessResult(exitCode: 127, request: request);
     }
 
     // 通用 --version
@@ -161,6 +198,13 @@ class ToolchainFixture {
     final bashDir = Directory('${temp.path}/rootfs/usr/bin');
     bashDir.createSync(recursive: true);
     File('${bashDir.path}/bash').createSync();
+    // 出厂 apt 源（与 App 部署的 noble rootfs tarball 一致）
+    final aptDir = Directory('${temp.path}/rootfs/etc/apt');
+    aptDir.createSync(recursive: true);
+    File('${aptDir.path}/sources.list').writeAsStringSync(
+      'deb [signed-by="/usr/share/keyrings/ubuntu-archive-keyring.gpg"] '
+      'http://ports.ubuntu.com/ubuntu-ports noble main universe multiverse\n',
+    );
 
     adapter = FakeToolchainAdapter();
     runner = RuntimeProcessRunner(adapters: [adapter]);
@@ -208,24 +252,60 @@ void main() {
 
       expect(result.success, isTrue);
       expect(f.adapter.log, contains('/usr/bin/apt-get update'));
-      expect(f.adapter.log,
-          contains('/usr/bin/apt-get install -y nodejs npm'));
+      expect(f.adapter.log, contains('/usr/bin/apt-get install -y nodejs npm'));
       expect(f.adapter.installedVersions['/usr/bin/node'], 'v18.19.1');
       expect(f.adapter.installedVersions['/usr/bin/npm'], '9.2.0');
       expect(result.version, contains('node'));
     });
 
-    test('apt-get update 失败 → FAILED（aptUpdateFailed）', () async {
+    test('apt-get update 网络失败 → 备用源全部失败 → FAILED（APT 下载失败分类）', () async {
       final f = ToolchainFixture();
       addTearDown(f.dispose);
-      f.adapter.failAptUpdate = true;
+      f.adapter.failAptUpdate = true; // 所有源均返回 Failed to fetch
 
       final installer = NodeJsInstaller();
       final result = await installer.install(f.ctx);
 
       expect(result.success, isFalse);
       expect(result.phase, InstallPhase.failed);
-      expect(result.errorMessage, contains('apt'));
+      // 部署中心必须显示真实网络分类，而不是「权限不足」
+      expect(result.errorMessage, contains('APT 下载失败'));
+      expect(result.errorMessage, contains('无法连接 Ubuntu 镜像'));
+      expect(result.errorMessage, isNot(contains('权限不足')));
+      // detail 必须保留已尝试的备用源与真实 stderr
+      expect(result.errorMessage, contains('已尝试源'));
+      expect(result.errorMessage, contains('official-https'));
+      expect(result.errorMessage, contains('tuna'));
+      expect(result.errorMessage, contains('aliyun'));
+      expect(result.errorMessage, contains('Failed to fetch'));
+    });
+
+    test('apt-get update 网络失败 → 自动切换备用源 → 安装成功', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      // 第一次 update 失败（TCP 无法连接官方 HTTP），后续备用源成功
+      f.adapter.failAptUpdateAttempts = 1;
+
+      final installer = NodeJsInstaller();
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(result.version, contains('node'));
+      // 必须真实发生源切换：rootfs /etc/apt/sources.list 被覆盖为备用源
+      final sources =
+          File('${f.temp.path}/rootfs/etc/apt/sources.list').readAsStringSync();
+      expect(sources, contains('https://ports.ubuntu.com/ubuntu-ports'));
+      expect(sources, contains('noble'));
+      // 原始出厂配置已备份
+      expect(
+        File('${f.temp.path}/rootfs/etc/apt/sources.list.orig').existsSync(),
+        isTrue,
+      );
+      // update 被调用至少 2 次（首次失败 + 备用源成功）
+      final updateCalls = f.adapter.log
+          .where((l) => l.contains('/usr/bin/apt-get update'))
+          .length;
+      expect(updateCalls, greaterThanOrEqualTo(2));
     });
 
     test('apt-get update 启动失败(exit=-1) → detail 暴露真实启动错误', () async {
@@ -245,8 +325,7 @@ void main() {
       expect(result.errorMessage, contains('errno=13'));
     });
 
-    test('apt install 失败 → FAILED（aptInstallFailed，非“暂不支持”）',
-        () async {
+    test('apt install 失败 → FAILED（aptInstallFailed，非“暂不支持”）', () async {
       final f = ToolchainFixture();
       addTearDown(f.dispose);
       f.adapter.failAptInstall = true;
@@ -258,6 +337,51 @@ void main() {
       expect(result.phase, InstallPhase.failed);
       expect(result.errorMessage, contains('失败'));
       expect(result.errorMessage, isNot(contains('暂不支持')));
+    });
+
+    test('apt install 下载 .deb 网络失败 → 自动切换备用源 → 安装成功', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      // update 成功，但第一次 install 下载 nodejs .deb 时 TCP 失败
+      f.adapter.failAptInstallAttempts = 1;
+
+      final installer = NodeJsInstaller();
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(result.version, contains('node'));
+      // 已切换为官方 HTTPS 备用源
+      final sources =
+          File('${f.temp.path}/rootfs/etc/apt/sources.list').readAsStringSync();
+      expect(sources, contains('https://ports.ubuntu.com/ubuntu-ports'));
+      // install 至少重试 2 次（首次失败 + 备用源成功）
+      final installCalls = f.adapter.log
+          .where((l) => l.contains('/usr/bin/apt-get install'))
+          .length;
+      expect(installCalls, greaterThanOrEqualTo(2));
+    });
+
+    test('apt install 非网络失败（unable to locate）→ 不切换源、不误报网络分类', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.failAptInstall =
+          true; // stderr: Unable to locate package nodejs
+
+      final installer = NodeJsInstaller();
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isFalse);
+      expect(result.errorMessage, contains('失败'));
+      expect(result.errorMessage, isNot(contains('APT 下载失败')));
+      // 非网络失败不应改写 rootfs apt 源（保持出厂 ports.ubuntu.com）
+      final sources =
+          File('${f.temp.path}/rootfs/etc/apt/sources.list').readAsStringSync();
+      expect(sources, contains('http://ports.ubuntu.com/ubuntu-ports'));
+      expect(sources, isNot(contains('mirrors.')));
+      expect(
+        File('${f.temp.path}/rootfs/etc/apt/sources.list.orig').existsSync(),
+        isFalse,
+      );
     });
   });
 
@@ -282,11 +406,11 @@ void main() {
       final result = await GitInstaller().install(f.ctx);
 
       expect(result.success, isTrue);
-      expect(f.adapter.log.where((l) => l.contains('apt-get install')), isEmpty);
+      expect(
+          f.adapter.log.where((l) => l.contains('apt-get install')), isEmpty);
     });
 
-    test('Python 缺失 → apt install python3+python3-pip → 验证 pip3',
-        () async {
+    test('Python 缺失 → apt install python3+python3-pip → 验证 pip3', () async {
       final f = ToolchainFixture();
       addTearDown(f.dispose);
 
@@ -312,8 +436,10 @@ void main() {
       final result = await installer.install(f.ctx);
 
       expect(result.success, isTrue);
-      expect(f.adapter.log,
-          contains('/usr/bin/npm install -g --no-fund --no-audit @openai/codex'));
+      expect(
+          f.adapter.log,
+          contains(
+              '/usr/bin/npm install -g --no-fund --no-audit @openai/codex'));
       expect(f.adapter.installedVersions['/usr/bin/codex'], '0.9.0');
     });
 
@@ -406,7 +532,8 @@ void main() {
         expect(r.success, isTrue, reason: '${r.tool} 应安装成功');
       }
       // 第一次：全部 apt/npm 执行
-      expect(f.adapter.log.where((l) => l.contains('apt-get install')).length, 3);
+      expect(
+          f.adapter.log.where((l) => l.contains('apt-get install')).length, 3);
       expect(f.adapter.log.where((l) => l.contains('npm install')).length, 2);
 
       // 第二次：全部 SKIP，无任何 apt/npm install（仅 --version 查询）
@@ -435,7 +562,8 @@ void main() {
       // 第一次：node 失败 → git/python 尝试也失败（apt install 失败）
       // codex/mimo 依赖 node 失败 → blocked
       final first = await f.orchestrator.installAll(f.ctx);
-      expect(first.firstWhere((r) => r.tool == RuntimeTool.node).success, isFalse);
+      expect(
+          first.firstWhere((r) => r.tool == RuntimeTool.node).success, isFalse);
       final codexFirst =
           first.firstWhere((r) => r.tool == RuntimeTool.codexCli);
       expect(codexFirst.success, isFalse);
