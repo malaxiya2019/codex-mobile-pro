@@ -14,6 +14,11 @@ on:
   pull_request:
     branches: [main]
 
+# 同分支连续 push 自动取消旧 run，避免排队等待（压缩端到端时间）
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ============================================================
   #  Job 1: 静态分析
@@ -25,13 +30,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: 3.x
+          cache: true
 
       - name: Install dependencies
         run: flutter pub get
@@ -44,49 +50,37 @@ jobs:
   # ============================================================
   test:
     name: 🧪 Tests
-    needs: analyze
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: 3.x
+          cache: true
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Run tests (visible output)
-        run: |
-          flutter test --reporter expanded
-          TEST_EXIT=$?
-          flutter test --machine > test_report.json || true
-          exit $TEST_EXIT
-
-      - name: Upload test report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-report
-          path: test_report.json
+      - name: Run tests
+        run: flutter test --reporter expanded
 
   # ============================================================
   #  Job 3: Android Debug Build
   # ============================================================
   build-android:
     name: 📦 Android Debug Build
-    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Restore fixed debug keystore (stable signing across builds)
         run: |
@@ -100,12 +94,14 @@ jobs:
         with:
           channel: stable
           flutter-version: 3.x
+          cache: true
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
+          cache: gradle
 
       - name: Install CMake (for native pty library)
         run: |
@@ -151,7 +147,7 @@ jobs:
           echo "✅ APK 签名证书匹配固定 keystore"
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: app-debug-apk-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-debug.apk
