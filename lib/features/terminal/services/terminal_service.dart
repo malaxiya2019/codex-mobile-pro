@@ -9,6 +9,7 @@ import '../../../core/logger/log_service.dart';
 import '../../../core/terminal/iterminal_backend.dart';
 import '../../../core/terminal/native_pty_backend.dart';
 import '../../../core/terminal/process_terminal_backend.dart';
+import '../../../runtime/process/guest_cwd.dart';
 import '../../../runtime/runtime_manager.dart';
 import 'ring_buffer.dart';
 
@@ -449,9 +450,11 @@ class TerminalService {
   ///
   /// 优先使用 Linux Runtime（RuntimeManager → LinuxRuntimeProvider → PRoot → /bin/bash）。
   /// Linux Runtime 未就绪时回退到 Android 系统 Shell。
-  Future<ShellInfo> _resolveShellInfo() async {
+  Future<ShellInfo> _resolveShellInfo({String? workingDirectory}) async {
     try {
-      final spec = await RuntimeManager.instance.buildTerminalShellSpec();
+      final spec = await RuntimeManager.instance.buildTerminalShellSpec(
+        workingDirectory: workingDirectory,
+      );
       if (spec != null) {
         LogService.info('Terminal', '  使用 Linux Runtime Shell (PRoot)');
         return ShellInfo(
@@ -477,14 +480,19 @@ class TerminalService {
     await initDefaultBackend();
     LogService.info('Terminal', 'createSession 后端: ${_backend?.runtimeType ?? "null"}');
 
-    // 解析 Shell 来源：
-    //   1. Linux Runtime（PRoot → Ubuntu /bin/bash）— 优先
-    //   2. Android 系统 Shell（/system/bin/sh）— 回退
-    final shellInfo = await _resolveShellInfo();
-
     // 使用 App 私有目录作为默认工作目录
     final appDir = await getApplicationDocumentsDirectory();
     final home = cwd ?? appDir.path;
+
+    // guest cwd（PRoot rootfs 内）：host 路径不得直接作为 guest 工作目录，
+    // 否则 proot 会报 can't chdir(...) in the guest rootfs 并回落到 "/"。
+    // host 侧 workDir（home）仍用于 host chdir，PRoot 侧由 -w guestCwd 控制。
+    final guestCwd = normalizeGuestCwd(home);
+
+    // 解析 Shell 来源：
+    //   1. Linux Runtime（PRoot → Ubuntu /bin/bash）— 优先
+    //   2. Android 系统 Shell（/system/bin/sh）— 回退
+    final shellInfo = await _resolveShellInfo(workingDirectory: guestCwd);
 
     final session = TerminalSession(
       id: const Uuid().v4(),
