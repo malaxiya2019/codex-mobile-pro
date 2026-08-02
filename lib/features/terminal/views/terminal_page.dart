@@ -332,7 +332,9 @@ class _TerminalPageState extends ConsumerState<TerminalPage>
                           maxLines: 4,
                           textInputAction: TextInputAction.send,
                           onChanged: _onCommandChanged,
-                          onSubmitted: _submitCommand,
+                          // onSubmitted 回调携带当前文本，_submitCommand 内部
+                          // 从 controller 读取，忽略入参即可
+                          onSubmitted: (_) => _submitCommand(),
                         ),
                       ),
                     ),
