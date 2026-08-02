@@ -409,14 +409,80 @@ class EnvironmentDoctor {
 
     if (!stillInterrupted) {
       ctx.dpkgHealthy = true;
+      checks.add(const DoctorCheck(
+        name: 'dpkg',
+        passed: true,
+        repaired: true,
+        detail: 'dpkg interrupted 已修复（dpkg --configure -a 成功）',
+      ));
+      return checks;
+    }
+
+    // 3. configure -a 无法恢复（缺 list/md5sums 控制文件等）→ 重装损坏包。
+    //    本地验证：apt-get install --reinstall 可重建控制文件；apt-get -f
+    //    install 无效（apt 不视为依赖 broken），故逐包显式 reinstall。
+    final broken = _dpkgBrokenPackages(reText);
+    if (broken.isEmpty) {
+      checks.add(DoctorCheck(
+        name: 'dpkg',
+        passed: false,
+        repaired: true,
+        detail: 'dpkg --configure -a 后仍存在 interrupted 状态:\n$reText',
+      ));
+      return checks;
+    }
+
+    LogService.warning(
+      'EnvironmentDoctor',
+      'dpkg 控制文件缺失，尝试重装损坏包: $broken',
+    );
+    try {
+      await ctx.ensureAptUpdated();
+      final reinstall = await ctx.runInRootfs(
+        '/usr/bin/apt-get',
+        arguments: ['install', '--reinstall', '-y', ...broken],
+        timeout: const Duration(minutes: 10),
+        label: 'doctor:dpkg-reinstall',
+      );
+      if (!reinstall.isSuccess) {
+        checks.add(DoctorCheck(
+          name: 'dpkg',
+          passed: false,
+          repaired: true,
+          detail: '重装损坏包失败: exit=${reinstall.exitCode} '
+              '${reinstall.stderr.trim()}',
+        ));
+        return checks;
+      }
+    } catch (e) {
+      checks.add(DoctorCheck(
+        name: 'dpkg',
+        passed: false,
+        repaired: true,
+        detail: '重装损坏包异常: $e',
+      ));
+      return checks;
+    }
+
+    // 4. 最终复验
+    final finalAudit = await ctx.runInRootfs(
+      '/usr/bin/dpkg',
+      arguments: const ['--audit'],
+      timeout: const Duration(seconds: 60),
+      label: 'doctor:dpkg-final-audit',
+    );
+    final finalText = '${finalAudit.stderr}\n${finalAudit.stdout}';
+    final clean = !_hasDpkgInterrupted(finalAudit.exitCode, finalText);
+    if (clean) {
+      ctx.dpkgHealthy = true;
     }
     checks.add(DoctorCheck(
       name: 'dpkg',
-      passed: !stillInterrupted,
+      passed: clean,
       repaired: true,
-      detail: stillInterrupted
-          ? 'dpkg --configure -a 后仍存在 interrupted 状态:\n$reText'
-          : 'dpkg interrupted 已修复（dpkg --configure -a 成功）',
+      detail: clean
+          ? 'dpkg 已修复：重装损坏包 $broken 后 audit 干净'
+          : 'dpkg 重装后仍异常:\n$finalText',
     ));
     return checks;
   }
@@ -428,7 +494,45 @@ class EnvironmentDoctor {
     return lower.contains('interrupted') ||
         lower.contains('in a mess') ||
         lower.contains('requires manual intervention') ||
-        lower.contains('serious problems');
+        lower.contains('serious problems') ||
+        lower.contains('missing the list control file') ||
+        lower.contains('missing the md5sums control file') ||
+        lower.contains('need to be reinstalled') ||
+        lower.contains('must be reinstalled');
+  }
+
+  /// 解析需要重装的损坏包名列表（missing list/md5sums control file 等）。
+  ///
+  /// 支持两种输出格式：
+  ///   - dpkg --audit: "dpkg-dev             Debian package development tools"
+  ///   - apt 报错:     "dpkg-dev (no description available)"
+  /// 触发行（含 reinstalled）之后、下一个空行之前的包名行。
+  static List<String> _dpkgBrokenPackages(String text) {
+    final result = <String>[];
+    var inSection = false;
+    for (final line in text.split('\n')) {
+      if (line.toLowerCase().contains('reinstalled')) {
+        inSection = true;
+        continue;
+      }
+      if (!inSection) continue;
+      if (line.trim().isEmpty) {
+        inSection = false;
+        continue;
+      }
+      final trimmed = line.trim();
+      // 跳过段落头（以冒号结尾的标题行）
+      if (trimmed.endsWith(':')) continue;
+      final name = trimmed
+          .split(RegExp(r'\s+'))
+          .first
+          .replaceAll(RegExp(r'[(),]'), '');
+      if (RegExp(r'^[a-zA-Z0-9+._-]+$').hasMatch(name) &&
+          !result.contains(name)) {
+        result.add(name);
+      }
+    }
+    return result;
   }
 
   // ─── apt recovery ────────────────────────────────────────────

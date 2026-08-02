@@ -327,6 +327,101 @@ void main() {
     });
   });
 
+    test('缺 list/md5sums 控制文件 → 检测到 → 重装损坏包 → audit 干净',
+        () async {
+      setUpHealthy();
+      const brokenText = 'The following packages are missing the list control '
+          'file in the database, they need to be reinstalled:\n'
+          ' dpkg-dev             Debian package development tools\n'
+          'The following packages are missing the md5sums control file in '
+          'the database, they need to be reinstalled:\n'
+          ' dpkg-dev             Debian package development tools\n';
+      // audit：损坏 → configure -a 后复验仍损坏 → 重装后最终复验干净
+      fakeRunner.whenSequence('dpkg --audit', [
+        const FakeCommandResult(stdout: brokenText),
+        const FakeCommandResult(stdout: brokenText),
+        const FakeCommandResult(),
+      ]);
+      fakeRunner.when('dpkg --configure -a', const FakeCommandResult());
+      fakeRunner.when('apt-get update', const FakeCommandResult());
+      fakeRunner.when(
+          'apt-get install --reinstall -y dpkg-dev',
+          const FakeCommandResult(stdout: 'Setting up dpkg-dev ...'));
+
+      final report = await doctor.runFullRepair();
+
+      final dpkg = report.checks.firstWhere((c) => c.name == 'dpkg');
+      expect(dpkg.passed, true, reason: report.summary);
+      expect(dpkg.repaired, true);
+      expect(dpkg.detail, contains('重装损坏包'));
+      // apt-get install --reinstall -y dpkg-dev 确实被执行
+      final ranReinstall = fakeRunner.executedRequests.any(
+        (r) =>
+            r.executable.endsWith('apt-get') &&
+            r.arguments.join(' ') == 'install --reinstall -y dpkg-dev',
+      );
+      expect(ranReinstall, true);
+      expect(report.allPassed, true, reason: report.summary);
+    });
+
+    test('重装损坏包失败 → dpkg 未恢复，安全中断后续流程', () async {
+      setUpHealthy();
+      const brokenText = 'The following packages are missing the list control '
+          'file in the database, they need to be reinstalled:\n'
+          ' dpkg-dev             Debian package development tools\n';
+      fakeRunner.whenSequence('dpkg --audit', [
+        const FakeCommandResult(stdout: brokenText),
+        const FakeCommandResult(stdout: brokenText),
+      ]);
+      fakeRunner.when('dpkg --configure -a', const FakeCommandResult());
+      fakeRunner.when('apt-get update', const FakeCommandResult());
+      fakeRunner.when(
+          'apt-get install --reinstall -y dpkg-dev',
+          const FakeCommandResult(
+            exitCode: 1,
+            stderr: 'E: dpkg was interrupted, you must manually run '
+                "'dpkg --configure -a' to correct the problem.",
+          ));
+
+      final report = await doctor.runFullRepair();
+
+      final dpkg = report.checks.firstWhere((c) => c.name == 'dpkg');
+      expect(dpkg.passed, false);
+      expect(dpkg.detail, contains('重装损坏包失败'));
+      // 安全中断：后续 apt / node / npm / git / python3 一律不出现
+      final names = report.checks.map((c) => c.name).toList();
+      expect(names, isNot(contains('apt')));
+      expect(names, isNot(contains('node')));
+      expect(names, isNot(contains('npm')));
+      expect(names, isNot(contains('git')));
+      expect(names, isNot(contains('python3')));
+    });
+
+    test('重装后 audit 仍异常 → dpkg 失败（不误判成功）', () async {
+      setUpHealthy();
+      const brokenText = 'The following packages are missing the list control '
+          'file in the database, they need to be reinstalled:\n'
+          ' dpkg-dev             Debian package development tools\n';
+      // 三次 audit 全部报损坏（重装未能恢复）
+      fakeRunner.whenSequence('dpkg --audit', [
+        const FakeCommandResult(stdout: brokenText),
+        const FakeCommandResult(stdout: brokenText),
+        const FakeCommandResult(stdout: brokenText),
+      ]);
+      fakeRunner.when('dpkg --configure -a', const FakeCommandResult());
+      fakeRunner.when('apt-get update', const FakeCommandResult());
+      fakeRunner.when(
+          'apt-get install --reinstall -y dpkg-dev',
+          const FakeCommandResult(stdout: 'Setting up dpkg-dev ...'));
+
+      final report = await doctor.runFullRepair();
+
+      final dpkg = report.checks.firstWhere((c) => c.name == 'dpkg');
+      expect(dpkg.passed, false);
+      expect(dpkg.detail, contains('dpkg 重装后仍异常'));
+      expect(report.allPassed, false);
+    });
+
   group('EnvironmentDoctor — npm 补装与 Capability 独立映射', () {
     test('node 已装、npm 缺失 → 仅补装 npm，不重装 nodejs', () async {
       setUpHealthy();
