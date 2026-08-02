@@ -50,6 +50,26 @@ class ShellInfo {
 
 /// 默认 Shell 信息
 const _kDefaultShell = ShellInfo();
+// ─── 命令输入解析 ───────────────────────────────────────────────
+
+/// 把输入文本拆成命令行（逐行执行）。
+///
+/// 支持多行粘贴场景：终端输入框是多行 TextField（换行符保留），
+/// 粘贴一段脚本（含注释行、空行）时按行拆分、过滤空行，
+/// 每行作为一条独立命令写入 PTY —— 与真实终端粘贴多行脚本逐行
+/// 执行的行为一致。
+///
+/// 注意：单行 TextField 会经 FilteringTextInputFormatter 删除 \n，
+/// 导致多行脚本粘连（如 'dpkg --configure -aapt'），此处拆行依赖
+/// 多行输入框保留换行符。
+List<String> splitCommandLines(String text) {
+  return text
+      .split('\n')
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
+}
+
 // ─── 终端运行环境 ─────────────────────────────────────────────
 
 /// 构建终端环境变量

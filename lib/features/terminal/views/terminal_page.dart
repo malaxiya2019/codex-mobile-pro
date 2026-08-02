@@ -86,12 +86,28 @@ class _TerminalPageState extends ConsumerState<TerminalPage>
   }
 
   void _submitCommand() {
-    final cmd = _commandController.text;
-    if (cmd.trim().isNotEmpty) {
-      ref.read(terminalProvider.notifier).writeCommand(cmd);
-      _commandController.clear();
-      _scrollToBottom();
+    _executeCommand(_commandController.text);
+  }
+
+  /// 输入框内容变化：检测到换行（多行粘贴）立即逐行执行并清空。
+  ///
+  /// 单行 TextField 会删除 \n 导致脚本粘连，多行 TextField 保留换行，
+  /// 由本方法在粘贴瞬间把多行脚本拆成独立命令逐条写入 PTY。
+  void _onCommandChanged(String text) {
+    if (!text.contains('\n')) return;
+    _executeCommand(text);
+  }
+
+  /// 执行命令：支持多行文本（粘贴脚本），逐行过滤后写入终端
+  void _executeCommand(String text) {
+    final commands = splitCommandLines(text);
+    if (commands.isEmpty) return;
+    final provider = ref.read(terminalProvider.notifier);
+    for (final cmd in commands) {
+      provider.writeCommand(cmd);
     }
+    _commandController.clear();
+    _scrollToBottom();
   }
 
   void _scrollToBottom() {
@@ -312,15 +328,11 @@ class _TerminalPageState extends ConsumerState<TerminalPage>
                             fontFamily: 'monospace',
                             fontSize: 13,
                           ),
-                          onSubmitted: (cmd) {
-                            if (cmd.trim().isNotEmpty) {
-                              ref
-                                  .read(terminalProvider.notifier)
-                                  .writeCommand(cmd);
-                              _commandController.clear();
-                              _scrollToBottom();
-                            }
-                          },
+                          minLines: 1,
+                          maxLines: 4,
+                          textInputAction: TextInputAction.send,
+                          onChanged: _onCommandChanged,
+                          onSubmitted: _submitCommand,
                         ),
                       ),
                     ),
