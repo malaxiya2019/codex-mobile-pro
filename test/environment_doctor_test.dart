@@ -304,6 +304,27 @@ void main() {
       // 两次报告结构一致
       expect(second.checks.length, first.checks.length);
     });
+
+    test('重复执行不破坏环境：/tmp 仍可写、无安装动作', () async {
+      setUpHealthy();
+      // 模拟上次执行遗留的探针文件
+      await File('${paths.rootfsDir}/tmp/.codex_doctor_probe')
+          .writeAsString('stale');
+      final first = await doctor.runFullRepair();
+      final second = await doctor.runFullRepair();
+
+      expect(first.allPassed, true, reason: first.summary);
+      expect(second.allPassed, true, reason: second.summary);
+      // /tmp 仍可写：探针写入删除成功（tmp check passed）
+      final tmpCheck = second.checks.firstWhere((c) => c.name == 'tmp');
+      expect(tmpCheck.passed, true, reason: tmpCheck.detail);
+      expect(tmpCheck.repaired, false);
+      // 无任何 install 动作（不污染环境）
+      final installs = fakeRunner.executedRequests
+          .where((r) => r.arguments.contains('install'))
+          .toList();
+      expect(installs, isEmpty);
+    });
   });
 
   group('EnvironmentDoctor — npm 补装与 Capability 独立映射', () {
@@ -398,6 +419,43 @@ void main() {
       // 只读验证仍执行：node/git/python3 独立 capability 不受 apt 影响
       final nodeCheck = report.checks.firstWhere((c) => c.name == 'node');
       expect(nodeCheck.passed, true);
+    });
+
+    test('node 未安装 → 跳过 npm 补装，Node 独立失败', () async {
+      setUpHealthy();
+      // 真机极端场景：node 与 npm 均不可用
+      fakeRunner.when(
+          'node --version',
+          const FakeCommandResult(
+            exitCode: 127,
+            stderr: 'command not found: node',
+          ));
+      fakeRunner.when(
+          'npm --version',
+          const FakeCommandResult(
+            exitCode: 127,
+            stderr: 'command not found: npm',
+          ));
+
+      final report = await doctor.runFullRepair();
+
+      // Node 独立 check 失败
+      final nodeCheck = report.checks.firstWhere((c) => c.name == 'node');
+      expect(nodeCheck.passed, false);
+      expect(nodeCheck.detail, contains('Node.js 不可用'));
+      // npm 分支明确「node 未安装，跳过 npm 补装」，不触发安装
+      final npmCheck = report.checks.firstWhere((c) => c.name == 'npm');
+      expect(npmCheck.passed, false);
+      expect(npmCheck.repaired, false);
+      expect(npmCheck.detail, contains('node 未安装'));
+      final installs = fakeRunner.executedRequests
+          .where((r) => r.arguments.contains('install'))
+          .toList();
+      expect(installs, isEmpty);
+      // git/python3 独立 capability 不受影响
+      final gitCheck = report.checks.firstWhere((c) => c.name == 'git');
+      expect(gitCheck.passed, true);
+      expect(report.allPassed, false, reason: 'node 缺失时整体不应判定通过');
     });
   });
 }
