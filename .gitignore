@@ -44,3 +44,8 @@ test_report*.json
 
 # Local CI scratch (never commit)
 .tmp-ci/
+
+# Flutter auto-generated (migrator / plugin tooling)
+.flutter-plugins-dependencies
+android/gradlew.bat
+android/app/src/main/java/io/flutter/plugins/
