@@ -50,6 +50,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  # 测试 mock path_provider（传递依赖需显式声明）
+  path_provider_platform_interface: ^2.1.2
   riverpod_generator: ^2.6.3
   build_runner: ^2.4.14
   mockito: ^5.4.6

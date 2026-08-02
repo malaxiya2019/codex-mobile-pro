@@ -125,6 +125,8 @@ void main() {
       expect(env['PROOT_LOADER'], paths.loaderPath);
       expect(env['PROOT_ROOTFS'], paths.rootfsDir);
       expect(env['TERM'], 'xterm-256color');
+      // PRoot 专用变量：宿主侧绝对路径（f2fs 探测/内部临时目录）
+      expect(env['PROOT_TMP_DIR'], '${paths.rootfsDir}/tmp');
     });
 
     test('getEnvironment 返回相同内容', () async {

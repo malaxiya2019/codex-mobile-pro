@@ -288,11 +288,14 @@ class TerminalSession {
   }
 
   /// 写入命令
+  ///
+  /// Native PTY 与 Process 两个后端行为保持一致：命令必须以换行符结尾，
+  /// bash 收到回车才会执行（PTY 原始写入不会自动追加换行）。
   void write(String command) {
     if (_disposed) return;
     try {
       if (_nativeSession != null) {
-        _nativeSession!.write(command);
+        _nativeSession!.write('$command\n');
       } else if (_process != null) {
         _process!.stdin.writeln(command);
       }

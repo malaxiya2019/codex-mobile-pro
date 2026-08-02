@@ -414,11 +414,14 @@ class LinuxRuntimeProvider implements IRuntimeProvider {
       'PATH': linuxPath,
       'TERM': 'xterm-256color',
       // TMPDIR/TMP/TEMP 统一指向 Ubuntu 内部 /tmp：
-      // apt/dpkg/npm 在 rootfs 内运行时依赖这些变量，
-      // 与 linux_execution 注入的 PROOT_TMP_DIR（宿主侧临时目录）解耦。
+      // apt/dpkg/npm 在 rootfs 内运行时依赖这些变量。
+      // PROOT_TMP_DIR 是 PRoot 专用变量（宿主绝对路径，不传给 guest），
+      // 用于 f2fs 探测与内部临时目录，缺失会触发
+      // "Unable to create temp directory for f2fs bug probe" warning。
       'TMPDIR': paths.tmpDir,
       'TMP': paths.tmpDir,
       'TEMP': paths.tmpDir,
+      'PROOT_TMP_DIR': '${paths.rootfsDir}/tmp',
       'LANG': 'en_US.UTF-8',
       'LC_ALL': 'en_US.UTF-8',
       'USER': 'root',
