@@ -140,6 +140,18 @@ class TerminalSession {
 
   static const int maxBufferSize = 10000;
 
+  /// 未完成输出行（流式模式：Native PTY 的 chunk 可能不带 \n，
+  /// 例如 bash 的 prompt / resize 重绘序列，必须累积到同一行再提交）
+  String _pendingLine = '';
+
+  /// 流式模式：Native PTY 后端启用（chunk 按流处理，只有 \n 才提交行）。
+  /// Process 后端（LineSplitter 已按行）保持逐行语义。
+  bool _streamMode = false;
+
+  /// 未完成行防失控上限：超过强制提交为一行（真实终端流异常保护，
+  /// 正常交互下 prompt/重绘序列远小于该值，不会触发）。
+  static const int maxPendingLength = 65536;
+
   TerminalSession({
     required this.id,
     required this.name,
@@ -155,17 +167,63 @@ class TerminalSession {
   String get shellPath => shellInfo.shellPath;
 
   /// 获取当前输出文本
-  String get outputText => outputBuffer.toList().map((l) => l.text).join('\n');
+  String get outputText {
+    final lines = outputBuffer.toList().map((l) => l.text).toList();
+    if (_streamMode && _pendingLine.isNotEmpty) {
+      lines.add(_pendingLine);
+    }
+    return lines.join('\n');
+  }
 
-  /// 添加输出行
+  /// 添加输出
+  ///
+  /// 流式模式（Native PTY）：chunk 可能不带 \n（bash prompt、resize 重绘
+  /// `\r\x1b[K\r<prompt>` 均无换行）。按行 split 会把同一逻辑行拆成多个
+  /// buffer 行，outputText join 时人为插入 \n，导致 AnsiParser 的
+  /// `\r` 覆盖语义跨行失效 —— resize 重绘的 prompt 在真机上堆叠成多行。
+  /// 此处维护未完成行：只有真正出现 \n 才提交一行，\r/覆盖序列保留在
+  /// 同一行内，交给 AnsiParser 行内覆盖。
+  ///
+  /// 逐行模式（Process 后端，LineSplitter 已按行切好）：保持原行为。
   void addOutput(String text, {bool isStderr = false}) {
     if (_disposed) return;
-    final lines = text.split('\n');
-    for (final line in lines) {
+    if (!_streamMode) {
+      final lines = text.split('\n');
+      for (final line in lines) {
+        if (line.isEmpty) continue;
+        outputBuffer.add(
+          TerminalLine(
+              text: line, isStderr: isStderr, timestamp: DateTime.now()),
+        );
+      }
+      return;
+    }
+
+    final combined = _pendingLine + text;
+    final parts = combined.split('\n');
+    _pendingLine = parts.removeLast();
+    for (final part in parts) {
+      // CRLF 换行：split 后行尾残留 \r（`\r\n`），与 Process 后端
+      // LineSplitter 行为一致地剥掉；行中 \r（覆盖序列）不受影响。
+      var line = part;
+      if (line.endsWith('\r')) {
+        line = line.substring(0, line.length - 1);
+      }
       if (line.isEmpty) continue;
       outputBuffer.add(
         TerminalLine(text: line, isStderr: isStderr, timestamp: DateTime.now()),
       );
+    }
+    // 防失控：未完成行异常增长时强制提交
+    if (_pendingLine.length > maxPendingLength) {
+      outputBuffer.add(
+        TerminalLine(
+          text: _pendingLine,
+          isStderr: isStderr,
+          timestamp: DateTime.now(),
+        ),
+      );
+      _pendingLine = '';
     }
   }
 
@@ -283,6 +341,10 @@ class TerminalSession {
       status = TerminalSessionStatus.running;
       LogService.info('Terminal', '  Native PTY 会话已创建');
 
+      // Native PTY 输出是字节流（非按行），启用流式缓冲，
+      // 保证 resize 重绘 / prompt 等无换行输出不跨行堆叠。
+      _streamMode = true;
+
       // 订阅输出流
       _nativeSession!.outputStream.listen(
         (line) => addOutput(line),
@@ -320,7 +382,12 @@ class TerminalSession {
       } else if (_process != null) {
         _process!.stdin.writeln(command);
       }
-      addOutput('\$ $command');
+      // Native PTY 在 ICANON|ECHO 下由终端驱动回显输入行，UI 再追加
+      // '$ command' 会与 ECHO 回显重复（真机可见命令回显两行）。
+      // Process 后端无 ECHO，保留手动回显。
+      if (!_streamMode) {
+        addOutput('\$ $command');
+      }
     } catch (e) {
       addOutput('写入失败: $e', isStderr: true);
       LogService.error('Terminal', '  写入失败: $e');
