@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'log_export_channel.dart';
 import 'log_file_writer.dart';
 
 /// 日志级别
@@ -123,6 +125,58 @@ class LogService {
   /// 立即刷入日志缓冲区
   static Future<void> flush() async {
     await _fileWriter?.flush();
+  }
+
+  /// 导出全部日志到 Download 目录
+  ///
+  /// - Android：通过 MediaStore 写入公共 Download（无需运行时权限）。
+  /// - 其他平台（测试/桌面）：写入系统临时目录便于验证。
+  /// 成功返回导出文件路径；无日志或失败返回 null。
+  static Future<String?> exportLogsToDownload({String? fileName}) async {
+    await flush();
+    if (_fileWriter == null) return null;
+
+    final content = await _fileWriter!.readAll();
+    if (content.trim().isEmpty) return null;
+
+    final name = fileName ?? _exportFileName();
+
+    if (Platform.isAndroid) {
+      try {
+        final written = await LogExportChannel.writeToDownload(
+          fileName: name,
+          content: content,
+        );
+        return '/storage/emulated/0/Download/$written';
+      } on PlatformException catch (e) {
+        debugPrint('[LogService] 导出日志到 Download 失败: ${e.message}');
+        return null;
+      } on MissingPluginException {
+        debugPrint('[LogService] 日志导出插件未注册');
+        return null;
+      } catch (e) {
+        debugPrint('[LogService] 导出日志到 Download 异常: $e');
+        return null;
+      }
+    }
+
+    // 非 Android：写入系统临时目录（便于测试/桌面调试）
+    try {
+      final file = File('${Directory.systemTemp.path}/$name');
+      await file.writeAsString(content);
+      return file.path;
+    } catch (e) {
+      debugPrint('[LogService] 导出日志（本地）失败: $e');
+      return null;
+    }
+  }
+
+  /// 生成带时间戳的导出文件名
+  static String _exportFileName() {
+    final now = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return 'app_log_${now.year}${two(now.month)}${two(now.day)}'
+        '_${two(now.hour)}${two(now.minute)}${two(now.second)}.log';
   }
 
   /// 获取最近日志

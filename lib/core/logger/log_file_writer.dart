@@ -161,6 +161,21 @@ class LogFileWriter {
     return total;
   }
 
+  /// 读取全部日志（最旧 → 最新，含轮转文件）
+  ///
+  /// 拼接顺序：app.log.{maxFiles-1}（最旧）→ ... → app.log.1 → app.log.0 → app.log（最新）。
+  Future<String> readAll() async {
+    final parts = <String>[];
+    for (int i = _maxFiles - 1; i >= 0; i--) {
+      final file = File(
+          i == 0 ? '$_baseDir/$_fileName' : '$_baseDir/$_fileName.$i');
+      if (await file.exists()) {
+        parts.add(await file.readAsString());
+      }
+    }
+    return parts.join();
+  }
+
   /// 读取最近的日志
   Future<String> readRecent({int maxLines = 100}) async {
     if (_currentFile == null || !await _currentFile!.exists()) return '';

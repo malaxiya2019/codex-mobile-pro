@@ -7,16 +7,20 @@ import com.codexmobile.app.terminal.PtyPlugin
 
 /// Codex Mobile Pro 主 Activity
 ///
-/// 注册 Native 插件（PTY），处理 Flutter ↔ Native 通信。
+/// 注册 Native 插件（PTY / 日志导出），处理 Flutter ↔ Native 通信。
 class MainActivity : FlutterActivity() {
 
     private val ptyPlugin by lazy { PtyPlugin(this) }
+    private val logExportPlugin by lazy { LogExportPlugin(this) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
         // 注册 PTY 终端插件（forkpty / execve）
         ptyPlugin.registerWith(flutterEngine)
+
+        // 注册日志导出插件（MediaStore → Download）
+        logExportPlugin.registerWith(flutterEngine)
     }
 
     override fun onDestroy() {

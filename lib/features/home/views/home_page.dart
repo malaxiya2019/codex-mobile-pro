@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/i18n/app_locale.dart';
 import '../../../core/i18n/strings.dart';
+import '../../../core/logger/log_service.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../features/workspace/workspace_provider.dart';
@@ -208,6 +209,14 @@ class HomePage extends ConsumerWidget {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push(RouteNames.localeSettings),
                 ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  leading: const Icon(Icons.ios_share),
+                  title: const Text('导出日志'),
+                  subtitle: const Text('复制全部日志到 Download 目录'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _exportLogs(context),
+                ),
               ],
             ),
           ),
@@ -333,6 +342,18 @@ class HomePage extends ConsumerWidget {
     if (ws != null && context.mounted) {
       ref.read(workspaceProvider.notifier).switchWorkspace(ws.id);
     }
+  }
+
+  /// 导出全部日志到 Download 目录并提示结果
+  Future<void> _exportLogs(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final path = await LogService.exportLogsToDownload();
+    if (!context.mounted) return;
+    messenger.showSnackBar(
+      path != null
+          ? SnackBar(content: Text('日志已导出：$path'))
+          : const SnackBar(content: Text('导出失败：无日志或权限不足')),
+    );
   }
 }
 

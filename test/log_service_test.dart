@@ -5,6 +5,8 @@ import 'package:codex_mobile_pro/core/logger/log_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  final testDir = '${Directory.systemTemp.path}/codex_log_test';
+
   group('LogLevel', () {
     test('优先级正确排序', () {
       expect(LogLevel.debug.priority, 0);
@@ -60,11 +62,31 @@ void main() {
       LogService.error('Test', 'should appear');
       // 没有异常即通过
     });
+
+    test('exportLogsToDownload 导出到本地文件（非 Android）', () async {
+      await LogService.init(logDir: testDir);
+      LogService.info('Test', 'export-me-marker');
+
+      final path =
+          await LogService.exportLogsToDownload(fileName: 'export_test.log');
+      expect(path, isNotNull);
+      expect(path, contains('export_test.log'));
+
+      final file = File(path!);
+      expect(await file.exists(), true);
+      final content = await file.readAsString();
+      expect(content, contains('export-me-marker'));
+      await file.delete();
+    });
+
+    test('exportLogsToDownload 文件日志未启用时返回 null', () async {
+      await LogService.init(enableFile: false);
+      final path = await LogService.exportLogsToDownload();
+      expect(path, isNull);
+    });
   });
 
   group('LogFileWriter', () {
-    final testDir = '${Directory.systemTemp.path}/codex_log_test';
-
     setUp(() async {
       final dir = Directory(testDir);
       if (await dir.exists()) {
@@ -164,6 +186,49 @@ void main() {
         expect(fileContent, isEmpty);
       }
       // 如果文件不存在（被删除），也视为清理成功
+      await writer.dispose();
+    });
+
+    test('readAll 合并当前文件全部内容', () async {
+      final writer = LogFileWriter(baseDir: testDir);
+      await writer.init();
+      for (int i = 0; i < 10; i++) {
+        await writer.write('line $i');
+      }
+      await writer.flush();
+
+      final all = await writer.readAll();
+      expect(all, contains('line 0'));
+      expect(all, contains('line 9'));
+      await writer.dispose();
+    });
+
+    test('readAll 合并轮转文件（最旧 → 最新）', () async {
+      final writer = LogFileWriter(
+        baseDir: testDir,
+        maxFileSize: 100,
+        maxFiles: 3,
+      );
+      await writer.init();
+
+      // 写入多行触发至少一次轮转
+      for (int i = 0; i < 30; i++) {
+        await writer.write('rotation-line-$i ' * 4);
+      }
+      await writer.flush().timeout(const Duration(seconds: 5));
+
+      final all = await writer.readAll();
+      // 最早与最新的行都应存在于合并结果中
+      expect(all, contains('rotation-line-0'));
+      expect(all, contains('rotation-line-29'));
+      await writer.dispose();
+    });
+
+    test('readAll 无文件时返回空字符串', () async {
+      final writer = LogFileWriter(baseDir: testDir);
+      await writer.init();
+      final all = await writer.readAll();
+      expect(all, isEmpty);
       await writer.dispose();
     });
 
