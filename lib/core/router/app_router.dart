@@ -11,6 +11,7 @@ import '../../features/git/views/pr_list_page.dart';
 import '../../features/git/views/repo_list_page.dart';
 import '../../features/home/views/home_page.dart';
 import '../../features/settings/views/about_settings_page.dart';
+import '../../features/settings/views/backup_settings_page.dart';
 import '../../features/settings/views/locale_settings_page.dart';
 import '../../features/settings/views/theme_settings_page.dart';
 import '../../features/terminal/views/terminal_page.dart';
@@ -67,6 +68,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.about,
         name: 'about',
         builder: (context, state) => const AboutSettingsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.backup,
+        name: 'backup',
+        builder: (context, state) => const BackupSettingsPage(),
       ),
       GoRoute(
         path: RouteNames.workspaceList,

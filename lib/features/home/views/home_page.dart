@@ -211,6 +211,14 @@ class HomePage extends ConsumerWidget {
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 ListTile(
+                  leading: const Icon(Icons.backup_outlined),
+                  title: const Text('备份与恢复'),
+                  subtitle: const Text('配置 · 工作区 · 登录状态'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push(RouteNames.backup),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
                   leading: const Icon(Icons.ios_share),
                   title: const Text('导出日志'),
                   subtitle: const Text('复制全部日志到 Download 目录'),
