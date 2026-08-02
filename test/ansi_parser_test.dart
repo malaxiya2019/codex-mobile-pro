@@ -62,12 +62,18 @@ void main() {
       expect(segments[0].foreground, isNotNull);
     });
 
-    test('忽略光标移动序列', () {
-      // CSI 光标移动被忽略，但 \x1b 会触发 flushBuffer 将已有文本先输出
+    test('清屏序列 (2J) 清除已输出文本', () {
       final segments = parser.parse('Hello\x1b[2JWorld');
-      expect(segments.length, 2);
-      expect(segments[0].text, 'Hello');
-      expect(segments[1].text, 'World');
+      expect(segments.length, 1);
+      expect(segments[0].text, 'World');
+    });
+
+    test('清屏 + 光标回行首 (2J H) 重绘 prompt', () {
+      final segments = parser.parse(
+        'Hello\x1b[2J\x1b[Hroot@localhost:/# ',
+      );
+      expect(segments.length, 1);
+      expect(segments[0].text, 'root@localhost:/# ');
     });
 
     test('处理下划线样式', () {
@@ -92,10 +98,66 @@ void main() {
       expect(segments[0].underline, true);
     });
 
-    test('处理 \\r 回车符', () {
+    test('处理 \\r 回车符（覆盖当前行）', () {
       final segments = parser.parse('Line1\rLine2');
-      // \r 应被忽略
+      // \r 回行首，Line2 覆盖 Line1
       expect(segments.length, 1);
+      expect(segments[0].text, 'Line2');
+    });
+
+    test('\\r 覆盖当前行部分文本', () {
+      final segments = parser.parse('abcdef\rXY');
+      expect(segments[0].text, 'XYcdef');
+    });
+
+    test('进度条同位置刷新（\\r + 覆盖）', () {
+      final segments = parser.parse('10%\r20%\r30%');
+      expect(segments[0].text, '30%');
+    });
+
+    test('bash resize 重绘序列只保留一行 prompt（核心修复）', () {
+      // bash 收到 SIGWINCH 后输出 \r\x1b[K\r<prompt> 重绘当前行，
+      // 历史上被错误展开为多行堆叠的 root@localhost:/#
+      const prompt = 'root@localhost:/# ';
+      final segments = parser.parse(
+        '$prompt\r\x1b[K\r$prompt\r\x1b[K\r$prompt',
+      );
+      expect(segments.length, 1);
+      expect(segments[0].text, prompt);
+    });
+
+    test('命令执行后重绘（长行变短，\x1b[K 清除残留）', () {
+      final segments = parser.parse(
+        'root@localhost:/# ls -la\r\x1b[K\rroot@localhost:/# ',
+      );
+      expect(segments[0].text, 'root@localhost:/# ');
+    });
+
+    test('处理 \\r\\n 双行', () {
+      final segments = parser.parse('a\r\nb');
+      expect(segments.length, 1);
+      expect(segments[0].text, 'a\nb');
+    });
+
+    test('处理多行文本（保留 \\n）', () {
+      final segments = parser.parse('line1\nline2');
+      expect(segments.length, 1);
+      expect(segments[0].text, 'line1\nline2');
+    });
+
+    test('处理 2K 清除整行', () {
+      final segments = parser.parse('abc\x1b[2Kdef');
+      expect(segments[0].text, 'def');
+    });
+
+    test('覆盖时样式跟随新字符', () {
+      final segments = parser.parse('\x1b[32mABCDE\x1b[0m\rXY');
+      // X、Y 以普通样式覆盖 A、B；C、D、E 仍是绿色
+      expect(segments.length, 2);
+      expect(segments[0].text, 'XY');
+      expect(segments[0].foreground, isNull);
+      expect(segments[1].text, 'CDE');
+      expect(segments[1].foreground, isNotNull);
     });
 
     test('处理 \\b 退格符', () {

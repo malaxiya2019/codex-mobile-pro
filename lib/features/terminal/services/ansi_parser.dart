@@ -6,6 +6,15 @@
 /// - 样式：0（重置），1（粗体），3（斜体），4（下划线），7（反色），9（删除线）
 /// - 256 色：38;5;N（前景），48;5;N（背景）
 ///
+/// 使用行缓冲模型模拟终端行为：
+/// - `\n`：提交当前行，开始新行
+/// - `\r`：光标回到当前行行首，后续文本按列覆盖
+/// - `\x1b[K`：清除当前行光标后到行尾（bash resize 重绘 prompt 时依赖此序列）
+/// - `\b`：光标左移；若在行尾则删除末尾字符
+///
+/// 这修正了历史上把 bash 的 `\r\x1b[K\r<prompt>` 重绘序列展开成
+/// 多行堆叠 prompt 的 bug（真机上 resize 一次堆一个 `root@localhost:/#`）。
+///
 /// 使用方式：
 /// ```dart
 /// final parser = AnsiParser();
@@ -55,6 +64,82 @@ class AnsiSegment {
   }
 }
 
+/// 单个字符的样式快照（行缓冲模型中样式跟随字符存储，
+/// 以便 `\r` 覆盖旧字符时同步替换其样式）。
+class _AnsiStyle {
+  final Color? fg;
+  final Color? bg;
+  final bool bold;
+  final bool italic;
+  final bool underline;
+  final bool strikethrough;
+  final bool reversed;
+
+  const _AnsiStyle({
+    this.fg,
+    this.bg,
+    this.bold = false,
+    this.italic = false,
+    this.underline = false,
+    this.strikethrough = false,
+    this.reversed = false,
+  });
+
+  static const normal = _AnsiStyle();
+
+  _AnsiStyle copyWith({
+    Color? fg,
+    Color? bg,
+    bool? bold,
+    bool? italic,
+    bool? underline,
+    bool? strikethrough,
+    bool? reversed,
+    bool clearFg = false,
+    bool clearBg = false,
+  }) {
+    return _AnsiStyle(
+      fg: clearFg ? null : (fg ?? this.fg),
+      bg: clearBg ? null : (bg ?? this.bg),
+      bold: bold ?? this.bold,
+      italic: italic ?? this.italic,
+      underline: underline ?? this.underline,
+      strikethrough: strikethrough ?? this.strikethrough,
+      reversed: reversed ?? this.reversed,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is _AnsiStyle &&
+        other.fg == fg &&
+        other.bg == bg &&
+        other.bold == bold &&
+        other.italic == italic &&
+        other.underline == underline &&
+        other.strikethrough == strikethrough &&
+        other.reversed == reversed;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        fg, bg, bold, italic, underline, strikethrough, reversed,
+      );
+}
+
+/// 行缓冲中的字符单元
+class _Cell {
+  final String char;
+  final _AnsiStyle style;
+
+  _Cell(this.char, this.style);
+}
+
+/// 行缓冲中的一行
+class _Line {
+  final List<_Cell> cells = [];
+}
+
 /// ANSI 解析器
 class AnsiParser {
   // ANSI 颜色映射 — 标准 16 色
@@ -100,47 +185,106 @@ class AnsiParser {
   }
 
   /// 解析 ANSI 转义序列，返回文本段列表
+  ///
+  /// 输出为换行分隔的流式文本：`\n` 保留在 segment.text 内，
+  /// `\r`/`\x1b[K` 只影响行缓冲，不产生新行。
   List<AnsiSegment> parse(String input) {
     if (input.isEmpty) return [];
 
-    final segments = <AnsiSegment>[];
-    final buffer = StringBuffer();
-    bool inEscape = false;
-    bool inOsc = false; // Operating System Command
-    final params = StringBuffer();
+    final lines = <_Line>[_Line()];
+    var cursorX = 0; // 当前行内的列位置
+    var style = _AnsiStyle.normal;
 
-    Color? currentFg;
-    Color? currentBg;
-    bool bold = false;
-    bool italic = false;
-    bool underline = false;
-    bool strikethrough = false;
-    bool reversed = false;
+    // 写入一个字符：光标处覆盖已有字符，否则追加
+    void write(String ch) {
+      final line = lines.last;
+      final cell = _Cell(ch, style);
+      if (cursorX < line.cells.length) {
+        line.cells[cursorX] = cell;
+      } else {
+        line.cells.add(cell);
+      }
+      cursorX++;
+    }
 
-    void flushBuffer() {
-      if (buffer.isNotEmpty) {
-        segments.add(AnsiSegment(
-          text: buffer.toString(),
-          foreground: currentFg,
-          background: currentBg,
-          bold: bold,
-          italic: italic,
-          underline: underline,
-          strikethrough: strikethrough,
-          reversed: reversed,
-        ));
-        buffer.clear();
+    void newline() {
+      lines.add(_Line());
+      cursorX = 0;
+    }
+
+    void carriageReturn() {
+      cursorX = 0;
+    }
+
+    void backspace() {
+      final line = lines.last;
+      if (cursorX == line.cells.length && cursorX > 0) {
+        // 光标位于行尾：删除末尾字符（近似退格）
+        line.cells.removeLast();
+        cursorX--;
+      } else if (cursorX > 0) {
+        // 光标在行中：仅左移（真实终端语义，后续字符覆盖）
+        cursorX--;
       }
     }
 
-    void resetAttributes() {
-      currentFg = null;
-      currentBg = null;
-      bold = false;
-      italic = false;
-      underline = false;
-      strikethrough = false;
-      reversed = false;
+    List<int> parseParams(StringBuffer buf) {
+      final str = buf.toString();
+      if (str.isEmpty) return const [];
+      return str.split(';').map((p) {
+        if (p.isEmpty) return 0;
+        return int.tryParse(p) ?? 0;
+      }).toList();
+    }
+
+    // CSI K — 清除行
+    void clearLine(List<int> codes) {
+      final line = lines.last;
+      final mode = codes.isEmpty ? 0 : codes.first;
+      switch (mode) {
+        case 1:
+          // 清行首到光标
+          if (cursorX > 0) line.cells.removeRange(0, cursorX);
+          cursorX = 0;
+          break;
+        case 2:
+          // 清整行
+          line.cells.clear();
+          cursorX = 0;
+          break;
+        default:
+          // 0（默认）：清光标到行尾
+          if (cursorX < line.cells.length) {
+            line.cells.removeRange(cursorX, line.cells.length);
+          }
+      }
+    }
+
+    // CSI J — 清除屏幕
+    void clearScreen(List<int> codes) {
+      final mode = codes.isEmpty ? 0 : codes.first;
+      switch (mode) {
+        case 2:
+          // 全清
+          lines.clear();
+          lines.add(_Line());
+          cursorX = 0;
+          break;
+        case 1:
+          // 清光标上方：保留当前行
+          final cur = lines.last;
+          lines
+            ..clear()
+            ..add(cur);
+          break;
+        default:
+          // 0（默认）：清光标下方（当前行光标后 + 之后所有行）
+          final cur = lines.last;
+          if (cursorX < cur.cells.length) {
+            cur.cells.removeRange(cursorX, cur.cells.length);
+          }
+          break;
+      }
     }
 
     void applySgr(List<int> codes) {
@@ -152,37 +296,37 @@ class AnsiParser {
       while (i < codes.length) {
         switch (codes[i]) {
           case 0:
-            resetAttributes();
+            style = _AnsiStyle.normal;
             break;
           case 1:
-            bold = true;
+            style = style.copyWith(bold: true);
             break;
           case 3:
-            italic = true;
+            style = style.copyWith(italic: true);
             break;
           case 4:
-            underline = true;
+            style = style.copyWith(underline: true);
             break;
           case 7:
-            reversed = true;
+            style = style.copyWith(reversed: true);
             break;
           case 9:
-            strikethrough = true;
+            style = style.copyWith(strikethrough: true);
             break;
           case 22:
-            bold = false;
+            style = style.copyWith(bold: false);
             break;
           case 23:
-            italic = false;
+            style = style.copyWith(italic: false);
             break;
           case 24:
-            underline = false;
+            style = style.copyWith(underline: false);
             break;
           case 27:
-            reversed = false;
+            style = style.copyWith(reversed: false);
             break;
           case 29:
-            strikethrough = false;
+            style = style.copyWith(strikethrough: false);
             break;
           case 30:
           case 31:
@@ -192,22 +336,24 @@ class AnsiParser {
           case 35:
           case 36:
           case 37:
-            currentFg = _ansiColors[codes[i]];
+            style = style.copyWith(fg: _ansiColors[codes[i]]);
             break;
           case 38:
             // 38;5;N — 256 色前景
             if (i + 2 < codes.length && codes[i + 1] == 5) {
-              currentFg = _get256Color(codes[i + 2]);
+              style = style.copyWith(fg: _get256Color(codes[i + 2]));
               i += 2;
             }
             // 38;2;R;G;B — TrueColor 前景
             else if (i + 4 < codes.length && codes[i + 1] == 2) {
-              currentFg = Color.fromARGB(255, codes[i + 2], codes[i + 3], codes[i + 4]);
+              style = style.copyWith(
+                fg: Color.fromARGB(255, codes[i + 2], codes[i + 3], codes[i + 4]),
+              );
               i += 4;
             }
             break;
           case 39:
-            currentFg = null;
+            style = style.copyWith(clearFg: true);
             break;
           case 40:
           case 41:
@@ -217,22 +363,24 @@ class AnsiParser {
           case 45:
           case 46:
           case 47:
-            currentBg = _ansiColors[codes[i] - 10];
+            style = style.copyWith(bg: _ansiColors[codes[i] - 10]);
             break;
           case 48:
             // 48;5;N — 256 色背景
             if (i + 2 < codes.length && codes[i + 1] == 5) {
-              currentBg = _get256Color(codes[i + 2]);
+              style = style.copyWith(bg: _get256Color(codes[i + 2]));
               i += 2;
             }
             // 48;2;R;G;B — TrueColor 背景
             else if (i + 4 < codes.length && codes[i + 1] == 2) {
-              currentBg = Color.fromARGB(255, codes[i + 2], codes[i + 3], codes[i + 4]);
+              style = style.copyWith(
+                bg: Color.fromARGB(255, codes[i + 2], codes[i + 3], codes[i + 4]),
+              );
               i += 4;
             }
             break;
           case 49:
-            currentBg = null;
+            style = style.copyWith(clearBg: true);
             break;
           case 90:
           case 91:
@@ -242,7 +390,7 @@ class AnsiParser {
           case 95:
           case 96:
           case 97:
-            currentFg = _ansiColors[codes[i]];
+            style = style.copyWith(fg: _ansiColors[codes[i]]);
             break;
           case 100:
           case 101:
@@ -252,12 +400,16 @@ class AnsiParser {
           case 105:
           case 106:
           case 107:
-            currentBg = _ansiColors[codes[i] - 60];
+            style = style.copyWith(bg: _ansiColors[codes[i] - 60]);
             break;
         }
         i++;
       }
     }
+
+    bool inEscape = false;
+    bool inOsc = false; // Operating System Command
+    final params = StringBuffer();
 
     for (int i = 0; i < input.length; i++) {
       final ch = input[i];
@@ -285,21 +437,35 @@ class AnsiParser {
               j++;
             } else if (c == 'm') {
               // SGR 结束
-              if (params.isNotEmpty) {
-                final codes = params.toString().split(';').map((p) {
-                  final v = int.tryParse(p);
-                  return v ?? 0;
-                }).toList();
-                applySgr(codes);
-              } else {
-                applySgr([0]);
-              }
+              applySgr(parseParams(params));
               i = j; // 跳过 'm'
               break;
-            } else if (c == 'H' || c == 'f' || c == 'A' || c == 'B' ||
-                       c == 'C' || c == 'D' || c == 'J' || c == 'K' ||
-                       c == 's' || c == 'u' || c == 'h' || c == 'l') {
-              // 其他 CSI 序列 — 忽略光标移动等
+            } else if (c == 'K') {
+              // 清除行（bash resize 重绘依赖）
+              clearLine(parseParams(params));
+              i = j;
+              break;
+            } else if (c == 'J') {
+              // 清除屏幕
+              clearScreen(parseParams(params));
+              i = j;
+              break;
+            } else if (c == 'H' || c == 'f') {
+              // 光标定位 — 流式渲染下仅支持回到行首（配合 2J 清屏）
+              final codes = parseParams(params);
+              if (codes.isEmpty ||
+                  (codes.length == 1 && codes.first <= 1) ||
+                  (codes.length == 2 && codes[0] <= 1 && codes[1] <= 1)) {
+                cursorX = 0;
+              }
+              i = j;
+              break;
+            } else if (c == 'A' || c == 'B' || c == 'C' || c == 'D') {
+              // 光标移动 — 流式渲染无绝对光标，忽略
+              i = j;
+              break;
+            } else if (c == 's' || c == 'u' || c == 'h' || c == 'l') {
+              // 保存/恢复光标、模式设置 — 忽略
               i = j;
               break;
             } else if (c == '?') {
@@ -324,30 +490,78 @@ class AnsiParser {
       }
 
       if (ch == '\x1b') {
-        flushBuffer();
         inEscape = true;
         continue;
       }
 
       if (ch == '\r') {
-        // 回车符 — 忽略或重置
+        // 回车 — 光标回行首，后续文本覆盖
+        carriageReturn();
+        continue;
+      }
+
+      if (ch == '\n') {
+        // 换行 — 提交当前行
+        newline();
         continue;
       }
 
       if (ch == '\b') {
-        // 退格 — 简单处理
-        if (buffer.isNotEmpty) {
-          final str = buffer.toString();
-          buffer.clear();
-          buffer.write(str.substring(0, str.length - 1));
-        }
+        // 退格
+        backspace();
         continue;
       }
 
-      buffer.write(ch);
+      if (ch == '\x07') {
+        // BEL — 忽略
+        continue;
+      }
+
+      write(ch);
     }
 
-    flushBuffer();
+    // ── 行缓冲 → 文本段（按样式连续性分组，\n 保留在文本内） ──
+    final segments = <AnsiSegment>[];
+    final buffer = StringBuffer();
+    _AnsiStyle? lastStyle;
+
+    void flushSegment() {
+      if (buffer.isEmpty) return;
+      final s = lastStyle ?? _AnsiStyle.normal;
+      segments.add(AnsiSegment(
+        text: buffer.toString(),
+        foreground: s.fg,
+        background: s.bg,
+        bold: s.bold,
+        italic: s.italic,
+        underline: s.underline,
+        strikethrough: s.strikethrough,
+        reversed: s.reversed,
+      ));
+      buffer.clear();
+    }
+
+    void emitCell(_Cell cell) {
+      final s = cell.style;
+      if (lastStyle != null && s != lastStyle) {
+        flushSegment();
+      }
+      lastStyle = s;
+      buffer.write(cell.char);
+    }
+
+    for (int li = 0; li < lines.length; li++) {
+      final line = lines[li];
+      for (final cell in line.cells) {
+        emitCell(cell);
+      }
+      if (li < lines.length - 1) {
+        // 行分隔：换行符归属当前样式 run
+        lastStyle ??= _AnsiStyle.normal;
+        buffer.write('\n');
+      }
+    }
+    flushSegment();
 
     return segments;
   }
