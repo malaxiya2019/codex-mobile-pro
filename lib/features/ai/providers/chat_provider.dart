@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/ai/ai_message.dart';
 import '../../../core/ai/ai_provider_manager.dart';
 import '../../../core/ai/chat_engine.dart';
 import '../../../core/ai/chat_session.dart';
+import '../../../core/ai/providers/deepseek_provider.dart';
 import '../../../core/context/workspace_context_provider.dart';
 
 // ══════════════════════════════════════════════
@@ -11,7 +14,15 @@ import '../../../core/context/workspace_context_provider.dart';
 
 /// IAIProviderManager Riverpod Provider
 final aiProviderManagerProvider = Provider<IAIProviderManager>((ref) {
-  return AIProviderManager();
+  final manager = AIProviderManager();
+  // 默认 DeepSeek Provider：AiConfig 默认指向本地 mimo :8788（zero-auth 模式），
+  // 无需用户填写 API key。initialize() 为异步 fire-and-forget —— 初始化完成后
+  // _selectProvider() 会通过 _findNextReadyProvider() 自动选中该 provider。
+  final deepSeek = DeepSeekProvider();
+  manager.register(deepSeek, priority: ProviderPriority.primary);
+  unawaited(deepSeek.initialize());
+  ref.onDispose(manager.dispose);
+  return manager;
 });
 /// IChatEngine Riverpod Provider
 final chatEngineProvider = Provider<IChatEngine>((ref) {

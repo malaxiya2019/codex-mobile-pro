@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:codex_mobile_pro/core/ai/ai_message.dart';
+import 'package:codex_mobile_pro/core/ai/ai_provider_manager.dart';
 import 'package:codex_mobile_pro/core/ai/chat_engine.dart';
 import 'package:codex_mobile_pro/core/ai/chat_session.dart';
 import 'package:codex_mobile_pro/features/ai/providers/chat_provider.dart';
@@ -247,6 +248,29 @@ ProviderContainer createTestContainer({MockChatEngine? engine}) {
 // ══════════════════════════════════════════════
 
 void main() {
+  // ── aiProviderManagerProvider ──
+
+  group('aiProviderManagerProvider', () {
+    test('默认注册 DeepSeek provider（本地 zero-auth 模式）', () {
+      final container = ProviderContainer();
+      addTearDown(() => container.dispose());
+
+      final manager = container.read(aiProviderManagerProvider);
+
+      expect(manager.registrations.length, 1);
+      expect(manager.registrations.first.provider.name, 'DeepSeek');
+      expect(manager.registrations.first.priority, ProviderPriority.primary);
+    });
+
+    test('dispose 后取消 health check 定时器（无异常即通过）', () {
+      final container = ProviderContainer();
+      container.read(aiProviderManagerProvider);
+      // 通过 ref.onDispose 触发 manager.dispose()，应取消 register 启动的
+      // health check Timer；若泄漏 flutter_test 会报 pending timer。
+      container.dispose();
+    });
+  });
+
   // ── ChatState ──
 
   group('ChatState', () {
