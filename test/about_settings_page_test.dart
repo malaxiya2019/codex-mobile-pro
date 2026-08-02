@@ -1,6 +1,7 @@
 import 'package:codex_mobile_pro/core/config/app_info.dart';
 import 'package:codex_mobile_pro/features/settings/views/about_settings_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

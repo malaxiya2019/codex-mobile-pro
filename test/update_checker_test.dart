@@ -7,6 +7,8 @@ import 'package:mocktail/mocktail.dart';
 
 class MockHttpClient extends Mock implements http.Client {}
 
+class FakeUri extends Fake implements Uri {}
+
 void main() {
   group('VersionCompare', () {
     test('比较主版本', () {
@@ -37,6 +39,7 @@ void main() {
     late UpdateChecker checker;
 
     setUp(() {
+      registerFallbackValue(FakeUri());
       mockClient = MockHttpClient();
       checker = UpdateChecker(
         currentVersion: '1.0.0',
