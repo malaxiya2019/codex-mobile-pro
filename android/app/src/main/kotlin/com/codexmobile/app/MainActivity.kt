@@ -12,6 +12,7 @@ class MainActivity : FlutterActivity() {
 
     private val ptyPlugin by lazy { PtyPlugin(this) }
     private val logExportPlugin by lazy { LogExportPlugin(this) }
+    private val updateInstallerPlugin by lazy { UpdateInstallerPlugin(this) }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -21,6 +22,9 @@ class MainActivity : FlutterActivity() {
 
         // 注册日志导出插件（MediaStore → Download）
         logExportPlugin.registerWith(flutterEngine)
+
+        // 注册更新安装插件（FileProvider → 系统包安装器）
+        updateInstallerPlugin.registerWith(flutterEngine)
     }
 
     override fun onDestroy() {

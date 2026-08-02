@@ -219,6 +219,14 @@ class HomePage extends ConsumerWidget {
                 ),
                 const Divider(height: 1, indent: 16, endIndent: 16),
                 ListTile(
+                  leading: const Icon(Icons.system_update_alt),
+                  title: const Text('检查更新'),
+                  subtitle: const Text('GitHub Release · 下载 APK · 自动安装'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push(RouteNames.update),
+                ),
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
                   leading: const Icon(Icons.ios_share),
                   title: const Text('导出日志'),
                   subtitle: const Text('复制全部日志到 Download 目录'),

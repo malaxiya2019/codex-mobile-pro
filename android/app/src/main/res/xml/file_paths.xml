@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 路径映射：
+     Flutter 的 getApplicationDocumentsDirectory() 在 Android 上映射到内部 files/ 目录，
+     更新 APK 下载到 <files>/updates/，备份写到 <files>/backups/。 -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="updates" path="updates/" />
+    <files-path name="backups" path="backups/" />
+    <cache-path name="cache" path="." />
+</paths>

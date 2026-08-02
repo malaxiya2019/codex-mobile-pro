@@ -11,6 +11,7 @@
 
     <!-- 网络权限（AI API 和 GitHub） -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- 前台服务（后台运行 Linux Runtime 进程） -->
@@ -56,5 +57,15 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- 更新安装：FileProvider 为已下载 APK 生成 content URI -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.codexmobile.app.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

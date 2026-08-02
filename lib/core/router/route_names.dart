@@ -8,6 +8,7 @@ abstract class RouteNames {
   static const appSettings = '/settings';
   static const about = '/about';
   static const backup = '/backup';
+  static const update = '/update';
 
   // ── 工作区 ──
   static const workspaceList = '/workspaces';
