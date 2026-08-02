@@ -10,10 +10,12 @@ import '../../features/git/views/issue_list_page.dart';
 import '../../features/git/views/pr_list_page.dart';
 import '../../features/git/views/repo_list_page.dart';
 import '../../features/home/views/home_page.dart';
+import '../../features/settings/views/about_settings_page.dart';
 import '../../features/settings/views/locale_settings_page.dart';
 import '../../features/settings/views/theme_settings_page.dart';
 import '../../features/terminal/views/terminal_page.dart';
 import '../../features/workspace/views/workspace_list_page.dart';
+import '../navigation/global_navigator_key.dart';
 import 'route_guard.dart';
 import 'route_names.dart';
 
@@ -22,6 +24,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authProvider);
 
   return GoRouter(
+    navigatorKey: globalNavigatorKey,
     initialLocation: RouteNames.home,
 
     // ── 路由守卫 ──
@@ -59,6 +62,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.localeSettings,
         name: 'localeSettings',
         builder: (context, state) => const LocaleSettingsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.about,
+        name: 'about',
+        builder: (context, state) => const AboutSettingsPage(),
       ),
       GoRoute(
         path: RouteNames.workspaceList,

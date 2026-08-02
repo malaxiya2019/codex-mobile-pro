@@ -6,6 +6,7 @@ abstract class RouteNames {
   static const themeSettings = '/theme-settings';
   static const localeSettings = '/locale-settings';
   static const appSettings = '/settings';
+  static const about = '/about';
 
   // ── 工作区 ──
   static const workspaceList = '/workspaces';

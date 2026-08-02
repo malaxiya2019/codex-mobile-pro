@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../logger/log_service.dart';
+import 'error_page.dart';
 
 /// 全局错误处理状态
 enum ErrorHandlerState {
@@ -36,6 +38,12 @@ class GlobalErrorHandler {
   static ErrorHandlerConfig _config = const ErrorHandlerConfig();
   static bool _initialized = false;
 
+  /// 全局导航 key（由 App 层注入），用于生产模式弹出友好崩溃界面
+  static GlobalKey<NavigatorState>? navigatorKey;
+
+  /// 崩溃界面是否正在显示（防止重复弹窗）
+  static bool _crashUiShowing = false;
+
   /// 错误发生回调（外部可监听）
   static void Function(FlutterErrorDetails details)? onError;
 
@@ -43,6 +51,8 @@ class GlobalErrorHandler {
   static void reset() {
     _initialized = false;
     onError = null;
+    navigatorKey = null;
+    _crashUiShowing = false;
   }
 
   /// 初始化全局错误处理
@@ -51,11 +61,13 @@ class GlobalErrorHandler {
   static void init({
     ErrorHandlerConfig? config,
     void Function(FlutterErrorDetails details)? onErrorCallback,
+    GlobalKey<NavigatorState>? navigatorKey,
   }) {
     if (_initialized) return;
 
     _config = config ?? const ErrorHandlerConfig();
     onError = onErrorCallback;
+    GlobalErrorHandler.navigatorKey = navigatorKey;
 
     // 1. 捕获 Flutter 框架错误
     FlutterError.onError = (FlutterErrorDetails details) {
@@ -94,6 +106,11 @@ class GlobalErrorHandler {
     if (_config.state == ErrorHandlerState.debug) {
       FlutterError.dumpErrorToConsole(details);
     }
+
+    // 生产模式 + 启用崩溃 UI：弹出友好错误界面
+    if (_config.state == ErrorHandlerState.production && _config.enableCrashUi) {
+      _showCrashUi(exception, stack);
+    }
   }
 
   /// 处理 Dart 顶层错误
@@ -111,7 +128,33 @@ class GlobalErrorHandler {
       debugPrint('═══════════════════════════════════');
     }
 
+    // 生产模式 + 启用崩溃 UI：弹出友好错误界面
+    if (_config.state == ErrorHandlerState.production && _config.enableCrashUi) {
+      _showCrashUi(error, stack);
+    }
+
     return true;
+  }
+
+  /// 生产模式弹出友好崩溃界面（防重复）
+  static void _showCrashUi(Object error, StackTrace? stack) {
+    if (_crashUiShowing) return;
+    final navigator = navigatorKey?.currentState;
+    if (navigator == null) return;
+
+    _crashUiShowing = true;
+    navigator.push(
+      MaterialPageRoute<void>(
+        builder: (context) => ErrorPage(
+          error: error,
+          stack: stack,
+          isFatal: true,
+          onBack: () => Navigator.of(context).pop(),
+        ),
+      ),
+    ).whenComplete(() {
+      _crashUiShowing = false;
+    });
   }
 
   /// 使用 Zone 封装应用入口（推荐）

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/error/error_handler.dart';
 import 'core/logger/log_service.dart';
+import 'core/navigation/global_navigator_key.dart';
 import 'core/performance/performance_tracker.dart';
 
 void main() {
@@ -16,9 +17,8 @@ void main() {
 
   // 初始化全局异常处理（必须在 runApp 之前）
   GlobalErrorHandler.init(
-    config: const ErrorHandlerConfig(
-      
-    ),
+    config: const ErrorHandlerConfig(),
+    navigatorKey: globalNavigatorKey,
   );
 
   // 初始化日志系统（含文件落盘）
