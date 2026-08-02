@@ -11,12 +11,32 @@ void main() {
         const MaterialApp(home: AboutSettingsPage()),
       );
 
-      expect(find.textContaining(AppInfo.name), findsOneWidget);
+      expect(find.text(AppInfo.name), findsOneWidget);
       expect(find.textContaining('v${AppInfo.versionLabel}'), findsOneWidget);
       expect(find.text(AppInfo.githubUrl), findsOneWidget);
     });
 
     testWidgets('点击仓库地址复制到剪贴板', (tester) async {
+      // mock 剪贴板平台通道（flutter_test 无真实剪贴板，否则调用挂起）
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String?;
+            return null;
+          }
+          if (call.method == 'Clipboard.getData') {
+            return <String, dynamic>{'text': copied};
+          }
+          return null;
+        },
+      );
+      addTearDown(() {
+        tester.binding.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null);
+      });
+
       await tester.pumpWidget(
         const MaterialApp(home: AboutSettingsPage()),
       );
@@ -24,8 +44,8 @@ void main() {
       await tester.tap(find.text(AppInfo.githubUrl));
       await tester.pump();
 
-      final clipboard = await Clipboard.getData('text/plain');
-      expect(clipboard?.text, AppInfo.githubUrl);
+      expect(copied, AppInfo.githubUrl);
+      expect(find.textContaining('仓库地址已复制'), findsOneWidget);
     });
   });
 }
