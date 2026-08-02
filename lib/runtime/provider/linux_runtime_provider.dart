@@ -413,7 +413,12 @@ class LinuxRuntimeProvider implements IRuntimeProvider {
       'SHELL': '/bin/bash',
       'PATH': linuxPath,
       'TERM': 'xterm-256color',
+      // TMPDIR/TMP/TEMP 统一指向 Ubuntu 内部 /tmp：
+      // apt/dpkg/npm 在 rootfs 内运行时依赖这些变量，
+      // 与 linux_execution 注入的 PROOT_TMP_DIR（宿主侧临时目录）解耦。
       'TMPDIR': paths.tmpDir,
+      'TMP': paths.tmpDir,
+      'TEMP': paths.tmpDir,
       'LANG': 'en_US.UTF-8',
       'LC_ALL': 'en_US.UTF-8',
       'USER': 'root',

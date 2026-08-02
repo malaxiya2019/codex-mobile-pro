@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/detector/detection_result.dart';
 import '../../../core/detector/detectors/network_detector.dart';
 import '../../../runtime/environment_doctor.dart';
-import '../../../runtime/installers/apt_toolchain_installers.dart';
 import '../../../runtime/install_models.dart';
 import '../../../runtime/runtime_dependency.dart';
 import '../../../runtime/runtime_detector.dart';
@@ -299,57 +298,22 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
         runner: mgr.processRunner,
         linux: mgr.linuxProvider,
       );
+      // 统一修复链路（幂等、顺序、安全中断）：
+      //   PRoot → /tmp+TMPDIR/TMP/TEMP → dpkg recovery → apt → 工具链验证
+      //   （node 已装、npm 缺失时由 doctor 内部补装 npm，不在此重复实现）
       final report = await doctor.runFullRepair();
-      final checks = [...report.checks];
 
-      // dpkg/apt 恢复后：npm 若仍 broken/missing 且 node 已装 → 补装 npm。
-      // 复用 NodeJsInstaller（node 已装但 npm 缺失 → 仅 apt install npm，
-      // 不重装 nodejs）。dpkg/apt 未恢复时跳过，避免再次失败。
-      if (report.allPassed) {
-        try {
-          final ctx = mgr.buildToolchainContext();
-          final nodeVer = await ctx.versionOf('/usr/bin/node');
-          final npmVer = await ctx.versionOf('/usr/bin/npm');
-          if (nodeVer != null && npmVer == null) {
-            final result = await NodeJsInstaller().install(ctx);
-            checks.add(DoctorCheck(
-              name: 'npm',
-              passed: result.success,
-              repaired: true,
-              detail: result.success
-                  ? 'npm 补装成功（node 已安装，npm 缺失/broken）'
-                  : 'npm 补装失败: ${result.errorMessage}',
-            ));
-          } else {
-            checks.add(DoctorCheck(
-              name: 'npm',
-              passed: npmVer != null,
-              detail: npmVer != null
-                  ? 'npm 可用: $npmVer'
-                  : 'node 未安装，跳过 npm 补装',
-            ));
-          }
-        } catch (e) {
-          checks.add(DoctorCheck(
-            name: 'npm',
-            passed: false,
-            detail: 'npm 检测异常: $e',
-          ));
-        }
-      }
-
-      final fullReport = DoctorReport(checks);
       // 修复完成后刷新检测结果（Capability Registry 重建）
       await checkAll();
       state = state.copyWith(
-        state: fullReport.allPassed
+        state: report.allPassed
             ? DeployState.completed
             : DeployState.error,
-        errorMessage: fullReport.allPassed
+        errorMessage: report.allPassed
             ? null
-            : '环境修复未完全成功:\n${fullReport.summary}',
+            : '环境修复未完全成功:\n${report.summary}',
       );
-      return fullReport;
+      return report;
     } catch (e) {
       state = state.copyWith(
         state: DeployState.error,
