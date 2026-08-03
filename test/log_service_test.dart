@@ -255,4 +255,34 @@ void main() {
       await writer.write('after dispose');
     });
   });
+
+  group('LogService.crash', () {
+    setUp(() {
+      LogService.dispose();
+    });
+
+    test('crash 不抛异常', () {
+      LogService.init(enableFile: false);
+      LogService.crash('FlutterError', Exception('boom'), StackTrace.current);
+      // 没有异常即通过
+    });
+
+    test('crash 落盘后含 CRASH 标记', () async {
+      await LogService.init(logDir: testDir);
+      LogService.crash('FlutterError', Exception('boom-marker'));
+      await LogService.flush();
+
+      final logs = await LogService.getRecentLogs();
+      expect(logs, contains('[ERROR][CRASH] [FlutterError] Exception: boom-marker'));
+    });
+
+    test('crash 堆栈随消息记录', () async {
+      await LogService.init(logDir: testDir);
+      LogService.crash('DartError', Exception('stack-marker'), StackTrace.current);
+      await LogService.flush();
+
+      final logs = await LogService.getRecentLogs();
+      expect(logs, contains('StackTrace:'));
+    });
+  });
 }

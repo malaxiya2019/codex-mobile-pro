@@ -92,11 +92,7 @@ class GlobalErrorHandler {
 
     // 记录日志
     if (_config.enableLogging) {
-      LogService.error(
-        'FlutterError',
-        '[$context] $exception',
-        stack,
-      );
+      LogService.crash('FlutterError', '[$context] $exception', stack);
     }
 
     // 外部回调
@@ -117,7 +113,7 @@ class GlobalErrorHandler {
   static bool _handleDartError(Object error, StackTrace stack) {
     // 记录日志
     if (_config.enableLogging) {
-      LogService.error('DartError', '$error', stack);
+      LogService.crash('DartError', error, stack);
     }
 
     // 调试模式：打印到控制台
@@ -170,7 +166,7 @@ class GlobalErrorHandler {
   /// ```
   static void zoneErrorHandler(Object error, StackTrace stack) {
     if (_config.enableLogging) {
-      LogService.error('ZoneError', '$error', stack);
+      LogService.crash('ZoneError', error, stack);
     }
 
     if (_config.state == ErrorHandlerState.debug) {

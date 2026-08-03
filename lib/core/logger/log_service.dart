@@ -99,6 +99,19 @@ class LogService {
     error(tag, exception is Object ? exception : exception.toString(), stack);
   }
 
+  /// 崩溃级日志（tag 统一为 CRASH，便于日志中心过滤展示）
+  ///
+  /// 用于全局异常捕获（FlutterError / DartError / ZoneError），
+  /// 写入 ERROR 级别，tag 固定为 `CRASH`，来源信息放入消息前缀。
+  static void crash(String source, Object error, [StackTrace? stack]) {
+    final message = error.toString();
+    _log(LogLevel.error, 'CRASH', '[$source] $message');
+    if (stack != null) {
+      final stackStr = stack.toString();
+      _log(LogLevel.error, 'CRASH', '[$source] StackTrace: ${_truncateStack(stackStr)}');
+    }
+  }
+
   /// 核心日志方法
   static void _log(LogLevel level, String tag, String message) {
     if (level.priority < _level.priority) return;
@@ -183,6 +196,14 @@ class LogService {
   static Future<String> getRecentLogs({int maxLines = 100}) async {
     if (_fileWriter == null) return '（文件日志未启用）';
     return _fileWriter!.readRecent(maxLines: maxLines);
+  }
+
+  /// 读取全部日志（含轮转文件，最旧 → 最新）
+  ///
+  /// 供日志中心查看完整历史；日志文件默认 1MB × 5，总量可控。
+  static Future<String> readAllLogs() async {
+    if (_fileWriter == null) return '';
+    return _fileWriter!.readAll();
   }
 
   /// 清理所有日志
