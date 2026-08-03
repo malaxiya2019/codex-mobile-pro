@@ -13,6 +13,7 @@ import '../../features/home/views/home_page.dart';
 import '../../features/settings/views/about_settings_page.dart';
 import '../../features/settings/views/backup_settings_page.dart';
 import '../../features/settings/views/locale_settings_page.dart';
+import '../../features/settings/views/log_center_page.dart';
 import '../../features/settings/views/theme_settings_page.dart';
 import '../../features/settings/views/update_settings_page.dart';
 import '../../features/terminal/views/terminal_page.dart';
@@ -79,6 +80,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RouteNames.update,
         name: 'update',
         builder: (context, state) => const UpdateSettingsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.logCenter,
+        name: 'logCenter',
+        builder: (context, state) => const LogCenterPage(),
       ),
       GoRoute(
         path: RouteNames.workspaceList,
