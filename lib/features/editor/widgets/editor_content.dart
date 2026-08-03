@@ -39,6 +39,13 @@ class _EditorContentState extends State<EditorContent> {
   final FocusNode _focusNode = FocusNode();
   double _fontSize = 14;
 
+  /// 语法高亮 Token 缓存（按行文本，LRU 容量上限）
+  ///
+  /// `_buildLine` 每次 build 都会调用 `highlightLine`，大文件滚动时
+  /// 可见行反复 tokenize 造成卡顿；缓存命中后直接复用 Token 列表。
+  final Map<String, List<SyntaxToken>> _tokenCache = {};
+  static const int _tokenCacheLimit = 1024;
+
   @override
   void initState() {
     super.initState();
@@ -185,6 +192,25 @@ class _EditorContentState extends State<EditorContent> {
     );
   }
 
+  /// 带缓存的行高亮：命中返回缓存 Token，未命中则高亮并写入缓存（LRU 清理）
+  List<SyntaxToken> _highlight(
+    String text,
+    SyntaxHighlighter? highlighter, {
+    required bool isFirstLine,
+  }) {
+    if (highlighter == null || text.isEmpty) return const [];
+    final key = '$isFirstLine|$text';
+    final cached = _tokenCache[key];
+    if (cached != null) return cached;
+
+    final tokens = highlighter.highlightLine(text, isFirstLine: isFirstLine);
+    if (_tokenCache.length >= _tokenCacheLimit) {
+      _tokenCache.remove(_tokenCache.keys.first);
+    }
+    _tokenCache[key] = tokens;
+    return tokens;
+  }
+
   Widget _buildLine(
     int index,
     String text,
@@ -208,7 +234,7 @@ class _EditorContentState extends State<EditorContent> {
     // 语法高亮
     final spans = <TextSpan>[];
     if (highlighter != null && text.isNotEmpty) {
-      final tokens = highlighter.highlightLine(text);
+      final tokens = _highlight(text, highlighter, isFirstLine: index == 0);
       if (tokens.isNotEmpty) {
         int lastEnd = 0;
         for (final token in tokens) {
