@@ -2,7 +2,82 @@
 
 ## [Unreleased]
 
-## [Unreleased]
+### 🏗️ Sprint 9：发布版 ✅
+
+#### 🔄 自动更新
+- `lib/features/settings/services/update_checker.dart` — **新建** GitHub Release 检查（公共仓库免 token，tag 版本比较，首个 APK asset 定位）
+- `lib/features/settings/services/update_downloader.dart` — **新建** APK 流式下载（进度回调，可注入 http.Client）
+- `lib/core/update/update_installer_channel.dart` — **新建** Dart 侧 MethodChannel 封装 installApk
+- `android/app/src/main/kotlin/.../UpdateInstallerPlugin.kt` — **新建** FileProvider content URI → 系统安装器（ACTION_VIEW + GRANT_READ_URI_PERMISSION）
+- `android/.../AndroidManifest.xml` — 新增 REQUEST_INSTALL_PACKAGES 权限 + FileProvider
+- `lib/features/settings/views/update_settings_page.dart` — **新建** 更新页（检查 → 下载进度 → 安装）
+
+#### 💾 备份恢复
+- `lib/core/config/backup_service.dart` — **新建** 配置备份/恢复核心（主题/语言/终端/GitHub Token/工作区/项目白名单，JSON 导出 + 类型安全写回）
+- `lib/features/settings/views/backup_settings_page.dart` — **新建** 备份页（备份按钮/历史列表/恢复确认）
+
+#### ⚡ 性能优化
+- `lib/features/editor/widgets/editor_content.dart` — 语法高亮 Token 缓存（LRU 1024，isFirstLine 参与缓存 key），大文件滚动不再重复 tokenize
+
+#### 💥 崩溃采集
+- `lib/core/logger/log_service.dart` — 新增 `crash()` 崩溃日志（CRASH 标识）
+- `lib/core/logger/error_handler.dart` — 三处异常捕获改用 crash()；生产模式 + enableCrashUi 时经全局 navigator 弹友好 ErrorPage
+- `lib/core/navigation/global_navigator_key.dart` — **新建** 全局 navigatorKey（GoRouter + 错误处理器共用）
+
+#### 📋 日志中心
+- `lib/core/logger/log_service.dart` — 新增 `readAllLogs()`（含轮转文件）与 `exportLogsToDownload()`（MediaStore 写 Download）
+- `lib/core/logger/log_file_writer.dart` — 新增 `readAll()` 合并轮转文件（最旧 → 最新）
+- `lib/features/settings/services/log_parser.dart` — **新建** 日志解析/级别过滤纯函数
+- `lib/features/settings/views/log_center_page.dart` — **新建** 日志中心页（级别过滤/崩溃过滤/导出/清除）
+- `android/.../LogExportPlugin.kt` — **新建** MethodChannel 导出到 Download（targetSdk 36 免运行时权限）
+
+#### ℹ️ 关于页面
+- `lib/features/settings/views/about_settings_page.dart` — **新建** 关于页（版本号/开源许可/仓库链接）
+- `lib/core/config/app_info.dart` — **新建** 应用信息常量（版本 1.0.0+1）
+
+#### 🧪 测试
+- `test/update_checker_test.dart` — 10 个用例（版本比较/Release 检查/User-Agent）
+- `test/backup_service_test.dart` — 5 个用例（白名单过滤/导出/排序/恢复保类型/空备份）
+- `test/log_parser_test.dart` + `test/log_center_page_test.dart` — 日志解析与日志中心 UI
+- `test/editor_content_cache_test.dart` — 3 个用例（缓存命中/isFirstLine key/缓存失效）
+- `test/log_service_test.dart` / `test/error_handler_test.dart` / `test/about_settings_page_test.dart` — 扩展
+
+#### 📋 文档
+- `docs/sprints/sprint-9-开发报告.md` — 完整开发报告
+- `docs/sprints/sprint-9-测试报告.md` — 测试报告
+- `CHANGELOG.md` — 更新日志
+
+---
+
+### 🏗️ Sprint 8：AI 编程增强 ✅
+
+#### 🤖 AI Chat Engine
+- `lib/features/ai/providers/ai_provider_manager.dart` — 多 Provider 注册/健康检查/自动选择（DeepSeek 默认注册）
+- `lib/features/ai/services/chat_engine.dart` — IChatEngine 流式对话架构
+- `lib/features/ai/providers/chat_provider.dart` — ChatProvider 迁移到 IChatEngine，AIProviderManager 注册默认 DeepSeek provider（本地 mimo zero-auth）
+
+#### ✨ AI 编程功能
+- 修 Bug / 解释代码 / 重构建议 / 生成测试 / Commit Message（`feat(sprint-8)` 系列提交）
+- AI 内联补全、代码生成
+
+#### 🧪 测试
+- AI 相关单元测试与 ChatProvider 架构迁移测试
+
+---
+
+### 🏗️ Sprint 7：AI 补全与 GitHub Workflow ✅
+
+#### ✨ AI Inline Completion
+- 编辑器 AI 内联补全引擎（Milestone 1）
+
+#### 💡 AI 辅助
+- 解释代码（Explain Code，Milestone 2）
+- 修复错误 + 代码生成（Fix Error + Generate Code，Milestone 3+4）
+
+#### 🔗 GitHub Workflow
+- GitHub Workflow Provider 化（Milestone 5）
+
+---
 
 ### 🔧 Sprint 0：基础环境修复
 
@@ -49,7 +124,6 @@
 ---
 
 ### 🏗️ Sprint 6：代码编辑器与 GitHub 深度集成 ✅
-：代码编辑器与 GitHub 深度集成 ✅
 
 #### 📝 代码编辑器
 - `features/editor/providers/editor_provider.dart` — 编辑器状态管理（Tab/光标/编辑/查找替换/自动保存）
