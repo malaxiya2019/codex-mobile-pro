@@ -1,6 +1,11 @@
+import 'dart:io';
+
 import 'package:codex_mobile_pro/core/detector/detection_result.dart';
 import 'package:codex_mobile_pro/runtime/runtime_detector.dart';
+import 'package:codex_mobile_pro/runtime/runtime_environment.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'capability/fake_runner.dart';
 
 void main() {
   group('RuntimeDetectionResult', () {
@@ -21,7 +26,8 @@ void main() {
     test('codingReady — 全部 installed 为 true', () {
       final result = RuntimeDetectionResult(
         coding: [
-          makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
+          makeResult(
+              id: 'node', name: 'Node.js', status: DetectionStatus.installed),
           makeResult(id: 'git', name: 'Git', status: DetectionStatus.installed),
         ],
         all: [],
@@ -34,7 +40,8 @@ void main() {
     test('codingReady — 有 missing 为 false', () {
       final result = RuntimeDetectionResult(
         coding: [
-          makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
+          makeResult(
+              id: 'node', name: 'Node.js', status: DetectionStatus.installed),
           makeResult(id: 'git', name: 'Git', status: DetectionStatus.missing),
         ],
         all: [],
@@ -47,8 +54,14 @@ void main() {
     test('codingReady — 全部 unsupported 为 true（无可安装项）', () {
       final result = RuntimeDetectionResult(
         coding: [
-          makeResult(id: 'codex', name: 'Codex CLI', status: DetectionStatus.unsupported),
-          makeResult(id: 'mimo2codex', name: 'mimo2codex', status: DetectionStatus.unsupported),
+          makeResult(
+              id: 'codex',
+              name: 'Codex CLI',
+              status: DetectionStatus.unsupported),
+          makeResult(
+              id: 'mimo2codex',
+              name: 'mimo2codex',
+              status: DetectionStatus.unsupported),
         ],
         all: [],
         isComplete: true,
@@ -61,8 +74,12 @@ void main() {
     test('codingReady — 混合 installed + unsupported 为 true', () {
       final result = RuntimeDetectionResult(
         coding: [
-          makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
-          makeResult(id: 'codex', name: 'Codex CLI', status: DetectionStatus.unsupported),
+          makeResult(
+              id: 'node', name: 'Node.js', status: DetectionStatus.installed),
+          makeResult(
+              id: 'codex',
+              name: 'Codex CLI',
+              status: DetectionStatus.unsupported),
         ],
         all: [],
         isComplete: true,
@@ -74,24 +91,31 @@ void main() {
     test('codingReady — 混合 installed + missing + unsupported 为 false', () {
       final result = RuntimeDetectionResult(
         coding: [
-          makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
+          makeResult(
+              id: 'node', name: 'Node.js', status: DetectionStatus.installed),
           makeResult(id: 'git', name: 'Git', status: DetectionStatus.missing),
-          makeResult(id: 'codex', name: 'Codex CLI', status: DetectionStatus.unsupported),
+          makeResult(
+              id: 'codex',
+              name: 'Codex CLI',
+              status: DetectionStatus.unsupported),
         ],
         all: [],
         isComplete: true,
       );
 
-      expect(result.codingReady, isFalse,
-          reason: '还有 missing 工具未安装');
+      expect(result.codingReady, isFalse, reason: '还有 missing 工具未安装');
     });
 
     test('codingInstalled 只统计 installed', () {
       final result = RuntimeDetectionResult(
         coding: [
-          makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
+          makeResult(
+              id: 'node', name: 'Node.js', status: DetectionStatus.installed),
           makeResult(id: 'git', name: 'Git', status: DetectionStatus.missing),
-          makeResult(id: 'codex', name: 'Codex CLI', status: DetectionStatus.unsupported),
+          makeResult(
+              id: 'codex',
+              name: 'Codex CLI',
+              status: DetectionStatus.unsupported),
         ],
         all: [],
         isComplete: true,
@@ -105,16 +129,22 @@ void main() {
     test('summary 包含基础/编码/AI/开发信息', () {
       final result = RuntimeDetectionResult(
         basic: [
-          makeResult(id: 'linux', name: 'Linux', status: DetectionStatus.installed),
+          makeResult(
+              id: 'linux', name: 'Linux', status: DetectionStatus.installed),
         ],
         coding: [
-          makeResult(id: 'node', name: 'Node.js', status: DetectionStatus.installed),
+          makeResult(
+              id: 'node', name: 'Node.js', status: DetectionStatus.installed),
         ],
         ai: [
-          makeResult(id: 'deepseek_key', name: 'DeepSeek', status: DetectionStatus.missing),
+          makeResult(
+              id: 'deepseek_key',
+              name: 'DeepSeek',
+              status: DetectionStatus.missing),
         ],
         development: [
-          makeResult(id: 'flutter', name: 'Flutter', status: DetectionStatus.missing),
+          makeResult(
+              id: 'flutter', name: 'Flutter', status: DetectionStatus.missing),
         ],
         all: [],
         isComplete: true,
@@ -125,6 +155,132 @@ void main() {
       expect(summary, contains('编码'));
       expect(summary, contains('AI'));
       expect(summary, contains('开发'));
+    });
+  });
+
+  group('reGroupResults — Codex CLI 分组', () {
+    final detector = RuntimeDetector(runner: FakeProcessRunner());
+
+    DetectionResult makeResult({
+      required String id,
+      required DetectionStatus status,
+    }) {
+      return DetectionResult(
+        id: id,
+        name: id,
+        icon: '🤖',
+        status: status,
+      );
+    }
+
+    test('A. codex 归入 coding 分组，mimo2codex 留在 advanced', () {
+      final results = [
+        makeResult(id: 'node', status: DetectionStatus.installed),
+        makeResult(id: 'npm', status: DetectionStatus.installed),
+        makeResult(id: 'git', status: DetectionStatus.installed),
+        makeResult(id: 'python', status: DetectionStatus.installed),
+        makeResult(id: 'codex', status: DetectionStatus.missing),
+        makeResult(id: 'mimo2codex', status: DetectionStatus.missing),
+      ];
+      final grouped = detector.reGroupResults(results);
+
+      final codingIds = grouped.coding.map((r) => r.id).toList();
+      final advancedIds = grouped.advanced.map((r) => r.id).toList();
+
+      expect(codingIds, containsAll(['node', 'npm', 'git', 'python', 'codex']));
+      expect(codingIds, isNot(contains('mimo2codex')));
+      expect(advancedIds, contains('mimo2codex'));
+      expect(advancedIds, isNot(contains('codex')));
+    });
+
+    test('B. codex missing → codingMissing > 0（一键部署按钮条件）', () {
+      // 复刻 deploy_page._buildActionButtons 的 codingMissing 计算：
+      //   final codingMissing = detection.coding
+      //       .where((r) => r.status == DetectionStatus.missing).length;
+      final results = [
+        makeResult(id: 'node', status: DetectionStatus.installed),
+        makeResult(id: 'npm', status: DetectionStatus.installed),
+        makeResult(id: 'git', status: DetectionStatus.installed),
+        makeResult(id: 'python', status: DetectionStatus.installed),
+        makeResult(id: 'codex', status: DetectionStatus.missing),
+      ];
+      final grouped = detector.reGroupResults(results);
+
+      final codingMissing = grouped.coding
+          .where((r) => r.status == DetectionStatus.missing)
+          .length;
+
+      expect(grouped.coding.map((r) => r.id), contains('codex'));
+      expect(codingMissing, greaterThan(0));
+      expect(grouped.codingReady, isFalse);
+    });
+
+    test('C. codex installed → codingReady 正确计算（total/installed 含 codex）', () {
+      final results = [
+        makeResult(id: 'node', status: DetectionStatus.installed),
+        makeResult(id: 'npm', status: DetectionStatus.installed),
+        makeResult(id: 'git', status: DetectionStatus.installed),
+        makeResult(id: 'python', status: DetectionStatus.installed),
+        makeResult(id: 'codex', status: DetectionStatus.installed),
+      ];
+      final grouped = detector.reGroupResults(results);
+
+      expect(grouped.codingTotal, 5);
+      expect(grouped.codingInstalled, 5);
+      expect(grouped.codingReady, isTrue);
+    });
+
+    test('C2. codex missing → codingTotal 含 codex、codingReady false', () {
+      final results = [
+        makeResult(id: 'node', status: DetectionStatus.installed),
+        makeResult(id: 'npm', status: DetectionStatus.installed),
+        makeResult(id: 'git', status: DetectionStatus.installed),
+        makeResult(id: 'python', status: DetectionStatus.installed),
+        makeResult(id: 'codex', status: DetectionStatus.missing),
+      ];
+      final grouped = detector.reGroupResults(results);
+
+      expect(grouped.codingTotal, 5);
+      expect(grouped.codingInstalled, 4);
+      expect(grouped.codingReady, isFalse);
+    });
+
+    test('D. verifyCodingEnvironment Linux 分支能检测 codex', () async {
+      final temp = await Directory.systemTemp.createTemp('rtd-verify-');
+      addTearDown(() => temp.delete(recursive: true));
+
+      final env = RuntimeEnvironment.forTest(temp.path);
+
+      // 构造 Linux Runtime 已安装假象（isUbuntuInstalled 三要素）
+      File('${env.ubuntuBinDir}/proot').createSync(recursive: true);
+      File('${env.ubuntuRootfsDir}/usr/bin/bash').createSync(recursive: true);
+      File(env.installCompleteMarker).createSync(recursive: true);
+
+      // rootfs /usr/bin 下放置 node/git/python3/codex 可执行文件
+      final ubuntuBin = '${env.ubuntuRootfsDir}/usr/bin';
+      for (final tool in ['node', 'git', 'python3', 'codex']) {
+        File('$ubuntuBin/$tool').createSync(recursive: true);
+      }
+
+      // 预设版本检测成功
+      final runner = FakeProcessRunner();
+      runner.whenVersion('node', '18.19.1');
+      runner.whenVersion('git', '2.43.0');
+      runner.whenVersion('python3', '3.12.3');
+      runner.whenVersion('codex', '0.9.0');
+
+      final detector = RuntimeDetector(runner: runner);
+      final results = await detector.verifyCodingEnvironment(environment: env);
+
+      final codex = results.firstWhere((r) => r.tool == 'codex');
+      expect(codex.success, isTrue, reason: 'codex --version 应验证成功');
+      expect(codex.output, contains('0.9.0'));
+
+      // 回归：原有 node/git/python3 仍可验证
+      for (final tool in ['node', 'git', 'python3']) {
+        final r = results.firstWhere((r) => r.tool == tool);
+        expect(r.success, isTrue, reason: '$tool 验证应成功');
+      }
     });
   });
 }

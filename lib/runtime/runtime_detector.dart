@@ -99,10 +99,10 @@ const _kCapabilityMappings = <_CapabilityToResult>[
 
 /// 将 RuntimeCapability 转换为 DetectionResult
 DetectionResult _capabilityToResult(
-    _CapabilityToResult mapping,
-    RuntimeCapability cap,
-    int durationMs,
-    ) {
+  _CapabilityToResult mapping,
+  RuntimeCapability cap,
+  int durationMs,
+) {
   // broken：可执行文件已解析成功（已安装）但执行失败 → error 状态。
   // 不能判定为 missing（否则 UI 显示「可安装」且安装按钮禁用）。
   // 例如 npm 随 Node.js 安装但 exit=127（dpkg interrupted 遗留）。
@@ -133,10 +133,10 @@ DetectionResult _capabilityToResult(
 
 /// 检测结果（按类别分组）
 class RuntimeDetectionResult {
-  final List<DetectionResult> basic;       // Layer 0: Android 系统
-  final List<DetectionResult> linux;       // Layer 1: Linux Runtime
-  final List<DetectionResult> coding;      // Layer 2: Coding Runtime
-  final List<DetectionResult> advanced;    // Layer 3: 高级工具
+  final List<DetectionResult> basic; // Layer 0: Android 系统
+  final List<DetectionResult> linux; // Layer 1: Linux Runtime
+  final List<DetectionResult> coding; // Layer 2: Coding Runtime
+  final List<DetectionResult> advanced; // Layer 3: 高级工具
   final List<DetectionResult> ai;
   final List<DetectionResult> development;
   final List<DetectionResult> all;
@@ -159,8 +159,7 @@ class RuntimeDetectionResult {
   int get codingTotal => coding.length;
   int get codingUnsupported =>
       coding.where((r) => r.status == DetectionStatus.unsupported).length;
-  bool get codingReady =>
-      codingInstalled >= codingTotal - codingUnsupported;
+  bool get codingReady => codingInstalled >= codingTotal - codingUnsupported;
 
   /// 环境就绪状态
   bool get isEnvironmentReady => codingReady;
@@ -169,11 +168,13 @@ class RuntimeDetectionResult {
   String get summary {
     final parts = <String>[];
     if (basic.isNotEmpty) {
-      final i = basic.where((r) => r.status == DetectionStatus.installed).length;
+      final i =
+          basic.where((r) => r.status == DetectionStatus.installed).length;
       parts.add('基础 ✅$i/${basic.length}');
     }
     if (linux.isNotEmpty) {
-      final i = linux.where((r) => r.status == DetectionStatus.installed).length;
+      final i =
+          linux.where((r) => r.status == DetectionStatus.installed).length;
       parts.add('Linux ✅$i/${linux.length}');
     }
     if (coding.isNotEmpty) {
@@ -184,8 +185,9 @@ class RuntimeDetectionResult {
       parts.add('AI ✅$i/${ai.length}');
     }
     if (development.isNotEmpty) {
-      final i =
-          development.where((r) => r.status == DetectionStatus.installed).length;
+      final i = development
+          .where((r) => r.status == DetectionStatus.installed)
+          .length;
       parts.add('开发 ✅$i/${development.length}');
     }
     return parts.join(' · ');
@@ -303,8 +305,7 @@ class RuntimeDetector {
   }
 
   /// 检测 Linux Runtime（PRoot + Ubuntu rootfs）
-  Future<List<DetectionResult>> _detectLinux(
-      RuntimeEnvironment env) async {
+  Future<List<DetectionResult>> _detectLinux(RuntimeEnvironment env) async {
     final results = <DetectionResult>[];
     final ubuntuDir = env.ubuntuRootfsDir;
     final prootFile = File(p.join(env.ubuntuBinDir, 'proot'));
@@ -324,7 +325,7 @@ class RuntimeDetector {
           try {
             final content = osRelease.readAsStringSync();
             final versionMatch =
-            RegExp(r'VERSION_ID="([^"]+)"').firstMatch(content);
+                RegExp(r'VERSION_ID="([^"]+)"').firstMatch(content);
             if (versionMatch != null) {
               version = 'Ubuntu ${versionMatch.group(1)}';
             }
@@ -370,8 +371,7 @@ class RuntimeDetector {
       final providers = _runtimeManager.registeredProviders;
       final linuxProviders =
           providers.where((p) => p.type == ProviderType.linux).toList();
-      final effective =
-          linuxProviders.isNotEmpty ? linuxProviders : providers;
+      final effective = linuxProviders.isNotEmpty ? linuxProviders : providers;
       for (final provider in effective) {
         final cap = await _capabilityResolver.checkCapability(
           mapping.type,
@@ -412,8 +412,11 @@ class RuntimeDetector {
         case RuntimeSubCategory.coding:
           if (r.id == 'linux') {
             linux.add(r);
-          } else if (r.id == 'node' || r.id == 'git' || r.id == 'python' ||
-              r.id == 'npm') {
+          } else if (r.id == 'node' ||
+              r.id == 'git' ||
+              r.id == 'python' ||
+              r.id == 'npm' ||
+              r.id == 'codex') {
             coding.add(r);
           } else {
             advanced.add(r);
@@ -449,7 +452,7 @@ class RuntimeDetector {
     if (environment != null &&
         environment.getRuntimeType() == RuntimeType.linux) {
       final ubuntuBin = p.join(environment.ubuntuRootfsDir, 'usr', 'bin');
-      for (final tool in ['node', 'git', 'python3']) {
+      for (final tool in ['node', 'git', 'python3', 'codex']) {
         final toolPath = p.join(ubuntuBin, tool);
         final file = File(toolPath);
         if (file.existsSync()) {
@@ -464,9 +467,9 @@ class RuntimeDetector {
               tool: tool,
               success: result.exitCode == 0,
               output:
-              result.exitCode == 0 ? result.stdout.toString().trim() : null,
+                  result.exitCode == 0 ? result.stdout.toString().trim() : null,
               error:
-              result.exitCode != 0 ? result.stderr.toString().trim() : null,
+                  result.exitCode != 0 ? result.stderr.toString().trim() : null,
             ));
           } catch (e) {
             results.add(VerificationResult(
@@ -502,9 +505,9 @@ class RuntimeDetector {
             tool: entry.$1,
             success: result.exitCode == 0,
             output:
-            result.exitCode == 0 ? result.stdout.toString().trim() : null,
+                result.exitCode == 0 ? result.stdout.toString().trim() : null,
             error:
-            result.exitCode != 0 ? result.stderr.toString().trim() : null,
+                result.exitCode != 0 ? result.stderr.toString().trim() : null,
           ));
         } catch (e) {
           results.add(VerificationResult(
