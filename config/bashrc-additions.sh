@@ -55,7 +55,7 @@ thread_start() {
 #  cy — 智能启动 Codex
 # ============================================================
 cy() {
-    mimo_start
+    # DeepSeek 直连模式，无需 mimo2codex 代理
     codex "$@"
 }
 
@@ -65,7 +65,7 @@ cy() {
 #  cyo --en  = 英文模式
 # ============================================================
 cyo() {
-    mimo_start
+    # DeepSeek 直连模式，无需 mimo2codex 代理
     thread_start
 
     local ZH_PROMPT="以后所有自然语言使用简体中文回答。

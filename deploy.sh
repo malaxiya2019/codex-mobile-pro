@@ -233,9 +233,9 @@ model_context_window = 128000
 model_reasoning_effort = "high"
 
 [model_providers.deepseek]
-name = "DeepSeek (via mimo2codex)"
-base_url = "http://127.0.0.1:8788/v1"
-wire_api = "responses"
+name = "DeepSeek"
+base_url = "https://api.deepseek.com"
+wire_api = "chat"
 requires_openai_auth = false
 env_key = "DEEPSEEK_API_KEY"
 

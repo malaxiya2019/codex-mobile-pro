@@ -1,6 +1,6 @@
 # ============================================================
 #  Codex 配置文件 — Codex Mobile Pro
-#  DeepSeek + mimo2codex 代理配置
+#  DeepSeek 直连配置（不经过 mimo2codex 代理）
 #  $HOME 会被 deploy.sh 自动替换为实际路径
 # ============================================================
 
@@ -10,9 +10,9 @@ model_context_window = 128000
 model_reasoning_effort = "high"
 
 [model_providers.deepseek]
-name = "DeepSeek (via mimo2codex)"
-base_url = "http://127.0.0.1:8788/v1"
-wire_api = "responses"
+name = "DeepSeek"
+base_url = "https://api.deepseek.com"
+wire_api = "chat"
 requires_openai_auth = false
 env_key = "DEEPSEEK_API_KEY"
 
