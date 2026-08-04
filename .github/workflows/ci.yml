@@ -71,10 +71,10 @@ jobs:
         run: flutter test --reporter expanded
 
   # ============================================================
-  #  Job 3: Android Debug Build
+  #  Job 3: Android Build (Debug + Release)
   # ============================================================
   build-android:
-    name: 📦 Android Debug Build
+    name: 📦 Android Build (debug + release)
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -126,6 +126,10 @@ jobs:
         # versionCode = GitHub Actions run number（每次运行严格递增），
         # 配合固定 keystore 实现无缝覆盖升级（无需卸载重装）。
         run: flutter build apk --debug --build-number=${{ github.run_number }} --build-name=1.0.0
+      - name: Build Android APK (release)
+        # release 同样使用仓库固定 debug.keystore 签名（build.gradle: release.signingConfig = debug），
+        # versionCode 与 debug 一致（同签名同 code 可互相覆盖安装）。
+        run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=1.0.0
 
       - name: Verify APK signature (must match fixed keystore)
         run: |
@@ -145,12 +149,35 @@ jobs:
             exit 1
           fi
           echo "✅ APK 签名证书匹配固定 keystore"
+      - name: Verify APK signature (release, must match fixed keystore)
+        run: |
+          EXPECTED="b1307e1488fe7cad36f0cac5ab2d1f0ce581e0c06afc74d391584a6bf2b93dd3"
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          APKSIGNER=$(ls "$SDK_ROOT"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "⚠️  apksigner 未找到，跳过签名校验"
+            exit 0
+          fi
+          ACTUAL=$("$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk \
+            | grep "certificate SHA-256 digest" | awk '{print $NF}')
+          echo "expected: $EXPECTED"
+          echo "actual:   $ACTUAL"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "❌ release APK 签名证书与固定 keystore 不匹配！覆盖安装会失败。"
+            exit 1
+          fi
+          echo "✅ release APK 签名证书匹配固定 keystore"
 
       - name: Upload APK
         uses: actions/upload-artifact@v5
         with:
           name: app-debug-apk-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-debug.apk
+      - name: Upload release APK
+        uses: actions/upload-artifact@v5
+        with:
+          name: app-release-apk-${{ github.run_number }}
+          path: build/app/outputs/flutter-apk/app-release.apk
 
   # ============================================================
   #  Job 4: 构建报告
@@ -170,4 +197,4 @@ jobs:
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| 🔍 Analyze | ${{ needs.analyze.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 🧪 Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📦 Android Build | ${{ needs.build-android.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Android Build (debug+release) | ${{ needs.build-android.result }} |" >> $GITHUB_STEP_SUMMARY
