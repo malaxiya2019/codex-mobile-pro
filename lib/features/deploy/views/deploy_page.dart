@@ -209,7 +209,10 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                 color: Theme.of(context).colorScheme.surface,
                 border: Border(
                   top: BorderSide(
-                    color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .outlineVariant
+                        .withValues(alpha: 0.5),
                   ),
                 ),
               ),
@@ -539,7 +542,8 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: () {
-                      ref.read(deployStatusProvider.notifier)
+                      ref
+                          .read(deployStatusProvider.notifier)
                           .installCodingRuntime();
                     },
                     icon: const Icon(Icons.restart_alt, size: 18),
@@ -554,8 +558,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
     );
   }
 
-  Widget _buildCheckingIndicator(
-      BuildContext context, DeployStatus status) {
+  Widget _buildCheckingIndicator(BuildContext context, DeployStatus status) {
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: 24),
       child: Center(
@@ -574,8 +577,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
   // 安装进度
   // ════════════════════════════════════════════════════════════════
 
-  Widget _buildInstallingIndicator(
-      BuildContext context, DeployStatus status) {
+  Widget _buildInstallingIndicator(BuildContext context, DeployStatus status) {
     final theme = Theme.of(context);
     final progress = status.currentProgress;
 
@@ -669,7 +671,6 @@ class _DeployPageState extends ConsumerState<DeployPage> {
   // ════════════════════════════════════════════════════════════════
 
   Widget _buildActionButtons(BuildContext context, DeployStatus status) {
-
     final detection = status.detectionResult;
 
     if (detection == null) return const SizedBox.shrink();
@@ -686,8 +687,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: () {
-                ref.read(deployStatusProvider.notifier)
-                    .installCodingRuntime();
+                ref.read(deployStatusProvider.notifier).installCodingRuntime();
               },
               icon: const Icon(Icons.rocket_launch),
               label: const Text('一键部署 Coding 环境'),
@@ -708,9 +708,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
             onPressed: status.isInstalling || status.isRepairing
                 ? null
                 : () {
-                    ref
-                        .read(deployStatusProvider.notifier)
-                        .repairEnvironment();
+                    ref.read(deployStatusProvider.notifier).repairEnvironment();
                   },
             icon: const Icon(Icons.build_circle, size: 18),
             label: const Text('🔧 修复环境'),
@@ -791,9 +789,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  allPassed
-                      ? '✅ Coding Environment Ready'
-                      : '⚠️ 部分验证未通过',
+                  allPassed ? '✅ Coding Environment Ready' : '⚠️ 部分验证未通过',
                   style: theme.textTheme.titleSmall
                       ?.copyWith(fontWeight: FontWeight.bold),
                 ),
@@ -819,9 +815,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        r.success
-                            ? r.output ?? '正常'
-                            : r.error ?? '未找到',
+                        r.success ? r.output ?? '正常' : r.error ?? '未找到',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: r.success
                               ? theme.colorScheme.onSurfaceVariant
@@ -891,10 +885,10 @@ class _DeployPageState extends ConsumerState<DeployPage> {
         break;
     }
 
-    final displayName = result.status == DetectionStatus.missing &&
-            result.missingHint != null
-        ? result.missingHint!
-        : '${result.icon} ${result.name}';
+    final displayName =
+        result.status == DetectionStatus.missing && result.missingHint != null
+            ? result.missingHint!
+            : '${result.icon} ${result.name}';
 
     // 判断是否显示安装按钮
     final showInstall = result.status == DetectionStatus.missing &&
@@ -909,9 +903,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
         borderRadius: BorderRadius.circular(12),
         onTap: result.status == DetectionStatus.installed
             ? null
-            : () => ref
-                .read(deployStatusProvider.notifier)
-                .checkOne(result.id),
+            : () => ref.read(deployStatusProvider.notifier).checkOne(result.id),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
@@ -941,15 +933,15 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                     if (result.version != null)
                       Text(
                         result.version!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: colorScheme.onSurfaceVariant),
                       ),
                     if (result.errorMessage != null &&
                         result.status != DetectionStatus.installed)
                       Text(
                         result.errorMessage!,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.red.shade300),
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: Colors.red.shade300),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1118,7 +1110,9 @@ class _DeployPageState extends ConsumerState<DeployPage> {
               if (key.isNotEmpty) {
                 _saveApiKey(key);
                 Navigator.pop(ctx);
-                ref.read(deployStatusProvider.notifier).checkOne('deepseek_key');
+                ref
+                    .read(deployStatusProvider.notifier)
+                    .checkOne('deepseek_key');
               }
             },
             child: const Text('保存'),
@@ -1130,8 +1124,17 @@ class _DeployPageState extends ConsumerState<DeployPage> {
 
   /// 保存 API Key
   Future<void> _saveApiKey(String key) async {
+    final env = RuntimeManager.instance.environment;
+    if (env == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Runtime 环境未初始化，无法保存 API Key')),
+        );
+      }
+      return;
+    }
     try {
-      final dir = Directory('${RuntimeManager.instance.environment?.runtimeDir ?? ""}/.mimo2codex');
+      final dir = Directory(env.mimoConfigDir);
       if (!dir.existsSync()) {
         await dir.create(recursive: true);
       }
@@ -1177,4 +1180,3 @@ class _DeployPageState extends ConsumerState<DeployPage> {
     );
   }
 }
-

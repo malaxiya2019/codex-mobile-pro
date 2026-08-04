@@ -25,6 +25,9 @@ class RuntimeEnvironment {
   String get runtimeDir => '$_appFilesDir/runtime';
   String get binDir => '$runtimeDir/bin';
 
+  /// mimo2codex 配置文件目录（与文档 `~/.mimo2codex/.env` 一致）
+  String get mimoConfigDir => '$_appFilesDir/.mimo2codex';
+
   // ─── 单包安装目录（deprecated） ───────────────────────────────
   String get nodeDir => '$runtimeDir/node';
   String get nodeBinDir => '$nodeDir/bin';
@@ -286,7 +289,7 @@ class RuntimeEnvironment {
   }
 
   bool _configFileExists() {
-    final envFile = File('$_appFilesDir/.mimo2codex/.env');
+    final envFile = File('$mimoConfigDir/.env');
     if (envFile.existsSync()) {
       final content = envFile.readAsStringSync();
       return content.contains('DS_API_KEY');
