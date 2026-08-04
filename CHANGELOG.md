@@ -63,6 +63,10 @@
 #### 🧪 测试
 - AI 相关单元测试与 ChatProvider 架构迁移测试
 
+#### 📋 文档
+- `docs/sprints/sprint-8-开发报告.md` — 完整开发报告
+
+
 ---
 
 ### 🏗️ Sprint 7：AI 补全与 GitHub Workflow ✅
@@ -76,6 +80,10 @@
 
 #### 🔗 GitHub Workflow
 - GitHub Workflow Provider 化（Milestone 5）
+
+#### 📋 文档
+- `docs/sprints/sprint-7-开发报告.md` — 完整开发报告
+
 
 ---
 
