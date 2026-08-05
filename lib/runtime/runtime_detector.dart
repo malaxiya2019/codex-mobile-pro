@@ -549,38 +549,39 @@ class RuntimeDetector {
 
     if (environment != null &&
         environment.getRuntimeType() == RuntimeType.linux) {
-      final ubuntuBin = p.join(environment.ubuntuRootfsDir, 'usr', 'bin');
+      // Linux Runtime 就绪时一律在 PRoot（rootfs）内执行真实版本检测，
+      // 与检测卡片共用同一执行链路，避免两个口径互相矛盾：
+      //   - 旧实现用宿主侧 File.existsSync() 判「未安装」，对 rootfs 内
+      //     broken symlink（宿主侧目标不存在）误报「未安装」，
+      //     而卡片却显示 exit=127（已安装但异常），用户被误导。
+      //   - 新实现直接执行 `node --version` 等（PATH 为 rootfs 内标准
+      //     PATH），未安装 → command not found；broken → exit=127，
+      //     与卡片口径一致。
       for (final tool in ['node', 'git', 'python3', 'codex']) {
-        final toolPath = p.join(ubuntuBin, tool);
-        final file = File(toolPath);
-        if (file.existsSync()) {
-          try {
-            final req = RuntimeProcessRequest(
-              executable: toolPath,
-              arguments: ['--version'],
-              runtimeId: 'linux',
-            );
-            final result = await _runner.run(req);
-            results.add(VerificationResult(
-              tool: tool,
-              success: result.exitCode == 0,
-              output:
-                  result.exitCode == 0 ? result.stdout.toString().trim() : null,
-              error:
-                  result.exitCode != 0 ? result.stderr.toString().trim() : null,
-            ));
-          } catch (e) {
-            results.add(VerificationResult(
-              tool: tool,
-              success: false,
-              error: e.toString(),
-            ));
-          }
-        } else {
+        try {
+          final req = RuntimeProcessRequest(
+            executable: tool,
+            arguments: ['--version'],
+            runtimeId: 'linux',
+          );
+          final result = await _runner.run(req);
+          final stderr = result.stderr.toString().trim();
+          results.add(VerificationResult(
+            tool: tool,
+            success: result.exitCode == 0,
+            output:
+                result.exitCode == 0 ? result.stdout.toString().trim() : null,
+            error: result.exitCode != 0
+                ? (stderr.isNotEmpty
+                    ? stderr
+                    : '命令不可用 (exit=${result.exitCode})')
+                : null,
+          ));
+        } catch (e) {
           results.add(VerificationResult(
             tool: tool,
             success: false,
-            error: '未安装',
+            error: e.toString(),
           ));
         }
       }

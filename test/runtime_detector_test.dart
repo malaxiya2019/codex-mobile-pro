@@ -283,6 +283,73 @@ void main() {
         expect(r.success, isTrue, reason: '$tool 验证应成功');
       }
     });
+
+    test(
+        'D2. verifyCodingEnvironment：rootfs 内 broken（exit=127）→ 报 exit 而非「未安装」',
+        () async {
+      final temp = await Directory.systemTemp.createTemp('rtd-verify-127-');
+      addTearDown(() => temp.delete(recursive: true));
+      final env = RuntimeEnvironment.forTest(temp.path);
+
+      // 构造 Linux Runtime 已安装假象（isUbuntuInstalled 三要素）
+      File('${env.ubuntuBinDir}/proot').createSync(recursive: true);
+      File('${env.ubuntuRootfsDir}/usr/bin/bash').createSync(recursive: true);
+      File(env.installCompleteMarker).createSync(recursive: true);
+
+      final runner = FakeProcessRunner();
+      runner.whenVersion('node', '18.19.1');
+      runner.whenVersion('git', '2.43.0');
+      runner.whenVersion('python3', '3.12.3');
+      // rootfs 内 broken symlink：命令存在但执行失败（无 stderr 输出）
+      runner.when('codex --version', const FakeCommandResult(exitCode: 127));
+
+      final detector = RuntimeDetector(runner: runner);
+      final results = await detector.verifyCodingEnvironment(environment: env);
+
+      final codex = results.firstWhere((r) => r.tool == 'codex');
+      expect(codex.success, isFalse);
+      expect(codex.error, isNotNull);
+      expect(codex.error, isNot(contains('未安装')),
+          reason: 'broken 与未安装必须区分（避免误导用户）');
+      expect(codex.error, contains('127'));
+      // 回归：node/git/python3 正常
+      for (final tool in ['node', 'git', 'python3']) {
+        final r = results.firstWhere((r) => r.tool == tool);
+        expect(r.success, isTrue, reason: '$tool 验证应成功');
+      }
+    });
+
+    test('D3. verifyCodingEnvironment：版本检测走 PRoot 上下文（runtimeId=linux）',
+        () async {
+      final temp = await Directory.systemTemp.createTemp('rtd-verify-rid-');
+      addTearDown(() => temp.delete(recursive: true));
+      final env = RuntimeEnvironment.forTest(temp.path);
+
+      // 构造 Linux Runtime 已安装假象（isUbuntuInstalled 三要素）
+      File('${env.ubuntuBinDir}/proot').createSync(recursive: true);
+      File('${env.ubuntuRootfsDir}/usr/bin/bash').createSync(recursive: true);
+      File(env.installCompleteMarker).createSync(recursive: true);
+
+      final runner = FakeProcessRunner();
+      runner.whenVersion('node', '18.19.1');
+      runner.whenVersion('git', '2.43.0');
+      runner.whenVersion('python3', '3.12.3');
+      runner.whenVersion('codex', '0.9.0');
+
+      final detector = RuntimeDetector(runner: runner);
+      await detector.verifyCodingEnvironment(environment: env);
+
+      // 全部走 runtimeId='linux'（PRoot → rootfs），不落在宿主侧
+      for (final tool in ['node', 'git', 'python3', 'codex']) {
+        final calls = runner.executedRequests
+            .where((r) =>
+                r.executable == tool && r.arguments.join(' ') == '--version')
+            .toList();
+        expect(calls, isNotEmpty, reason: '$tool 应发出版本检测请求');
+        expect(calls.first.runtimeId, 'linux',
+            reason: '$tool 必须走 PRoot 上下文（rootfs 内真实检测）');
+      }
+    });
   });
 
   group('Linux Runtime 未就绪 → Coding 工具 missing（APK-238 回归）', () {

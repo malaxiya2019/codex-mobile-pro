@@ -3,7 +3,7 @@
 ///
 /// 覆盖（收敛修复后）：
 ///   1. 干净环境 → 全部通过（proot / loader / rootfs / tmp / tmp-env /
-///      dpkg / apt / node / npm / git / python3）
+///      dpkg / apt / node / npm / git / python3 / codex）
 ///   2. proot 缺失 → 结构化失败且安全中断
 ///   3. /tmp 缺失 → 自动创建 + TMPDIR/TMP/TEMP 环境变量验证
 ///   4. dpkg interrupted → dpkg --configure -a 被调用并修复
@@ -12,6 +12,10 @@
 ///   7. npm 补装：node 已装 npm 缺 → 仅 apt install npm，不重装 nodejs
 ///   8. Capability 独立映射：npm 补装失败不影响 Node.js = installed
 ///   9. apt 失败 → 跳过 npm 补装（防止错误扩大）
+///  10. 修复环境自愈：node 缺失+apt 可用 → 补装 nodejs+npm
+///  11. git 缺失+apt 可用 → 补装 git
+///  12. codex 缺失+npm 可用 → npm 全局补装 @openai/codex
+///  13. apt 失败 → node/git/codex 一律只读不补装
 /// ====================================================================
 library;
 
@@ -77,6 +81,11 @@ void main() {
         const FakeCommandResult(
           stdout: 'Python 3.12.3\n',
         ));
+    fakeRunner.when(
+        'codex --version',
+        const FakeCommandResult(
+          stdout: '0.50.0\n',
+        ));
   }
 
   setUp(() async {
@@ -105,8 +114,8 @@ void main() {
       expect(report.hasUnresolved, false);
       expect(report.anyRepaired, false);
       // 检查项：proot/loader/rootfs/proot-smoke/tmp/tmp-env/dpkg/apt/
-      //         node/npm/git/python3（共 12 项）
-      expect(report.checks.length, greaterThanOrEqualTo(12));
+      //         node/npm/git/python3/codex（共 13 项）
+      expect(report.checks.length, greaterThanOrEqualTo(13));
       final names = report.checks.map((c) => c.name).toList();
       for (final n in [
         'proot',
@@ -121,6 +130,7 @@ void main() {
         'npm',
         'git',
         'python3',
+        'codex',
       ]) {
         expect(names, contains(n), reason: '缺少检查项 $n: $names');
       }
@@ -327,100 +337,97 @@ void main() {
     });
   });
 
-    test('缺 list/md5sums 控制文件 → 检测到 → 重装损坏包 → audit 干净',
-        () async {
-      setUpHealthy();
-      const brokenText = 'The following packages are missing the list control '
-          'file in the database, they need to be reinstalled:\n'
-          ' dpkg-dev             Debian package development tools\n'
-          'The following packages are missing the md5sums control file in '
-          'the database, they need to be reinstalled:\n'
-          ' dpkg-dev             Debian package development tools\n';
-      // audit：损坏 → configure -a 后复验仍损坏 → 重装后最终复验干净
-      fakeRunner.whenSequence('dpkg --audit', [
-        const FakeCommandResult(stdout: brokenText),
-        const FakeCommandResult(stdout: brokenText),
-        const FakeCommandResult(),
-      ]);
-      fakeRunner.when('dpkg --configure -a', const FakeCommandResult());
-      fakeRunner.when('apt-get update', const FakeCommandResult());
-      fakeRunner.when(
-          'apt-get install --reinstall -y dpkg-dev',
-          const FakeCommandResult(stdout: 'Setting up dpkg-dev ...'));
+  test('缺 list/md5sums 控制文件 → 检测到 → 重装损坏包 → audit 干净', () async {
+    setUpHealthy();
+    const brokenText = 'The following packages are missing the list control '
+        'file in the database, they need to be reinstalled:\n'
+        ' dpkg-dev             Debian package development tools\n'
+        'The following packages are missing the md5sums control file in '
+        'the database, they need to be reinstalled:\n'
+        ' dpkg-dev             Debian package development tools\n';
+    // audit：损坏 → configure -a 后复验仍损坏 → 重装后最终复验干净
+    fakeRunner.whenSequence('dpkg --audit', [
+      const FakeCommandResult(stdout: brokenText),
+      const FakeCommandResult(stdout: brokenText),
+      const FakeCommandResult(),
+    ]);
+    fakeRunner.when('dpkg --configure -a', const FakeCommandResult());
+    fakeRunner.when('apt-get update', const FakeCommandResult());
+    fakeRunner.when('apt-get install --reinstall -y dpkg-dev',
+        const FakeCommandResult(stdout: 'Setting up dpkg-dev ...'));
 
-      final report = await doctor.runFullRepair();
+    final report = await doctor.runFullRepair();
 
-      final dpkg = report.checks.firstWhere((c) => c.name == 'dpkg');
-      expect(dpkg.passed, true, reason: report.summary);
-      expect(dpkg.repaired, true);
-      expect(dpkg.detail, contains('重装损坏包'));
-      // apt-get install --reinstall -y dpkg-dev 确实被执行
-      final ranReinstall = fakeRunner.executedRequests.any(
-        (r) =>
-            r.executable.endsWith('apt-get') &&
-            r.arguments.join(' ') == 'install --reinstall -y dpkg-dev',
-      );
-      expect(ranReinstall, true);
-      expect(report.allPassed, true, reason: report.summary);
-    });
+    final dpkg = report.checks.firstWhere((c) => c.name == 'dpkg');
+    expect(dpkg.passed, true, reason: report.summary);
+    expect(dpkg.repaired, true);
+    expect(dpkg.detail, contains('重装损坏包'));
+    // apt-get install --reinstall -y dpkg-dev 确实被执行
+    final ranReinstall = fakeRunner.executedRequests.any(
+      (r) =>
+          r.executable.endsWith('apt-get') &&
+          r.arguments.join(' ') == 'install --reinstall -y dpkg-dev',
+    );
+    expect(ranReinstall, true);
+    expect(report.allPassed, true, reason: report.summary);
+  });
 
-    test('重装损坏包失败 → dpkg 未恢复，安全中断后续流程', () async {
-      setUpHealthy();
-      const brokenText = 'The following packages are missing the list control '
-          'file in the database, they need to be reinstalled:\n'
-          ' dpkg-dev             Debian package development tools\n';
-      fakeRunner.whenSequence('dpkg --audit', [
-        const FakeCommandResult(stdout: brokenText),
-        const FakeCommandResult(stdout: brokenText),
-      ]);
-      fakeRunner.when('dpkg --configure -a', const FakeCommandResult());
-      fakeRunner.when('apt-get update', const FakeCommandResult());
-      fakeRunner.when(
-          'apt-get install --reinstall -y dpkg-dev',
-          const FakeCommandResult(
-            exitCode: 1,
-            stderr: 'E: dpkg was interrupted, you must manually run '
-                "'dpkg --configure -a' to correct the problem.",
-          ));
+  test('重装损坏包失败 → dpkg 未恢复，安全中断后续流程', () async {
+    setUpHealthy();
+    const brokenText = 'The following packages are missing the list control '
+        'file in the database, they need to be reinstalled:\n'
+        ' dpkg-dev             Debian package development tools\n';
+    fakeRunner.whenSequence('dpkg --audit', [
+      const FakeCommandResult(stdout: brokenText),
+      const FakeCommandResult(stdout: brokenText),
+    ]);
+    fakeRunner.when('dpkg --configure -a', const FakeCommandResult());
+    fakeRunner.when('apt-get update', const FakeCommandResult());
+    fakeRunner.when(
+        'apt-get install --reinstall -y dpkg-dev',
+        const FakeCommandResult(
+          exitCode: 1,
+          stderr: 'E: dpkg was interrupted, you must manually run '
+              "'dpkg --configure -a' to correct the problem.",
+        ));
 
-      final report = await doctor.runFullRepair();
+    final report = await doctor.runFullRepair();
 
-      final dpkg = report.checks.firstWhere((c) => c.name == 'dpkg');
-      expect(dpkg.passed, false);
-      expect(dpkg.detail, contains('重装损坏包失败'));
-      // 安全中断：后续 apt / node / npm / git / python3 一律不出现
-      final names = report.checks.map((c) => c.name).toList();
-      expect(names, isNot(contains('apt')));
-      expect(names, isNot(contains('node')));
-      expect(names, isNot(contains('npm')));
-      expect(names, isNot(contains('git')));
-      expect(names, isNot(contains('python3')));
-    });
+    final dpkg = report.checks.firstWhere((c) => c.name == 'dpkg');
+    expect(dpkg.passed, false);
+    expect(dpkg.detail, contains('重装损坏包失败'));
+    // 安全中断：后续 apt / node / npm / git / python3 一律不出现
+    final names = report.checks.map((c) => c.name).toList();
+    expect(names, isNot(contains('apt')));
+    expect(names, isNot(contains('node')));
+    expect(names, isNot(contains('npm')));
+    expect(names, isNot(contains('git')));
+    expect(names, isNot(contains('python3')));
+  });
 
-    test('重装后 audit 仍异常 → dpkg 失败（不误判成功）', () async {
-      setUpHealthy();
-      const brokenText = 'The following packages are missing the list control '
-          'file in the database, they need to be reinstalled:\n'
-          ' dpkg-dev             Debian package development tools\n';
-      // 三次 audit 全部报损坏（重装未能恢复）
-      fakeRunner.whenSequence('dpkg --audit', [
-        const FakeCommandResult(stdout: brokenText),
-        const FakeCommandResult(stdout: brokenText),
-        const FakeCommandResult(stdout: brokenText),
-      ]);
-      fakeRunner.when('dpkg --configure -a', const FakeCommandResult());
-      fakeRunner.when('apt-get update', const FakeCommandResult());
-      fakeRunner.when(
-          'apt-get install --reinstall -y dpkg-dev',
-          const FakeCommandResult(stdout: 'Setting up dpkg-dev ...'));
+  test('重装后 audit 仍异常 → dpkg 失败（不误判成功）', () async {
+    setUpHealthy();
+    const brokenText = 'The following packages are missing the list control '
+        'file in the database, they need to be reinstalled:\n'
+        ' dpkg-dev             Debian package development tools\n';
+    // 三次 audit 全部报损坏（重装未能恢复）
+    fakeRunner.whenSequence('dpkg --audit', [
+      const FakeCommandResult(stdout: brokenText),
+      const FakeCommandResult(stdout: brokenText),
+      const FakeCommandResult(stdout: brokenText),
+    ]);
+    fakeRunner.when('dpkg --configure -a', const FakeCommandResult());
+    fakeRunner.when('apt-get update', const FakeCommandResult());
+    fakeRunner.when('apt-get install --reinstall -y dpkg-dev',
+        const FakeCommandResult(stdout: 'Setting up dpkg-dev ...'));
 
-      final report = await doctor.runFullRepair();
+    final report = await doctor.runFullRepair();
 
-      final dpkg = report.checks.firstWhere((c) => c.name == 'dpkg');
-      expect(dpkg.passed, false);
-      expect(dpkg.detail, contains('dpkg 重装后仍异常'));
-      expect(report.allPassed, false);
-    });
+    final dpkg = report.checks.firstWhere((c) => c.name == 'dpkg');
+    expect(dpkg.passed, false);
+    expect(dpkg.detail, contains('dpkg 重装后仍异常'));
+    expect(report.allPassed, false);
+  });
 
   group('EnvironmentDoctor — npm 补装与 Capability 独立映射', () {
     test('node 已装、npm 缺失 → 仅补装 npm，不重装 nodejs', () async {
@@ -516,7 +523,7 @@ void main() {
       expect(nodeCheck.passed, true);
     });
 
-    test('node 未安装 → 跳过 npm 补装，Node 独立失败', () async {
+    test('node 未安装 → 全量补装 nodejs+npm，不单独触发 npm 补装', () async {
       setUpHealthy();
       // 真机极端场景：node 与 npm 均不可用
       fakeRunner.when(
@@ -531,26 +538,204 @@ void main() {
             exitCode: 127,
             stderr: 'command not found: npm',
           ));
+      // apt 安装成功（fake 无法模拟安装后状态，node --version 仍失败）
+      fakeRunner.when(
+          'apt-get install -y nodejs npm',
+          const FakeCommandResult(
+            stdout: 'Setting up nodejs ... done',
+          ));
 
       final report = await doctor.runFullRepair();
 
-      // Node 独立 check 失败
+      // node 缺失 → NodeJsInstaller 全量补装 nodejs+npm
+      final ranFull = fakeRunner.executedRequests.any(
+        (r) => r.arguments.join(' ') == 'install -y nodejs npm',
+      );
+      expect(ranFull, true, reason: 'node 缺失时必须执行 apt install nodejs npm');
+      // 不单独触发 npm 补装（已包含在全量安装里）
+      final ranNpmOnly = fakeRunner.executedRequests.any(
+        (r) => r.arguments.join(' ') == 'install -y npm',
+      );
+      expect(ranNpmOnly, false);
+      // Node 独立 check：fake 下安装后仍未恢复 → 失败但标记 repaired
       final nodeCheck = report.checks.firstWhere((c) => c.name == 'node');
       expect(nodeCheck.passed, false);
-      expect(nodeCheck.detail, contains('Node.js 不可用'));
-      // npm 分支明确「node 未安装，跳过 npm 补装」，不触发安装
+      expect(nodeCheck.repaired, true);
+      // npm 分支明确「node 未安装，跳过 npm 补装」（独立补装分支）
       final npmCheck = report.checks.firstWhere((c) => c.name == 'npm');
       expect(npmCheck.passed, false);
       expect(npmCheck.repaired, false);
       expect(npmCheck.detail, contains('node 未安装'));
-      final installs = fakeRunner.executedRequests
-          .where((r) => r.arguments.contains('install'))
-          .toList();
-      expect(installs, isEmpty);
-      // git/python3 独立 capability 不受影响
+      // git/python3/codex 独立 capability 不受影响
       final gitCheck = report.checks.firstWhere((c) => c.name == 'git');
       expect(gitCheck.passed, true);
       expect(report.allPassed, false, reason: 'node 缺失时整体不应判定通过');
+    });
+  });
+
+  group('EnvironmentDoctor — 工具链补装（修复环境自愈）', () {
+    bool ranAptInstall(FakeProcessRunner runner, String packages) =>
+        runner.executedRequests.any((r) =>
+            r.executable.endsWith('apt-get') &&
+            r.arguments.join(' ') == 'install -y $packages');
+
+    bool ranNpmGlobalInstall(FakeProcessRunner runner) =>
+        runner.executedRequests.any((r) =>
+            r.executable.endsWith('npm') &&
+            r.arguments.isNotEmpty &&
+            r.arguments.first == 'install');
+
+    test('node 缺失 + apt 可用 → 补装 nodejs+npm', () async {
+      setUpHealthy();
+      fakeRunner.when(
+          'node --version',
+          const FakeCommandResult(
+            exitCode: 127,
+            stderr: 'command not found: node',
+          ));
+      fakeRunner.when(
+          'apt-get install -y nodejs npm',
+          const FakeCommandResult(
+            stdout: 'Setting up nodejs ... done',
+          ));
+
+      final report = await doctor.runFullRepair();
+
+      expect(ranAptInstall(fakeRunner, 'nodejs npm'), isTrue,
+          reason: 'node 缺失时必须触发 apt install nodejs npm');
+      final nodeCheck = report.checks.firstWhere((c) => c.name == 'node');
+      expect(nodeCheck.passed, isFalse, reason: 'fake 下 node 未恢复');
+      expect(nodeCheck.repaired, isTrue);
+      // npm 独立 capability：npm 本身可用 → passed（不受 node 补装影响）
+      final npmCheck = report.checks.firstWhere((c) => c.name == 'npm');
+      expect(npmCheck.passed, isTrue, reason: npmCheck.detail);
+    });
+
+    test('git 缺失 + apt 可用 → 补装 git', () async {
+      setUpHealthy();
+      fakeRunner.when(
+          'git --version',
+          const FakeCommandResult(
+            exitCode: 127,
+            stderr: 'command not found: git',
+          ));
+      fakeRunner.when(
+          'apt-get install -y git',
+          const FakeCommandResult(
+            stdout: 'Setting up git ... done',
+          ));
+
+      final report = await doctor.runFullRepair();
+
+      expect(ranAptInstall(fakeRunner, 'git'), isTrue,
+          reason: 'git 缺失时必须触发 apt install git');
+      final gitCheck = report.checks.firstWhere((c) => c.name == 'git');
+      expect(gitCheck.passed, isFalse, reason: 'fake 下 git 未恢复');
+      expect(gitCheck.repaired, isTrue);
+    });
+
+    test('codex 缺失 + npm 可用 → npm 全局补装 @openai/codex', () async {
+      setUpHealthy();
+      fakeRunner.when(
+          'codex --version',
+          const FakeCommandResult(
+            exitCode: 127,
+            stderr: 'command not found: codex',
+          ));
+      fakeRunner.when('npm install -g --no-fund --no-audit @openai/codex',
+          const FakeCommandResult(stdout: 'added 1 package'));
+
+      final report = await doctor.runFullRepair();
+
+      expect(ranNpmGlobalInstall(fakeRunner), isTrue,
+          reason: 'codex 缺失且 npm 可用时必须触发 npm 全局安装');
+      final codexCheck = report.checks.firstWhere((c) => c.name == 'codex');
+      expect(codexCheck.passed, isFalse, reason: 'fake 下 codex 未恢复');
+      expect(codexCheck.repaired, isTrue);
+      // 其它工具链不受影响
+      expect(report.checks.firstWhere((c) => c.name == 'node').passed, isTrue);
+      expect(report.checks.firstWhere((c) => c.name == 'npm').passed, isTrue);
+      expect(report.checks.firstWhere((c) => c.name == 'git').passed, isTrue);
+    });
+
+    test('apt 失败 → node/git 不补装；codex 走 npm 独立补装', () async {
+      setUpHealthy();
+      fakeRunner.when(
+          'node --version',
+          const FakeCommandResult(
+            exitCode: 127,
+            stderr: 'command not found: node',
+          ));
+      fakeRunner.when(
+          'git --version',
+          const FakeCommandResult(
+            exitCode: 127,
+            stderr: 'command not found: git',
+          ));
+      fakeRunner.when(
+          'codex --version',
+          const FakeCommandResult(
+            exitCode: 127,
+            stderr: 'command not found: codex',
+          ));
+      fakeRunner.when(
+          'apt-get update',
+          const FakeCommandResult(
+            exitCode: 100,
+            stderr: 'E: Failed to fetch http://ports.ubuntu.com/... '
+                'Unable to connect',
+          ));
+      fakeRunner.when('npm install -g --no-fund --no-audit @openai/codex',
+          const FakeCommandResult(stdout: 'added 1 package'));
+
+      final report = await doctor.runFullRepair();
+
+      // apt 类安装被禁止（node/git 依赖 apt）
+      expect(ranAptInstall(fakeRunner, 'nodejs npm'), isFalse);
+      expect(ranAptInstall(fakeRunner, 'git'), isFalse);
+      // codex 补装仅依赖 npm（registry 与 apt 源独立），npm 可用时仍自愈
+      expect(ranNpmGlobalInstall(fakeRunner), isTrue,
+          reason: 'codex 补装走 npm，不依赖 apt 可用性');
+      // 只读验证仍给出独立结果
+      final nodeCheck = report.checks.firstWhere((c) => c.name == 'node');
+      expect(nodeCheck.passed, isFalse);
+      expect(nodeCheck.repaired, isFalse);
+      final gitCheck = report.checks.firstWhere((c) => c.name == 'git');
+      expect(gitCheck.passed, isFalse);
+      expect(gitCheck.repaired, isFalse);
+      final codexCheck = report.checks.firstWhere((c) => c.name == 'codex');
+      expect(codexCheck.passed, isFalse);
+      expect(codexCheck.repaired, isTrue, reason: 'fake 下 codex 未恢复，但补装已触发');
+    });
+
+    test('codex 缺失但 npm 不可用 → 不触发 npm 全局补装', () async {
+      setUpHealthy();
+      fakeRunner.when(
+          'codex --version',
+          const FakeCommandResult(
+            exitCode: 127,
+            stderr: 'command not found: codex',
+          ));
+      fakeRunner.when(
+          'npm --version',
+          const FakeCommandResult(
+            exitCode: 127,
+            stderr: 'command not found: npm',
+          ));
+      // npm 缺失 → NodeJsInstaller 走 apt 补装 npm（与 npm 全局安装无关）
+      fakeRunner.when(
+          'apt-get install -y npm',
+          const FakeCommandResult(
+            stdout: 'Setting up npm ... done',
+          ));
+
+      final report = await doctor.runFullRepair();
+
+      expect(ranNpmGlobalInstall(fakeRunner), isFalse,
+          reason: 'npm 不可用时 codex 不得触发全局安装');
+      final codexCheck = report.checks.firstWhere((c) => c.name == 'codex');
+      expect(codexCheck.passed, isFalse);
+      expect(codexCheck.repaired, isFalse);
     });
   });
 }

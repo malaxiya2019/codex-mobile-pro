@@ -674,14 +674,20 @@ class _DeployPageState extends ConsumerState<DeployPage> {
 
     if (detection == null) return const SizedBox.shrink();
 
+    // codingMissing（未安装）+ codingBroken（已装但异常，如 exit=127）。
+    // 两者都必须触发「一键部署」，否则 broken 工具永远没有重装入口
+    // （error 不计入 missing → 按钮消失，APK-238 死锁同型）。
     final codingMissing = detection.coding
         .where((r) => r.status == DetectionStatus.missing)
         .length;
+    final codingBroken =
+        detection.coding.where((r) => r.status == DetectionStatus.error).length;
+    final needsInstall = (codingMissing + codingBroken) > 0;
 
     return Column(
       children: [
-        // 一键部署（仅在有可安装的工具时显示）
-        if (codingMissing > 0 && !status.isInstalling)
+        // 一键部署（有 missing 或 broken 工具时显示；broken 也需重装入口）
+        if (needsInstall && !status.isInstalling)
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
@@ -697,8 +703,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
             ),
           ),
 
-        if (codingMissing > 0 && !status.isInstalling)
-          const SizedBox(height: 8),
+        if (needsInstall && !status.isInstalling) const SizedBox(height: 8),
 
         // 修复环境（PRoot / tmp / dpkg / apt 一键修复）
         SizedBox(
@@ -889,8 +894,12 @@ class _DeployPageState extends ConsumerState<DeployPage> {
             ? result.missingHint!
             : '${result.icon} ${result.name}';
 
-    // 判断是否显示安装按钮
-    final showInstall = result.status == DetectionStatus.missing &&
+    // 判断是否显示安装按钮：
+    //   - missing：未安装 → 可安装
+    //   - error：已安装但异常（broken，如 exit=127）→ 可重装修复，
+    //     否则 broken 工具永远没有重装入口（与一键部署按钮同型死锁）
+    final showInstall = (result.status == DetectionStatus.missing ||
+            result.status == DetectionStatus.error) &&
         _canInstall(result.id) &&
         !status.isInstalling &&
         !status.isRepairing;

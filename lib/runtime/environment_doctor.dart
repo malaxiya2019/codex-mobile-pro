@@ -31,6 +31,7 @@ import 'package:path/path.dart' as p;
 
 import '../core/logger/log_service.dart';
 import 'installers/apt_toolchain_installers.dart';
+import 'installers/npm_toolchain_installers.dart';
 import 'installers/toolchain_context.dart';
 import 'process/process_runner.dart';
 import 'process/runner_models.dart';
@@ -523,10 +524,8 @@ class EnvironmentDoctor {
       final trimmed = line.trim();
       // 跳过段落头（以冒号结尾的标题行）
       if (trimmed.endsWith(':')) continue;
-      final name = trimmed
-          .split(RegExp(r'\s+'))
-          .first
-          .replaceAll(RegExp(r'[(),]'), '');
+      final name =
+          trimmed.split(RegExp(r'\s+')).first.replaceAll(RegExp(r'[(),]'), '');
       if (RegExp(r'^[a-zA-Z0-9+._-]+$').hasMatch(name) &&
           !result.contains(name)) {
         result.add(name);
@@ -556,19 +555,22 @@ class EnvironmentDoctor {
     }
   }
 
-  // ─── Toolchain Doctor（验证 + npm 补装）──────────────────────
+  // ─── Toolchain Doctor（验证 + 补装）────────────────────────────
 
-  /// 工具链独立 capability 验证 + npm 补装。
+  /// 工具链独立 capability 验证 + 补装。
   ///
   /// 顺序：
-  ///   1. 只读快照 node/npm/git/python3
-  ///   2. node 已装但 npm 缺失/broken 且 apt 可用 → 仅补装 npm
-  ///      （复用 NodeJsInstaller：该状态下只执行 apt install npm，
-  ///        不重装 nodejs；dpkg/apt 幂等标记共享 ctx 跳过重复步骤）
-  ///   3. node / npm / git / python3 各自生成独立 DoctorCheck ——
-  ///      npm 失败不影响 Node.js = installed 的判定
+  ///   1. 只读快照 node/npm/git/python3/codex
+  ///   2. node 缺失/broken 且 apt 可用 → NodeJsInstaller 补装
+  ///      （node+npm 全缺 → apt install nodejs npm；node 在但 npm
+  ///        broken → 仅 apt install npm，不重装 nodejs）
+  ///   3. npm 独立 capability：node 可用但 npm 缺失/broken → 补装 npm
+  ///   4. git 缺失/broken 且 apt 可用 → GitInstaller 补装
+  ///   5. python3 只读验证（rootfs 基础组件，不做自动安装）
+  ///   6. codex 缺失/broken 且 npm 可用 → CodexCliInstaller 补装
   ///
-  /// [aptReady] = false 时跳过 npm 补装，只做只读验证，
+  /// 每项独立生成 DoctorCheck：任一失败不影响其它工具的判定。
+  /// [aptReady] = false 时跳过 apt/npm 补装，只做只读验证，
   /// 防止在 apt/dpkg 未恢复时扩大错误。
   Future<List<DoctorCheck>> _doctorToolchain(
     ToolchainContext ctx, {
@@ -577,41 +579,60 @@ class EnvironmentDoctor {
     final checks = <DoctorCheck>[];
 
     // 1. 只读快照
-    final nodeVer = await ctx.versionOf('/usr/bin/node');
+    final nodeBefore = await ctx.versionOf('/usr/bin/node');
     final npmBefore = await ctx.versionOf('/usr/bin/npm');
-    final gitVer = await ctx.versionOf('/usr/bin/git');
-    final pyVer = await ctx.versionOf('/usr/bin/python3');
+    final gitBefore = await ctx.versionOf('/usr/bin/git');
+    final pyBefore = await ctx.versionOf('/usr/bin/python3');
+    final codexBefore = await ctx.versionOf('/usr/bin/codex');
 
-    // 2. Node.js 独立 capability
-    checks.add(DoctorCheck(
-      name: 'node',
-      passed: nodeVer != null,
-      detail: nodeVer != null ? 'Node.js 可用: $nodeVer' : 'Node.js 不可用',
-    ));
+    // 2. Node.js 独立 capability（缺失/broken → 补装 node+npm）
+    var nodeVer = nodeBefore;
+    if (nodeVer == null && aptReady) {
+      LogService.info(
+        'EnvironmentDoctor',
+        'node 缺失/broken，apt 补装 nodejs+npm...',
+      );
+      final result = await NodeJsInstaller().install(ctx);
+      nodeVer = result.success ? await ctx.versionOf('/usr/bin/node') : null;
+      checks.add(DoctorCheck(
+        name: 'node',
+        passed: result.success && nodeVer != null,
+        repaired: true,
+        detail: result.success && nodeVer != null
+            ? 'Node.js 补装成功: $nodeVer'
+            : 'Node.js 补装失败: ${result.errorMessage}',
+      ));
+    } else {
+      checks.add(DoctorCheck(
+        name: 'node',
+        passed: nodeVer != null,
+        detail: nodeVer != null ? 'Node.js 可用: $nodeVer' : 'Node.js 不可用',
+      ));
+    }
 
-    // 3. npm 独立 capability（含补装）
-    if (nodeVer != null && npmBefore == null && aptReady) {
+    // 3. npm 独立 capability（node 可用但 npm 缺失/broken → 补装 npm）
+    var npmVer = npmBefore;
+    if (npmVer == null && nodeVer != null && aptReady) {
       LogService.info(
         'EnvironmentDoctor',
         'node 已安装、npm 缺失/broken，补装 npm...',
       );
       final result = await NodeJsInstaller().install(ctx);
-      final npmAfter =
-          result.success ? await ctx.versionOf('/usr/bin/npm') : null;
+      npmVer = result.success ? await ctx.versionOf('/usr/bin/npm') : null;
       checks.add(DoctorCheck(
         name: 'npm',
-        passed: result.success && npmAfter != null,
+        passed: result.success && npmVer != null,
         repaired: true,
-        detail: result.success && npmAfter != null
-            ? 'npm 补装成功（node 已安装，npm 缺失/broken）: $npmAfter'
+        detail: result.success && npmVer != null
+            ? 'npm 补装成功（node 已安装，npm 缺失/broken）: $npmVer'
             : 'npm 补装失败: ${result.errorMessage}',
       ));
     } else {
       checks.add(DoctorCheck(
         name: 'npm',
-        passed: npmBefore != null,
-        detail: npmBefore != null
-            ? 'npm 可用: $npmBefore'
+        passed: npmVer != null,
+        detail: npmVer != null
+            ? 'npm 可用: $npmVer'
             : nodeVer == null
                 ? 'node 未安装，跳过 npm 补装'
                 : !aptReady
@@ -620,17 +641,59 @@ class EnvironmentDoctor {
       ));
     }
 
-    // 4. Git / Python3 独立 capability
-    checks.add(DoctorCheck(
-      name: 'git',
-      passed: gitVer != null,
-      detail: gitVer != null ? 'Git 可用: $gitVer' : 'Git 不可用',
-    ));
+    // 4. Git 独立 capability（缺失/broken → 补装）
+    var gitVer = gitBefore;
+    if (gitVer == null && aptReady) {
+      LogService.info('EnvironmentDoctor', 'git 缺失/broken，apt 补装 git...');
+      final result = await GitInstaller().install(ctx);
+      gitVer = result.success ? await ctx.versionOf('/usr/bin/git') : null;
+      checks.add(DoctorCheck(
+        name: 'git',
+        passed: result.success && gitVer != null,
+        repaired: true,
+        detail: result.success && gitVer != null
+            ? 'Git 补装成功: $gitVer'
+            : 'Git 补装失败: ${result.errorMessage}',
+      ));
+    } else {
+      checks.add(DoctorCheck(
+        name: 'git',
+        passed: gitVer != null,
+        detail: gitVer != null ? 'Git 可用: $gitVer' : 'Git 不可用',
+      ));
+    }
+
+    // 5. Python3 独立 capability（rootfs 基础组件，只读验证）
     checks.add(DoctorCheck(
       name: 'python3',
-      passed: pyVer != null,
-      detail: pyVer != null ? 'Python 3 可用: $pyVer' : 'Python 3 不可用',
+      passed: pyBefore != null,
+      detail: pyBefore != null ? 'Python 3 可用: $pyBefore' : 'Python 3 不可用',
     ));
+
+    // 6. Codex CLI（npm 可用且缺失/broken → 补装；失败不阻断其它结果）
+    var codexVer = codexBefore;
+    if (codexVer == null && npmVer != null) {
+      LogService.info(
+        'EnvironmentDoctor',
+        'codex 缺失/broken，npm 补装 @openai/codex...',
+      );
+      final result = await CodexCliInstaller().install(ctx);
+      codexVer = result.success ? await ctx.versionOf('/usr/bin/codex') : null;
+      checks.add(DoctorCheck(
+        name: 'codex',
+        passed: result.success && codexVer != null,
+        repaired: true,
+        detail: result.success && codexVer != null
+            ? 'Codex CLI 补装成功: $codexVer'
+            : 'Codex CLI 补装失败: ${result.errorMessage}',
+      ));
+    } else {
+      checks.add(DoctorCheck(
+        name: 'codex',
+        passed: codexVer != null,
+        detail: codexVer != null ? 'Codex CLI 可用: $codexVer' : 'Codex CLI 不可用',
+      ));
+    }
 
     return checks;
   }
