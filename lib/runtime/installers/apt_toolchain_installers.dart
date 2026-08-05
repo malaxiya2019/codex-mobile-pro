@@ -59,14 +59,16 @@ class NodeJsInstaller extends ToolchainInstaller {
     if (nodeVer != null && npmVer == null) {
       report(ctx, InstallPhase.installing, 0.3, 'npm 缺失，补装 npm...');
       try {
-        await ctx.aptInstall(['npm']);
+        await ctx.aptInstall(['npm'],
+            onProgress: (p, m) => report(ctx, InstallPhase.installing, p, m));
       } catch (e) {
         return failure(e);
       }
     } else {
       report(ctx, InstallPhase.installing, 0.3, 'apt 安装 nodejs + npm...');
       try {
-        await ctx.aptInstall(['nodejs', 'npm']);
+        await ctx.aptInstall(['nodejs', 'npm'],
+            onProgress: (p, m) => report(ctx, InstallPhase.installing, p, m));
       } catch (e) {
         return failure(e);
       }
@@ -129,7 +131,8 @@ class GitInstaller extends ToolchainInstaller {
 
     report(ctx, InstallPhase.installing, 0.3, 'apt 安装 git...');
     try {
-      await ctx.aptInstall(['git']);
+      await ctx.aptInstall(['git'],
+          onProgress: (p, m) => report(ctx, InstallPhase.installing, p, m));
     } catch (e) {
       return failure(e);
     }
@@ -189,7 +192,8 @@ class PythonInstaller extends ToolchainInstaller {
 
     report(ctx, InstallPhase.installing, 0.3, 'apt 安装 python3 + pip...');
     try {
-      await ctx.aptInstall(['python3', 'python3-pip']);
+      await ctx.aptInstall(['python3', 'python3-pip'],
+          onProgress: (p, m) => report(ctx, InstallPhase.installing, p, m));
     } catch (e) {
       return failure(e);
     }

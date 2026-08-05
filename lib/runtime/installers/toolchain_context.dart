@@ -14,7 +14,9 @@
 /// ====================================================================
 library;
 
+import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import '../../core/logger/log_service.dart';
 import '../deploy_error.dart';
@@ -260,26 +262,41 @@ class ToolchainContext {
   Future<void> aptInstall(
     List<String> packages, {
     Duration? timeout,
+    void Function(double progress, String message)? onProgress,
   }) async {
-    await ensureDpkgHealthy();
-    await ensureAptUpdated();
-    // --no-install-recommends：砍掉 systemd 等推荐链。
-    // 真机实测：noble rootfs 内 systemd 的 postinst/tmpfiles 与 PRoot
-    // 不兼容，Unpacking/Setting up 阶段极慢甚至卡死（用户日志中的
-    // journal-nocow 报错）；不装推荐包可显著缩短首次部署耗时。
-    await _runWithAptSourceFallback(
-      arguments: ['install', '-y', '--no-install-recommends', ...packages],
-      label: 'apt:install:${packages.join(",")}',
-      failureCode: DeployErrorCode.aptInstallFailed,
-      failureMessage: 'Ubuntu 包安装失败: ${packages.join(', ')}',
-      failureSuggestion: '可尝试重新初始化后重试，或检查 apt 源是否可用',
-      timeout: timeout ?? const Duration(minutes: 15),
-      context: {
-        'packages': packages,
-        'command':
-            'apt-get install -y --no-install-recommends ${packages.join(' ')}',
-      },
-    );
+    // 安装心跳：apt-get 是阻塞式执行（无流式输出），若只上报一次
+    // 静态 0.3，UI 会长时间显示「30%」看起来像卡死。心跳按经过时间
+    // 平滑推进 0.30 → 0.89，并附带已运行秒数，让进度条始终动态变化。
+    Timer? heartbeat;
+    if (onProgress != null) {
+      heartbeat = _startInstallHeartbeat(
+        action: 'apt 安装 ${packages.join(', ')}',
+        onProgress: onProgress,
+      );
+    }
+    try {
+      await ensureDpkgHealthy();
+      await ensureAptUpdated();
+      // --no-install-recommends：砍掉 systemd 等推荐链。
+      // 真机实测：noble rootfs 内 systemd 的 postinst/tmpfiles 与 PRoot
+      // 不兼容，Unpacking/Setting up 阶段极慢甚至卡死（用户日志中的
+      // journal-nocow 报错）；不装推荐包可显著缩短首次部署耗时。
+      await _runWithAptSourceFallback(
+        arguments: ['install', '-y', '--no-install-recommends', ...packages],
+        label: 'apt:install:${packages.join(",")}',
+        failureCode: DeployErrorCode.aptInstallFailed,
+        failureMessage: 'Ubuntu 包安装失败: ${packages.join(', ')}',
+        failureSuggestion: '可尝试重新初始化后重试，或检查 apt 源是否可用',
+        timeout: timeout ?? const Duration(minutes: 15),
+        context: {
+          'packages': packages,
+          'command':
+              'apt-get install -y --no-install-recommends ${packages.join(' ')}',
+        },
+      );
+    } finally {
+      heartbeat?.cancel();
+    }
   }
 
   /// 带 apt 源 fallback 的命令执行（apt-get update / install 共用）。
@@ -460,27 +477,62 @@ class ToolchainContext {
   Future<void> npmInstallGlobal(
     List<String> packages, {
     Duration? timeout,
+    void Function(double progress, String message)? onProgress,
   }) async {
-    final result = await runInRootfs(
-      '/usr/bin/npm',
-      arguments: ['install', '-g', '--no-fund', '--no-audit', ...packages],
-      timeout: timeout ?? const Duration(minutes: 15),
-      label: 'npm:install:${packages.join(",")}',
-    );
-    if (!result.isSuccess) {
-      throw DeployError(
-        code: DeployErrorCode.npmInstallFailed,
-        message: 'npm 全局安装失败: ${packages.join(', ')}',
-        detail: 'exit=${result.exitCode}\n'
-            '${result.error != null ? "启动错误: ${result.error}\n" : ""}'
-            'stdout: ${result.stdout.trim()}\n'
-            'stderr: ${result.stderr.trim()}',
-        userSuggestion: '请检查网络后重试',
-        context: {
-          'packages': packages,
-          'command': 'npm install -g ${packages.join(' ')}',
-        },
+    // 安装心跳：npm install 同样为阻塞式执行，保持进度条动态变化。
+    Timer? heartbeat;
+    if (onProgress != null) {
+      heartbeat = _startInstallHeartbeat(
+        action: 'npm 安装 ${packages.join(', ')}',
+        onProgress: onProgress,
       );
     }
+    try {
+      final result = await runInRootfs(
+        '/usr/bin/npm',
+        arguments: ['install', '-g', '--no-fund', '--no-audit', ...packages],
+        timeout: timeout ?? const Duration(minutes: 15),
+        label: 'npm:install:${packages.join(",")}',
+      );
+      if (!result.isSuccess) {
+        throw DeployError(
+          code: DeployErrorCode.npmInstallFailed,
+          message: 'npm 全局安装失败: ${packages.join(', ')}',
+          detail: 'exit=${result.exitCode}\n'
+              '${result.error != null ? "启动错误: ${result.error}\n" : ""}'
+              'stdout: ${result.stdout.trim()}\n'
+              'stderr: ${result.stderr.trim()}',
+          userSuggestion: '请检查网络后重试',
+          context: {
+            'packages': packages,
+            'command': 'npm install -g ${packages.join(' ')}',
+          },
+        );
+      }
+    } finally {
+      heartbeat?.cancel();
+    }
+  }
+
+  /// 启动安装心跳定时器。
+  ///
+  /// apt/npm 安装是阻塞式执行（无流式输出），安装期间若进度长期
+  /// 停留在静态值（如 30%），用户会误以为卡死。心跳每 2s 按指数
+  /// 递增曲线平滑推进 0.30 → 0.89（封顶避免与 verifying 的 0.9
+  /// 混淆），并附带已运行秒数，明确安装仍在进行。
+  /// 返回值必须在安装结束（finally）时 cancel。
+  Timer _startInstallHeartbeat({
+    required String action,
+    required void Function(double progress, String message) onProgress,
+  }) {
+    final stopwatch = Stopwatch()..start();
+    return Timer.periodic(const Duration(seconds: 2), (_) {
+      final elapsedMs = stopwatch.elapsedMilliseconds;
+      // 指数平滑：前 1 分钟较快，随后逐渐放缓，永不封顶到 0.9
+      var p = 0.30 + 0.59 * (1 - math.exp(-elapsedMs / 90000));
+      if (p > 0.89) p = 0.89;
+      final seconds = (elapsedMs / 1000).round();
+      onProgress(p, '$action… 已运行 ${seconds}s');
+    });
   }
 }

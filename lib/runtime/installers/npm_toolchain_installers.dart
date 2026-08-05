@@ -89,7 +89,8 @@ class CodexCliInstaller extends ToolchainInstaller {
 
     report(ctx, InstallPhase.installing, 0.3, 'npm 安装 @openai/codex...');
     try {
-      await ctx.npmInstallGlobal([npmPackage]);
+      await ctx.npmInstallGlobal([npmPackage],
+          onProgress: (p, m) => report(ctx, InstallPhase.installing, p, m));
     } catch (e) {
       return failure(e);
     }
@@ -195,7 +196,8 @@ class Mimo2codexInstaller extends ToolchainInstaller {
 
     report(ctx, InstallPhase.installing, 0.3, 'npm 安装 mimo2codex...');
     try {
-      await ctx.npmInstallGlobal([npmPackage]);
+      await ctx.npmInstallGlobal([npmPackage],
+          onProgress: (p, m) => report(ctx, InstallPhase.installing, p, m));
     } catch (e) {
       return failure(e);
     }

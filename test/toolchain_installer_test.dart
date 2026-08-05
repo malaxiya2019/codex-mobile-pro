@@ -62,6 +62,9 @@ class FakeToolchainAdapter implements IExecutionAdapter {
   /// 模拟 dpkg interrupted（dpkg --audit 报错，--configure -a 修复后恢复）
   bool dpkgInterrupted = false;
 
+  /// 模拟 apt-get install 的耗时（验证安装期间心跳动态上报）
+  Duration? installDelay;
+
   /// 模拟 dpkg --configure -a 永远失败（不可恢复场景）
   bool dpkgConfigureAlwaysFails = false;
   final List<String> log = [];
@@ -160,6 +163,9 @@ class FakeToolchainAdapter implements IExecutionAdapter {
             request: request,
           );
         }
+        if (installDelay != null) {
+          await Future.delayed(installDelay!);
+        }
         for (final pkg in args) {
           switch (pkg) {
             case 'nodejs':
@@ -185,6 +191,9 @@ class FakeToolchainAdapter implements IExecutionAdapter {
 
     if (exe == '/usr/bin/npm') {
       if (args.contains('install')) {
+        if (installDelay != null) {
+          await Future.delayed(installDelay!);
+        }
         if (failNpmInstall) {
           return RuntimeProcessResult(
             exitCode: 1,
@@ -850,6 +859,55 @@ void main() {
         expect(e.code, DeployErrorCode.aptInstallFailed);
         expect(e.detail, contains('Unable to locate package'));
       }
+    });
+  });
+
+  group('安装心跳（进度动态变化，不再卡静态 30%）', () {
+    test('apt install 阻塞期间 onProgress 被持续调用且单调递增', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      // 模拟 apt 安装耗时 > 2 个心跳周期（心跳间隔 2s）
+      f.adapter.installDelay = const Duration(milliseconds: 4600);
+
+      final progressValues = <double>[];
+      final messages = <String>[];
+      await f.ctx.aptInstall(
+        ['git'],
+        onProgress: (p, m) {
+          progressValues.add(p);
+          messages.add(m);
+        },
+      );
+
+      expect(progressValues.length, greaterThanOrEqualTo(2),
+          reason: '安装阻塞期间应持续上报心跳进度');
+      expect(progressValues.first, greaterThan(0.3));
+      expect(progressValues.last, greaterThan(progressValues.first),
+          reason: '心跳进度应单调递增（不卡在静态 30%）');
+      expect(progressValues.last, lessThan(0.9),
+          reason: '心跳封顶 0.89，避免与 verifying 的 0.9 混淆');
+      expect(messages.first, contains('已运行'), reason: '心跳消息应附带已运行秒数');
+      // 安装完成后 Timer 被取消（finally），进度停留在验证阶段的值
+      expect(f.adapter.installedVersions['/usr/bin/git'], '2.43.0');
+    });
+
+    test('npm install 阻塞期间同样上报心跳', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installDelay = const Duration(milliseconds: 4600);
+      // npm 前置：node/npm 已装
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+      f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
+
+      final progressValues = <double>[];
+      await f.ctx.npmInstallGlobal(
+        ['@openai/codex'],
+        onProgress: (p, m) => progressValues.add(p),
+      );
+
+      expect(progressValues.length, greaterThanOrEqualTo(2));
+      expect(progressValues.first, greaterThan(0.3));
+      expect(progressValues.last, lessThan(0.9));
     });
   });
 }
