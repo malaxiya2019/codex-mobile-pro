@@ -19,6 +19,7 @@ import 'capability/capability_resolver.dart';
 import 'process/process_runner.dart';
 import 'process/runner_models.dart';
 import 'provider/runtime_capability.dart';
+import 'runtime_dependency.dart';
 import 'runtime_environment.dart';
 import 'runtime_manager.dart';
 
@@ -94,6 +95,17 @@ const _kCapabilityMappings = <_CapabilityToResult>[
     category: DetectorCategory.development,
     subCategory: RuntimeSubCategory.development,
     missingHint: 'Flutter SDK（可选，用于 Flutter 开发）',
+  ),
+
+  // DeepSeek API Key：非二进制能力（App 私有目录配置文件），
+  // 在 _detectCapabilities / detectOne 中特判检测，不经过 CapabilityResolver。
+  _CapabilityToResult(
+    type: CapabilityType.deepseekKey,
+    id: 'deepseek_key',
+    name: 'DeepSeek API Key',
+    icon: '🔑',
+    subCategory: RuntimeSubCategory.ai,
+    missingHint: '用于 AI 代码补全（mimo2codex / AI Provider）',
   ),
 ];
 
@@ -244,7 +256,7 @@ class RuntimeDetector {
     results.addAll(systemResults);
 
     // 2. 通过 RuntimeManager + CapabilityResolver 检测工具能力
-    final toolResults = await _detectCapabilities();
+    final toolResults = await _detectCapabilities(environment);
     results.addAll(toolResults);
 
     // 3. Linux Runtime 补充检测（PRoot + Ubuntu rootfs）
@@ -256,14 +268,21 @@ class RuntimeDetector {
   }
 
   /// 通过 CapabilityResolver 检测工具能力
-  Future<List<DetectionResult>> _detectCapabilities() async {
+  Future<List<DetectionResult>> _detectCapabilities(
+    RuntimeEnvironment? environment,
+  ) async {
     final results = <DetectionResult>[];
+
+    // DeepSeek API Key：非二进制能力（App 私有目录 .mimo2codex/.env），
+    // 与 Provider 无关，统一在入口生成一次。
+    results.add(await _detectDeepSeekKey(environment));
 
     // 获取所有可用 Provider
     final providers = _runtimeManager.registeredProviders;
     if (providers.isEmpty) {
       // 无可用 Provider，标记所有工具为 missing
       for (final mapping in _kCapabilityMappings) {
+        if (mapping.type == CapabilityType.deepseekKey) continue;
         results.add(DetectionResult(
           id: mapping.id,
           name: mapping.name,
@@ -290,6 +309,7 @@ class RuntimeDetector {
     // 对每个 Provider 检测能力
     for (final provider in effectiveProviders) {
       for (final mapping in _kCapabilityMappings) {
+        if (mapping.type == CapabilityType.deepseekKey) continue;
         final start = DateTime.now();
         final cap = await _capabilityResolver.checkCapability(
           mapping.type,
@@ -361,7 +381,15 @@ class RuntimeDetector {
   /// 支持两类 ID：
   ///   - 工具 ID（node / git / python / codex / flutter 等）→ CapabilityResolver
   ///   - 系统 ID（shell / network / storage 等）→ DetectorService
-  Future<DetectionResult?> detectOne(String id) async {
+  Future<DetectionResult?> detectOne(
+    String id, {
+    RuntimeEnvironment? environment,
+  }) async {
+    // DeepSeek API Key：非二进制能力，直接检查 App 私有目录配置文件
+    if (id == 'deepseek_key') {
+      return _detectDeepSeekKey(environment ?? _runtimeManager.environment);
+    }
+
     // 1. 先尝试 CapabilityResolver（工具能力）
     for (final mapping in _kCapabilityMappings) {
       if (mapping.id != id) continue;
@@ -393,6 +421,35 @@ class RuntimeDetector {
 
     // 2. 回退到系统检测器
     return _systemService.detectOne(id);
+  }
+
+  /// 查找 capability 映射（deepseek_key 特判用）
+  static _CapabilityToResult _findCapabilityMapping(String id) {
+    for (final m in _kCapabilityMappings) {
+      if (m.id == id) return m;
+    }
+    throw StateError('缺少 capability 映射: $id');
+  }
+
+  /// DeepSeek API Key：非二进制能力检测
+  ///
+  /// 检查 App 私有目录 `.mimo2codex/.env` 中是否已保存 DS_API_KEY。
+  /// 不执行任何二进制命令，只依赖 RuntimeEnvironment.isToolInstalled。
+  Future<DetectionResult> _detectDeepSeekKey(
+    RuntimeEnvironment? environment,
+  ) async {
+    final mapping = _findCapabilityMapping('deepseek_key');
+    final ready = environment != null &&
+        await environment.isToolInstalled(RuntimeTool.deepseekKey);
+    return DetectionResult(
+      id: mapping.id,
+      name: mapping.name,
+      icon: mapping.icon,
+      status: ready ? DetectionStatus.installed : DetectionStatus.missing,
+      category: mapping.category,
+      subCategory: mapping.subCategory,
+      missingHint: mapping.missingHint,
+    );
   }
 
   /// 将检测结果按 RuntimeCategory 分组
