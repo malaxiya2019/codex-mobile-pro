@@ -574,6 +574,68 @@ void main() {
       expect(result.phase, InstallPhase.failed);
       expect(result.errorMessage, contains('npm'));
     });
+
+    test('Codex CLI 安装成功 → 注入 Shell 快捷命令到 rootfs /root/.bashrc', () async {
+      // 真机根因复刻：App 一键部署只 npm install，从不追加
+      // config/bashrc-additions.sh → cyo/cy/cs command not found。
+      // 修复：验证 codex 后把 asset 内容幂等追加到 /root/.bashrc。
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+      f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
+
+      const sample = '# Codex Mobile Pro — Shell 快捷命令\n'
+          'cy() { echo cy; }\n'
+          'cyo() { echo cyo; }\n';
+      final installer =
+          CodexCliInstaller(loadShellAdditions: () async => sample);
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      final bashrc = File('${f.temp.path}/rootfs/root/.bashrc');
+      expect(bashrc.existsSync(), isTrue);
+      final content = bashrc.readAsStringSync();
+      expect(content, contains('# Codex Mobile Pro'));
+      expect(content, contains('cyo()'));
+    });
+
+    test('Shell 快捷命令已注入 → 不重复追加（幂等）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+      f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
+      final bashrc = File('${f.temp.path}/rootfs/root/.bashrc');
+      bashrc.createSync(recursive: true);
+      bashrc
+          .writeAsStringSync('# Codex Mobile Pro — 已存在\ncyo() { echo old; }\n');
+
+      var loadCalls = 0;
+      final installer = CodexCliInstaller(loadShellAdditions: () async {
+        loadCalls++;
+        return '# Codex Mobile Pro — NEW\ncyo() { echo new; }\n';
+      });
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(loadCalls, 0, reason: '已注入时不得读取/追加');
+      expect(bashrc.readAsStringSync(), isNot(contains('NEW')));
+    });
+
+    test('Shell 快捷命令注入失败 → 不阻断 Codex 安装', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+      f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
+
+      final installer = CodexCliInstaller(loadShellAdditions: () async {
+        throw StateError('asset 加载失败');
+      });
+      final result = await installer.install(f.ctx);
+
+      // 快捷命令为增强步骤：注入失败仅 warning，Codex 安装仍成功
+      expect(result.success, isTrue);
+      expect(result.version, contains('0.9.0'));
+    });
   });
 
   group('ToolchainOrchestrator', () {
