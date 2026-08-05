@@ -5,6 +5,11 @@
 
 export PATH="$HOME/.local/bin:$PATH"
 
+# ---------- DeepSeek API Key（codex 直连，配置中心保存的 key） ----------
+if [ -f "$HOME/.mimo2codex/.env" ]; then
+    export DEEPSEEK_API_KEY="$(grep '^DS_API_KEY=' "$HOME/.mimo2codex/.env" | head -1 | cut -d= -f2- | tr -d '\r\n')"
+fi
+
 # ---------- 基础 ----------
 alias c='codex'
 alias cp-status='ps aux | grep -E "mimo2codex|codex|threadripper" | grep -v grep'

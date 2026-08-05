@@ -149,6 +149,10 @@ EOF
 CODEX_BIN="$HOME/.local/lib/codex/bin/codex"
 CODEX_RESOLV_CONF="$HOME/.local/lib/codex/resolv.conf"
 export SSL_CERT_FILE="/data/data/com.termux/files/usr/etc/tls/cert.pem"
+# 从 .mimo2codex/.env 注入 DeepSeek API Key（codex 直连，配置中心保存的 key）
+if [ -f "$HOME/.mimo2codex/.env" ]; then
+    export DEEPSEEK_API_KEY="$(grep '^DS_API_KEY=' "$HOME/.mimo2codex/.env" | head -1 | cut -d= -f2- | tr -d '\r\n')"
+fi
 exec "$CODEX_BIN" "$@" 9<"$CODEX_RESOLV_CONF"
 CODEXWRAPPER
 

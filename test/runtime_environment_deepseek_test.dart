@@ -48,5 +48,37 @@ void main() {
 
       expect(await env.isToolInstalled(RuntimeTool.deepseekKey), isFalse);
     });
+
+    test('saveDeepSeekKey → App 侧 + rootfs 侧双写，codex 可读取', () async {
+      // 构造 Ubuntu rootfs 已安装（ubuntuRootfsDir 存在）
+      final rootfs = Directory(env.ubuntuRootfsDir);
+      await rootfs.create(recursive: true);
+
+      await env.saveDeepSeekKey('sk-rootfs-sync');
+
+      // App 侧（部署中心检测路径）
+      expect(await env.isToolInstalled(RuntimeTool.deepseekKey), isTrue,
+          reason: 'App 侧写入 mimoConfigDir/.env');
+
+      // rootfs 内（codex 进程读取路径）
+      final rootfsEnv = File(
+        '${env.ubuntuRootfsDir}/root/.mimo2codex/.env',
+      );
+      expect(rootfsEnv.existsSync(), isTrue,
+          reason: 'rootfs 存在时需同步写入 root/.mimo2codex/.env');
+      expect(rootfsEnv.readAsStringSync(), contains('DS_API_KEY=sk-rootfs-sync'));
+    });
+
+    test('saveDeepSeekKey → rootfs 未安装时仅写 App 侧，不报错', () async {
+      // 不创建 ubuntuRootfsDir
+      await env.saveDeepSeekKey('sk-app-only');
+
+      expect(await env.isToolInstalled(RuntimeTool.deepseekKey), isTrue);
+      expect(
+        Directory('${env.ubuntuRootfsDir}/root').existsSync(),
+        isFalse,
+        reason: 'rootfs 不存在时不应创建多余目录',
+      );
+    });
   });
 }

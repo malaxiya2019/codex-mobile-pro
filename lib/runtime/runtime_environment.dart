@@ -297,6 +297,29 @@ class RuntimeEnvironment {
     return false;
   }
 
+  /// 保存 DeepSeek API Key（部署中心「配置」入口）
+  ///
+  /// 双写：
+  ///   1. App 私有目录 `.mimo2codex/.env`（部署中心 UI 检测路径，isToolInstalled）
+  ///   2. Ubuntu rootfs 内 `/root/.mimo2codex/.env`（codex 进程读取位置，
+  ///      deploy.sh 生成的 codex 包装脚本从这里注入 DEEPSEEK_API_KEY）
+  ///
+  /// rootfs 未安装时仅写 App 侧，安装 Codex 时 deploy.sh 会直接复用已同步文件。
+  Future<void> saveDeepSeekKey(String key) async {
+    final appFile = File('$mimoConfigDir/.env');
+    await appFile.parent.create(recursive: true);
+    await appFile.writeAsString('DS_API_KEY=$key\n');
+
+    // Ubuntu rootfs 内同步（rootfs 存在才写）
+    final rootfsDir = ubuntuRootfsDir;
+    if (Directory(rootfsDir).existsSync()) {
+      final rootfsEnvFile =
+          File(path.join(rootfsDir, 'root', '.mimo2codex', '.env'));
+      await rootfsEnvFile.parent.create(recursive: true);
+      await rootfsEnvFile.writeAsString('DS_API_KEY=$key\n');
+    }
+  }
+
   /// ─── 工具方法 ───────────────────────────────────────────────
 
   /// PATH 去重（保留首次出现的顺序）

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/detector/detection_result.dart';
@@ -1134,12 +1133,8 @@ class _DeployPageState extends ConsumerState<DeployPage> {
       return;
     }
     try {
-      final dir = Directory(env.mimoConfigDir);
-      if (!dir.existsSync()) {
-        await dir.create(recursive: true);
-      }
-      final file = File('${dir.path}/.env');
-      await file.writeAsString('DS_API_KEY=$key\n');
+      // 双写：App 私有目录（部署中心检测）+ Ubuntu rootfs（codex 读取）
+      await env.saveDeepSeekKey(key);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
