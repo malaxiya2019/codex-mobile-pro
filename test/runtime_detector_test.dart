@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:codex_mobile_pro/core/detector/detection_result.dart';
+import 'package:codex_mobile_pro/runtime/capability/capability_resolver.dart';
 import 'package:codex_mobile_pro/runtime/runtime_detector.dart';
 import 'package:codex_mobile_pro/runtime/runtime_environment.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -281,6 +282,94 @@ void main() {
         final r = results.firstWhere((r) => r.tool == tool);
         expect(r.success, isTrue, reason: '$tool 验证应成功');
       }
+    });
+  });
+
+  group('Linux Runtime 未就绪 → Coding 工具 missing（APK-238 回归）', () {
+    test('E. Linux 未就绪时 detectOne(node) 为 missing + 依赖提示，不误报 exit=127',
+        () async {
+      final temp = await Directory.systemTemp.createTemp('rtd-238-');
+      addTearDown(() => temp.delete(recursive: true));
+      final env = RuntimeEnvironment.forTest(temp.path);
+
+      // 即使预设了版本成功（模拟宿主 shell 能找到），未就绪时也应短路，
+      // 不执行任何版本检测命令。
+      final runner = FakeProcessRunner();
+      runner.whenVersion('node', '18.19.1');
+
+      final detector = RuntimeDetector(
+        runner: runner,
+        capabilityResolver: CapabilityResolver(runner: runner),
+      );
+      final result = await detector.detectOne('node', environment: env);
+
+      expect(result, isNotNull);
+      expect(result!.id, 'node');
+      expect(result.status, DetectionStatus.missing,
+          reason: 'Linux 未就绪时 node 必须为 missing（可安装），而非 error');
+      expect(result.status, isNot(DetectionStatus.error));
+      expect(result.missingHint, contains('Linux Runtime'),
+          reason: '应引导用户先完成一键部署');
+      expect(result.errorMessage, isNull, reason: '不应再出现 exit=127 类错误误报');
+      // 未就绪时不应发出任何 node 相关执行请求
+      final nodeCalls = runner.executedRequests
+          .where((r) => r.executable.contains('node'))
+          .length;
+      expect(nodeCalls, 0, reason: 'Linux 未就绪时应完全跳过 resolver 检测');
+    });
+
+    test('F. Linux 未就绪时全部 rootfs 工具均为 missing', () async {
+      final temp = await Directory.systemTemp.createTemp('rtd-238-all-');
+      addTearDown(() => temp.delete(recursive: true));
+      final env = RuntimeEnvironment.forTest(temp.path);
+
+      final detector = RuntimeDetector(
+        runner: FakeProcessRunner(),
+        capabilityResolver: CapabilityResolver(runner: FakeProcessRunner()),
+      );
+
+      for (final id in [
+        'node',
+        'npm',
+        'git',
+        'python',
+        'codex',
+        'mimo2codex',
+        'flutter',
+      ]) {
+        final result = await detector.detectOne(id, environment: env);
+        expect(result, isNotNull, reason: '$id 应返回检测结果');
+        expect(result!.status, DetectionStatus.missing,
+            reason: '$id 在 Linux 未就绪时应为 missing');
+        expect(result.missingHint, contains('Linux Runtime'),
+            reason: '$id 应提示依赖 Linux Runtime');
+      }
+    });
+
+    test('G. Linux 就绪后 detectOne(node) 正常走 resolver（回归保护）', () async {
+      final temp = await Directory.systemTemp.createTemp('rtd-238-ready-');
+      addTearDown(() => temp.delete(recursive: true));
+      final env = RuntimeEnvironment.forTest(temp.path);
+
+      // 构造 Linux Runtime 已安装假象（isUbuntuInstalled 三要素）
+      File('${env.ubuntuBinDir}/proot').createSync(recursive: true);
+      File('${env.ubuntuRootfsDir}/usr/bin/bash').createSync(recursive: true);
+      File(env.installCompleteMarker).createSync(recursive: true);
+
+      final runner = FakeProcessRunner();
+      runner.whenWhich('node', '${env.ubuntuRootfsDir}/usr/bin/node');
+      runner.whenVersion('node', '18.19.1');
+
+      final detector = RuntimeDetector(
+        runner: runner,
+        capabilityResolver: CapabilityResolver(runner: runner),
+      );
+      final result = await detector.detectOne('node', environment: env);
+
+      expect(result, isNotNull);
+      expect(result!.status, DetectionStatus.installed,
+          reason: 'Linux 就绪后应正常检测 node');
+      expect(result.version, contains('18.19.1'));
     });
   });
 }

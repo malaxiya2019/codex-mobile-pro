@@ -141,6 +141,28 @@ DetectionResult _capabilityToResult(
   );
 }
 
+/// 生成「依赖 Linux Runtime」的 missing 结果
+///
+/// PRoot + Ubuntu rootfs 未就绪（全新安装 / 卸载重装 / 初始化中断）时，
+/// rootfs 内工具（node/npm/git/python/codex/mimo2codex/flutter）一律不经过
+/// CapabilityResolver：
+///   - resolver 会 fallback 到宿主 shell 执行 `node --version` 等命令
+///     → command not found exit=127
+///   - _capabilityToResult 将其误判为「已安装但执行失败（error）」
+///   - error 不计入 codingMissing → 一键部署按钮永不出现（APK-238 死锁根因）
+/// → 统一标记 missing，引导用户先完成一键部署。
+DetectionResult _rootfsDependencyMissing(_CapabilityToResult mapping) {
+  return DetectionResult(
+    id: mapping.id,
+    name: mapping.name,
+    icon: mapping.icon,
+    status: DetectionStatus.missing,
+    category: mapping.category,
+    subCategory: mapping.subCategory,
+    missingHint: '依赖 Linux Runtime（请先一键部署 Coding 环境）',
+  );
+}
+
 // ─── RuntimeDetectionResult ───────────────────────────────────
 
 /// 检测结果（按类别分组）
@@ -306,10 +328,22 @@ class RuntimeDetector {
     final effectiveProviders =
         linuxProviders.isNotEmpty ? linuxProviders : providers;
 
+    // Linux Runtime 未就绪（全新安装 / 卸载重装）时，rootfs 内工具一律
+    // 不经过 CapabilityResolver，避免宿主 shell fallback 误报 exit=127
+    // 被标成 error（→ codingMissing=0 → 一键部署按钮不出现，APK-238 死锁）。
+    // 统一标记 missing 并引导先完成一键部署。
+    final env = environment ?? _runtimeManager.environment;
+    final linuxNotReady =
+        linuxProviders.isNotEmpty && env != null && !env.isLinuxReady;
+
     // 对每个 Provider 检测能力
     for (final provider in effectiveProviders) {
       for (final mapping in _kCapabilityMappings) {
         if (mapping.type == CapabilityType.deepseekKey) continue;
+        if (linuxNotReady) {
+          results.add(_rootfsDependencyMissing(mapping));
+          continue;
+        }
         final start = DateTime.now();
         final cap = await _capabilityResolver.checkCapability(
           mapping.type,
@@ -400,6 +434,13 @@ class RuntimeDetector {
       final linuxProviders =
           providers.where((p) => p.type == ProviderType.linux).toList();
       final effective = linuxProviders.isNotEmpty ? linuxProviders : providers;
+
+      // 与 _detectCapabilities 一致：Linux 未就绪时跳过 resolver，
+      // 避免宿主 shell fallback 误报 exit=127。
+      final env = environment ?? _runtimeManager.environment;
+      if (linuxProviders.isNotEmpty && env != null && !env.isLinuxReady) {
+        return _rootfsDependencyMissing(mapping);
+      }
       for (final provider in effective) {
         final cap = await _capabilityResolver.checkCapability(
           mapping.type,
