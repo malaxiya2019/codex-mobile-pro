@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:http/http.dart' as http;
+
 import '../ai_message.dart';
 import '../ai_provider.dart';
 import '../ai_service.dart';
@@ -12,9 +14,11 @@ class DeepSeekProvider implements AiProvider {
   AiService? _service;
   AiProviderStatus _status = AiProviderStatus.uninitialized;
   final AiConfig _config;
+  final http.Client? _httpClient;
 
-  DeepSeekProvider({AiConfig? config})
-      : _config = config ?? const AiConfig();
+  DeepSeekProvider({AiConfig? config, http.Client? httpClient})
+      : _config = config ?? const AiConfig(),
+        _httpClient = httpClient;
 
   @override
   String get name => 'DeepSeek';
@@ -26,7 +30,7 @@ class DeepSeekProvider implements AiProvider {
   Future<void> initialize() async {
     _status = AiProviderStatus.initializing;
     try {
-      _service = AiService(config: _config);
+      _service = AiService(config: _config, httpClient: _httpClient);
       final health = await _service!.checkStatus();
       if (health == AiServiceStatus.ready) {
         _status = AiProviderStatus.ready;
@@ -123,7 +127,6 @@ class DeepSeekProvider implements AiProvider {
   }) async* {
     if (_service == null || _status != AiProviderStatus.ready) return;
 
-    final completer = Completer<void>();
     final streamController = StreamController<String>();
 
     final chatMessages = messages
@@ -135,35 +138,43 @@ class DeepSeekProvider implements AiProvider {
             ))
         .toList();
 
-    _service!.chatStream(
+    // 把 AiService.chatStream（Future 风格 + onChunk 回调）桥接为
+    // 单订阅 Stream。历史 bug：chatStream 的 Future 既未 await 也未
+    // catch，错误变成 unhandled async error 被运行时吞掉；onError 回调
+    // 只 complete() 不传错误 → 上层收到空流 → ChatEngine 显示
+    // 「⚠️ 未收到有效回复」。现在统一经 streamController 的 error 通道
+    // 把真实错误抛给调用方（AIProviderManager 负责重试/failover）。
+    final completion = _service!
+        .chatStream(
       messages: chatMessages,
       temperature: temperature,
       maxTokens: maxTokens,
       onChunk: (chunk) {
-        if (cancelToken?.isCancelled == true) {
-          if (!completer.isCompleted) completer.complete();
-          return;
+        if (cancelToken?.isCancelled != true) {
+          streamController.add(chunk);
         }
-        streamController.add(chunk);
       },
-      onDone: (full) {
-        if (!completer.isCompleted) completer.complete();
+      onDone: (_) {
+        if (!streamController.isClosed) streamController.close();
       },
-      onError: (error) {
-        if (!completer.isCompleted) completer.complete();
-      },
-    );
+    )
+        .then<void>((_) {}, onError: (Object error) {
+      if (!streamController.isClosed) streamController.addError(error);
+    });
 
-    // 取消监听
     cancelToken?.reset();
 
-    await for (final chunk in streamController.stream) {
-      if (cancelToken?.isCancelled == true) break;
-      yield chunk;
+    try {
+      await for (final chunk in streamController.stream) {
+        if (cancelToken?.isCancelled == true) break;
+        yield chunk;
+      }
+      // 流正常结束时若 chatStream 自身还有未传播的错误，在此抛出
+      //（正常情况下 completion 已消费，不会抛）。
+      await completion;
+    } finally {
+      if (!streamController.isClosed) streamController.close();
     }
-
-    if (!completer.isCompleted) completer.complete();
-    await completer.future;
   }
 
   @override

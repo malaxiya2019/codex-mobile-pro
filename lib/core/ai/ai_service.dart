@@ -1,4 +1,7 @@
 import 'dart:async';
+
+import 'package:http/http.dart' as http;
+
 import 'ai_client.dart';
 import 'ai_message.dart';
 import 'sse_parser.dart';
@@ -58,14 +61,18 @@ typedef OnStreamError = void Function(AiClientException error);
 /// - 流式聊天支持
 class AiService {
   final AiConfig _config;
+  final http.Client? _httpClient;
   AiClient? _client;
   int _consecutiveFailures = 0;
 
-  AiService({AiConfig? config}) : _config = config ?? const AiConfig();
+  AiService({AiConfig? config, http.Client? httpClient})
+      : _config = config ?? const AiConfig(),
+        _httpClient = httpClient;
 
   /// 获取或创建客户端
   AiClient _getClient() {
     _client ??= AiClient(
+      httpClient: _httpClient,
       config: AiClientConfig(
         baseUrl: _config.baseUrl,
         apiKey: _config.apiKey,
@@ -105,7 +112,8 @@ class AiService {
           temperature: temperature,
           maxTokens: maxTokens,
         );
-        final choice = response.choices.isNotEmpty ? response.choices.first : null;
+        final choice =
+            response.choices.isNotEmpty ? response.choices.first : null;
         if (choice == null) {
           throw const AiClientException(
             type: AiClientErrorType.api,
@@ -157,11 +165,21 @@ class AiService {
                 // 流结束
                 break;
               case SseEventType.error:
+                // SSE 错误事件 = 流终止：向 completer 传错，让调用方
+                // 走 catch → 重试/失败，而不是把错误吞成「空响应」。
+                // （历史 bug：只调 onError?.call 后 break，错误丢失，
+                //   上游 DeepSeekProvider 收到空流 → 显示「未收到有效回复」）
                 onError?.call(AiClientException(
                   type: AiClientErrorType.api,
                   message: event.errorMessage ?? 'SSE 解析错误',
                 ));
-                break;
+                if (!completer.isCompleted) {
+                  completer.completeError(AiClientException(
+                    type: AiClientErrorType.api,
+                    message: event.errorMessage ?? 'SSE 解析错误',
+                  ));
+                }
+                return;
             }
           },
           onError: (e) {
@@ -208,7 +226,9 @@ class AiService {
         // 指数退避
         await Future.delayed(retryDelay);
         retryDelay = Duration(
-          milliseconds: (retryDelay.inMilliseconds * _config.retryBackoffMultiplier).toInt(),
+          milliseconds:
+              (retryDelay.inMilliseconds * _config.retryBackoffMultiplier)
+                  .toInt(),
         );
       }
     }
@@ -258,7 +278,9 @@ class AiService {
 
         await Future.delayed(retryDelay);
         retryDelay = Duration(
-          milliseconds: (retryDelay.inMilliseconds * _config.retryBackoffMultiplier).toInt(),
+          milliseconds:
+              (retryDelay.inMilliseconds * _config.retryBackoffMultiplier)
+                  .toInt(),
         );
       }
     }
