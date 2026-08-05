@@ -369,6 +369,8 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
   /// 分类为「失败组件：npm / Node.js：已安装」，避免误显示
   /// 「部署失败（Node.js）」把已安装的 Node.js 判为失败。
   String _buildFailureMessage(InstallResult result) {
+    const repairGuide =
+        '\n\n💡 环境问题？点「🔧 修复环境」自动修复（PRoot / apt 源 / dpkg / 工具链）';
     final toolName =
         RuntimeDependency.forTool(result.tool)?.displayName ?? result.tool.name;
     final phase = result.phase.name;
@@ -387,6 +389,7 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
       buf.write('Node.js：已安装');
       buf.writeln();
       buf.write('原因：$base');
+      buf.write(repairGuide);
       return buf.toString();
     }
 
@@ -396,6 +399,7 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
     buf.write('阶段：$phase');
     buf.writeln();
     buf.write(base);
+    buf.write(repairGuide);
     return buf.toString();
   }
 

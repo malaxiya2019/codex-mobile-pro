@@ -675,6 +675,7 @@ class _DeployPageState extends ConsumerState<DeployPage> {
   // ════════════════════════════════════════════════════════════════
 
   Widget _buildActionButtons(BuildContext context, DeployStatus status) {
+    final theme = Theme.of(context);
     final detection = status.detectionResult;
 
     if (detection == null) return const SizedBox.shrink();
@@ -711,20 +712,39 @@ class _DeployPageState extends ConsumerState<DeployPage> {
         if (needsInstall && !status.isInstalling) const SizedBox(height: 8),
 
         // 修复环境（PRoot / tmp / dpkg / apt 一键修复）
+        // 有 missing/broken 工具时提升为强调样式（FilledButton.tonal），
+        // 让用户知道「修复环境」与「一键部署」一样能解决当前问题。
         SizedBox(
           width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: status.isInstalling || status.isRepairing
-                ? null
-                : () {
-                    ref.read(deployStatusProvider.notifier).repairEnvironment();
-                  },
-            icon: const Icon(Icons.build_circle, size: 18),
-            label: const Text('🔧 修复环境'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 44),
-            ),
-          ),
+          child: needsInstall
+              ? FilledButton.tonalIcon(
+                  onPressed: status.isInstalling || status.isRepairing
+                      ? null
+                      : () {
+                          ref
+                              .read(deployStatusProvider.notifier)
+                              .repairEnvironment();
+                        },
+                  icon: const Icon(Icons.build_circle, size: 18),
+                  label: const Text('🔧 修复环境'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 44),
+                  ),
+                )
+              : OutlinedButton.icon(
+                  onPressed: status.isInstalling || status.isRepairing
+                      ? null
+                      : () {
+                          ref
+                              .read(deployStatusProvider.notifier)
+                              .repairEnvironment();
+                        },
+                  icon: const Icon(Icons.build_circle, size: 18),
+                  label: const Text('🔧 修复环境'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 44),
+                  ),
+                ),
         ),
 
         const SizedBox(height: 8),
@@ -765,6 +785,16 @@ class _DeployPageState extends ConsumerState<DeployPage> {
               ),
             ),
           ],
+        ),
+
+        const SizedBox(height: 4),
+        // 部署中心自愈范围说明：环境问题都能在 App 内解决，无需进终端
+        Text(
+          '可自动修复：Linux Runtime (PRoot) · apt 源 · dpkg · 工具链',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.outline,
+          ),
         ),
       ],
     );
