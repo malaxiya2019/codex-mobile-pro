@@ -145,6 +145,75 @@ void main() {
     });
   });
 
+  group('selectFastestSource', () {
+    AptSourceManager withProbe(AptSourceProbe probe) =>
+        AptSourceManager(rootfs, probe: probe);
+
+    test('全部可达且官方最快 → 选官方', () async {
+      final m = withProbe((url) async {
+        if (url.contains('ports.ubuntu.com')) {
+          return const Duration(milliseconds: 80);
+        }
+        if (url.contains('tuna')) return const Duration(milliseconds: 200);
+        if (url.contains('aliyun')) return const Duration(milliseconds: 220);
+        return const Duration(milliseconds: 250);
+      });
+      final selected = await m.selectFastestSource();
+      expect(selected!.name, 'official-https');
+    });
+
+    test('镜像明显更快（差距 > 300ms）→ 选镜像', () async {
+      final m = withProbe((url) async {
+        if (url.contains('ports.ubuntu.com')) {
+          return const Duration(seconds: 2);
+        }
+        if (url.contains('tuna')) return const Duration(milliseconds: 120);
+        return const Duration(seconds: 3);
+      });
+      final selected = await m.selectFastestSource();
+      expect(selected!.name, 'tuna');
+    });
+
+    test('官方与最优差距 <= 300ms → 官方优先（稳定优先）', () async {
+      final m = withProbe((url) async {
+        if (url.contains('ports.ubuntu.com')) {
+          return const Duration(milliseconds: 400);
+        }
+        if (url.contains('tuna')) return const Duration(milliseconds: 300);
+        return const Duration(milliseconds: 350);
+      });
+      final selected = await m.selectFastestSource();
+      expect(selected!.name, 'official-https');
+    });
+
+    test('部分不可达 → 可达源中选最快', () async {
+      final m = withProbe((url) async {
+        if (url.contains('ports.ubuntu.com')) return null; // 官方不可达
+        if (url.contains('tuna')) return const Duration(milliseconds: 150);
+        if (url.contains('aliyun')) return null;
+        return const Duration(milliseconds: 300);
+      });
+      final selected = await m.selectFastestSource();
+      expect(selected!.name, 'tuna');
+    });
+
+    test('全部不可达 → null（保持当前源，走 fallback 兜底）', () async {
+      final m = withProbe((url) async => null);
+      expect(await m.selectFastestSource(), isNull);
+    });
+
+    test('探测 URL 为 dists/noble/Release（与 apt 真实路径一致）', () async {
+      final urls = <String>[];
+      final m = withProbe((url) async {
+        urls.add(url);
+        return const Duration(milliseconds: 100);
+      });
+      await m.selectFastestSource();
+      expect(urls, hasLength(4));
+      expect(urls.every((u) => u.endsWith('/dists/noble/Release')), isTrue);
+    });
+  });
+
   group('buildFallbackChain', () {
     test('默认包含 4 个备用源，按优先级降序', () {
       final chain = mgr.buildFallbackChain();

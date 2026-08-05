@@ -122,7 +122,10 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                   ),
 
                 // ── 检测结果（不含底部操作按钮）──
-                if (status.detectionResult != null) ...[
+                // 进行中（安装/验证/修复）隐藏：detectionResult 是
+                // 部署开始前的旧检测（如全新 rootfs 的 Node exit=127），
+                // 若同时渲染会造成「部署中 git 30% + Node 127」状态混叠。
+                if (status.detectionResult != null && !status.isBusy) ...[
                   // ⚡ 基础 Runtime
                   if (status.detectionResult!.basic.isNotEmpty)
                     _buildCategorySection(
@@ -202,7 +205,9 @@ class _DeployPageState extends ConsumerState<DeployPage> {
           ),
 
           // ── 固定底部操作栏 ──
-          if (status.detectionResult != null)
+          // 进行中隐藏：一键部署/修复/重新检测在 installing 下全部禁用，
+          // 保留只会让「部署中」页面看起来像「有错误待处理」。
+          if (status.detectionResult != null && !status.isBusy)
             Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,

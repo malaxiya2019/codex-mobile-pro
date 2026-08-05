@@ -95,6 +95,8 @@ void main() {
     doctor = EnvironmentDoctor(
       runner: fakeRunner,
       injectedPaths: paths,
+      // 全部不可达：preselect 测速不写源、不发真实 HTTP（测试隔离）
+      aptSourceProbe: (_) async => null,
     );
   });
 
@@ -442,7 +444,7 @@ void main() {
       // apt install npm 成功（fake 无法模拟安装后状态，
       // npm --version 保持失败 → npm check 判为未恢复，Node 仍独立通过）
       fakeRunner.when(
-          'apt-get install -y npm',
+          'apt-get install -y --no-install-recommends npm',
           const FakeCommandResult(
             stdout: 'Setting up npm ... done',
           ));
@@ -451,12 +453,15 @@ void main() {
 
       // 触发 npm 补装：apt install npm 出现
       final ranNpmInstall = fakeRunner.executedRequests.any(
-        (r) => r.arguments.join(' ') == 'install -y npm',
+        (r) =>
+            r.arguments.join(' ') == 'install -y --no-install-recommends npm',
       );
       expect(ranNpmInstall, true, reason: '必须执行 apt install npm');
       // 不得重装 nodejs
       final ranFullNodeInstall = fakeRunner.executedRequests.any(
-        (r) => r.arguments.join(' ') == 'install -y nodejs npm',
+        (r) =>
+            r.arguments.join(' ') ==
+            'install -y --no-install-recommends nodejs npm',
       );
       expect(ranFullNodeInstall, false, reason: 'node 已装不得重装 nodejs');
 
@@ -512,7 +517,8 @@ void main() {
       expect(apt.passed, false);
       // apt 不可用 → 不得尝试 apt install npm
       final ranNpmInstall = fakeRunner.executedRequests.any(
-        (r) => r.arguments.join(' ') == 'install -y npm',
+        (r) =>
+            r.arguments.join(' ') == 'install -y --no-install-recommends npm',
       );
       expect(ranNpmInstall, false);
       final npmCheck = report.checks.firstWhere((c) => c.name == 'npm');
@@ -540,7 +546,7 @@ void main() {
           ));
       // apt 安装成功（fake 无法模拟安装后状态，node --version 仍失败）
       fakeRunner.when(
-          'apt-get install -y nodejs npm',
+          'apt-get install -y --no-install-recommends nodejs npm',
           const FakeCommandResult(
             stdout: 'Setting up nodejs ... done',
           ));
@@ -549,12 +555,15 @@ void main() {
 
       // node 缺失 → NodeJsInstaller 全量补装 nodejs+npm
       final ranFull = fakeRunner.executedRequests.any(
-        (r) => r.arguments.join(' ') == 'install -y nodejs npm',
+        (r) =>
+            r.arguments.join(' ') ==
+            'install -y --no-install-recommends nodejs npm',
       );
       expect(ranFull, true, reason: 'node 缺失时必须执行 apt install nodejs npm');
       // 不单独触发 npm 补装（已包含在全量安装里）
       final ranNpmOnly = fakeRunner.executedRequests.any(
-        (r) => r.arguments.join(' ') == 'install -y npm',
+        (r) =>
+            r.arguments.join(' ') == 'install -y --no-install-recommends npm',
       );
       expect(ranNpmOnly, false);
       // Node 独立 check：fake 下安装后仍未恢复 → 失败但标记 repaired
@@ -577,7 +586,8 @@ void main() {
     bool ranAptInstall(FakeProcessRunner runner, String packages) =>
         runner.executedRequests.any((r) =>
             r.executable.endsWith('apt-get') &&
-            r.arguments.join(' ') == 'install -y $packages');
+            r.arguments.join(' ') ==
+                'install -y --no-install-recommends $packages');
 
     bool ranNpmGlobalInstall(FakeProcessRunner runner) =>
         runner.executedRequests.any((r) =>
@@ -594,7 +604,7 @@ void main() {
             stderr: 'command not found: node',
           ));
       fakeRunner.when(
-          'apt-get install -y nodejs npm',
+          'apt-get install -y --no-install-recommends nodejs npm',
           const FakeCommandResult(
             stdout: 'Setting up nodejs ... done',
           ));
@@ -620,7 +630,7 @@ void main() {
             stderr: 'command not found: git',
           ));
       fakeRunner.when(
-          'apt-get install -y git',
+          'apt-get install -y --no-install-recommends git',
           const FakeCommandResult(
             stdout: 'Setting up git ... done',
           ));
@@ -724,7 +734,7 @@ void main() {
           ));
       // npm 缺失 → NodeJsInstaller 走 apt 补装 npm（与 npm 全局安装无关）
       fakeRunner.when(
-          'apt-get install -y npm',
+          'apt-get install -y --no-install-recommends npm',
           const FakeCommandResult(
             stdout: 'Setting up npm ... done',
           ));

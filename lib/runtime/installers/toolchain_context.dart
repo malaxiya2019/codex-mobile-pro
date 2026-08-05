@@ -29,16 +29,23 @@ class ToolchainContext {
   final LinuxRuntimeProvider? _linux;
   final LinuxRuntimePaths? _injectedPaths;
 
+  /// 可注入的 apt 源测速探针（单元测试用；null → 默认真实 HTTP 测速）
+  final AptSourceProbe? aptSourceProbe;
+
   /// 同一轮安装中 `apt-get update` 是否已成功执行（幂等）
   bool aptUpdated = false;
 
   /// 同一轮安装中 `dpkg` 是否已确认健康（幂等）
   bool dpkgHealthy = false;
 
+  /// 同一轮安装中是否已执行过「自动测速选源」（幂等）
+  bool _aptSourcePreselected = false;
+
   ToolchainContext({
     required RuntimeProcessRunner runner,
     LinuxRuntimeProvider? linux,
     LinuxRuntimePaths? injectedPaths,
+    this.aptSourceProbe,
   })  : _runner = runner,
         _linux = linux,
         _injectedPaths = injectedPaths;
@@ -191,12 +198,48 @@ class ToolchainContext {
     dpkgHealthy = true;
   }
 
+  /// 部署前主动测速选源（自动检测网络 → 智能切换）。
+  ///
+  /// 对官方 HTTPS + 国内镜像并发测速，把 RTT 最小的源写入初始
+  /// sources.list（首次覆盖前备份 .orig）。任何失败都静默忽略：
+  ///   - 全部不可达 → 保持当前源
+  ///   - 当前源无法识别 → 不乱写
+  ///   - 已是所选源 → 不重写
+  /// 后续仍由 _runWithAptSourceFallback 在真实安装失败时兜底切源。
+  Future<void> _preselectAptSource() async {
+    if (_aptSourcePreselected) return;
+    _aptSourcePreselected = true;
+    try {
+      final paths = await resolvePaths();
+      final aptSource = AptSourceManager(
+        paths.rootfsDir,
+        probe: aptSourceProbe,
+      );
+      final selected = await aptSource.selectFastestSource();
+      if (selected == null) return;
+      final current = await aptSource.readCurrentUri();
+      if (current == null) return;
+      String norm(String u) => u.trim().replaceFirst(RegExp(r'/*$'), '');
+      if (norm(current) == norm(selected.baseUri)) return;
+      await aptSource.writeSource(selected);
+      LogService.info(
+        'Toolchain',
+        'apt 自动测速选源 ${selected.name}: ${selected.baseUri}',
+      );
+    } catch (e) {
+      LogService.warning('Toolchain', 'apt 预选源失败(忽略，继续默认流程): $e');
+    }
+  }
+
   /// 执行 `apt-get update`（幂等：同轮已成功则不重复执行）。
   ///
   /// 失败时若判定为网络获取失败（TCP/HTTP 无法连接镜像），自动按
   /// fallback 链切换 apt 源重试；全部失败抛 DeployError(aptUpdateFailed)。
   Future<void> ensureAptUpdated() async {
     if (aptUpdated) return;
+    // 首次 apt 操作前先主动测速选源（自动检测网络 → 智能切换）。
+    // 失败不影响主流程：仍用当前源，由 _runWithAptSourceFallback 兜底。
+    await _preselectAptSource();
     await _runWithAptSourceFallback(
       arguments: const ['update'],
       label: 'apt:update',
@@ -220,8 +263,12 @@ class ToolchainContext {
   }) async {
     await ensureDpkgHealthy();
     await ensureAptUpdated();
+    // --no-install-recommends：砍掉 systemd 等推荐链。
+    // 真机实测：noble rootfs 内 systemd 的 postinst/tmpfiles 与 PRoot
+    // 不兼容，Unpacking/Setting up 阶段极慢甚至卡死（用户日志中的
+    // journal-nocow 报错）；不装推荐包可显著缩短首次部署耗时。
     await _runWithAptSourceFallback(
-      arguments: ['install', '-y', ...packages],
+      arguments: ['install', '-y', '--no-install-recommends', ...packages],
       label: 'apt:install:${packages.join(",")}',
       failureCode: DeployErrorCode.aptInstallFailed,
       failureMessage: 'Ubuntu 包安装失败: ${packages.join(', ')}',
@@ -229,7 +276,8 @@ class ToolchainContext {
       timeout: timeout ?? const Duration(minutes: 15),
       context: {
         'packages': packages,
-        'command': 'apt-get install -y ${packages.join(' ')}',
+        'command':
+            'apt-get install -y --no-install-recommends ${packages.join(' ')}',
       },
     );
   }

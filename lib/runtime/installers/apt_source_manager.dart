@@ -25,6 +25,32 @@ import 'dart:io';
 
 import '../../core/logger/log_service.dart';
 
+/// apt 源测速探针：对 [url] 发起轻量请求，返回 RTT；不可达/超时返回 null。
+///
+/// 默认真实实现走 `dart:io HttpClient`（宿主侧，与 rootfs 同一网络出口），
+/// 便于在单元测试中注入固定延迟。
+typedef AptSourceProbe = Future<Duration?> Function(String url);
+
+/// 默认探针：HTTP HEAD 到 `{baseUri}/dists/{codename}/Release`。
+///
+/// 只要收到响应头即视为可达（不要求 2xx：镜像对 HEAD 返回 404 也证明
+/// TCP/HTTPS 链路通），连接失败 / 超时 / 证书错误 → null（不可达）。
+Future<Duration?> _defaultAptProbe(String url) async {
+  final stopwatch = Stopwatch()..start();
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+  try {
+    final request = await client.headUrl(Uri.parse(url));
+    final response = await request.close().timeout(const Duration(seconds: 5));
+    await response.drain<void>();
+    stopwatch.stop();
+    return stopwatch.elapsed;
+  } catch (_) {
+    return null;
+  } finally {
+    client.close(force: true);
+  }
+}
+
 /// 单个 apt 源描述
 class AptSourceEntry {
   /// 源名称（日志 / 诊断用，如 official-https / tuna）
@@ -52,7 +78,10 @@ class AptSourceManager {
   /// rootfs 根目录（绝对路径，宿主机视角）
   final String rootfsDir;
 
-  const AptSourceManager(this.rootfsDir);
+  final AptSourceProbe _probe;
+
+  const AptSourceManager(this.rootfsDir, {AptSourceProbe? probe})
+      : _probe = probe ?? _defaultAptProbe;
 
   /// Ubuntu 版本代号（App 部署的是 noble LTS）
   static const String codename = 'noble';
@@ -173,6 +202,42 @@ class AptSourceManager {
 
     await listFile.writeAsString(buildSourcesList(src));
     LogService.info('AptSource', 'apt 源已切换为 ${src.name}: ${src.baseUri}');
+  }
+
+  /// 自动测速选源：并发探测所有候选源（官方 HTTPS + 国内镜像），
+  /// 返回 RTT 最小的可达源；全部不可达返回 null（保持当前源）。
+  ///
+  /// 规则：
+  ///   - 官方 HTTPS 若可达，且与最优源的 RTT 差不超过 [officialBias]
+  ///     （默认 300ms）→ 优先官方（权威、稳定），避免为了几十毫秒
+  ///     切到镜像。
+  ///   - 其余情况选 RTT 最小者。
+  ///
+  /// 这是「自动检测网络 → 智能切换」的主动探测入口（区别于被动
+  /// fallback：后者只在安装失败后才切源）。国外用户会自然选中官方源，
+  /// 国内用户会选中清华/阿里/USTC。
+  Future<AptSourceEntry?> selectFastestSource({
+    Duration officialBias = const Duration(milliseconds: 300),
+  }) async {
+    final results = await Future.wait(fallbackChain.map((src) async {
+      final url = '${src.baseUri}/dists/$codename/Release';
+      final rtt = await _probe(url);
+      return (entry: src, rtt: rtt);
+    }));
+    final reachable = results.where((r) => r.rtt != null).toList()
+      ..sort((a, b) => a.rtt!.compareTo(b.rtt!));
+    if (reachable.isEmpty) return null;
+
+    final fastest = reachable.first;
+    for (final r in reachable) {
+      if (r.entry.name == 'official-https') {
+        if (r.entry != fastest.entry && r.rtt! - fastest.rtt! <= officialBias) {
+          return r.entry;
+        }
+        return fastest.entry;
+      }
+    }
+    return fastest.entry;
   }
 
   /// 构建 fallback 链（排除当前源，避免重复尝试同一 URI）。

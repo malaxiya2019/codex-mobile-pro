@@ -25,6 +25,7 @@ import 'dart:io';
 
 import 'package:codex_mobile_pro/runtime/deploy_error.dart';
 import 'package:codex_mobile_pro/runtime/install_models.dart';
+import 'package:codex_mobile_pro/runtime/installers/apt_source_manager.dart';
 import 'package:codex_mobile_pro/runtime/installers/apt_toolchain_installers.dart';
 import 'package:codex_mobile_pro/runtime/installers/npm_toolchain_installers.dart';
 import 'package:codex_mobile_pro/runtime/installers/toolchain_context.dart';
@@ -225,7 +226,7 @@ class ToolchainFixture {
   late final ToolchainContext ctx;
   late final ToolchainOrchestrator orchestrator;
 
-  ToolchainFixture() {
+  ToolchainFixture({AptSourceProbe? probe}) {
     temp = Directory.systemTemp.createTempSync('toolchain_test_');
     // 满足 isLinuxReady：proot + rootfs bash 真实存在
     File('${temp.path}/proot').createSync(recursive: true);
@@ -249,6 +250,9 @@ class ToolchainFixture {
         rootfsDir: '${temp.path}/rootfs',
         loaderPath: '${temp.path}/loader',
       ),
+      // 默认注入「全部不可达」探针：测速不写源、不发真实 HTTP；
+      // preselect 专项测试再注入特定延迟。
+      aptSourceProbe: probe ?? (_) async => null,
     );
     orchestrator = ToolchainOrchestrator();
   }
@@ -290,7 +294,8 @@ void main() {
 
       expect(result.success, isTrue);
       // 必须只补装 npm，不重装 nodejs
-      expect(f.adapter.log, contains('/usr/bin/apt-get install -y npm'));
+      expect(f.adapter.log,
+          contains('/usr/bin/apt-get install -y --no-install-recommends npm'));
       expect(
         f.adapter.log.where(
             (l) => l.contains('apt-get install') && l.contains('nodejs')),
@@ -311,7 +316,10 @@ void main() {
 
       expect(result.success, isTrue);
       expect(f.adapter.log, contains('/usr/bin/apt-get update'));
-      expect(f.adapter.log, contains('/usr/bin/apt-get install -y nodejs npm'));
+      expect(
+          f.adapter.log,
+          contains(
+              '/usr/bin/apt-get install -y --no-install-recommends nodejs npm'));
       expect(f.adapter.installedVersions['/usr/bin/node'], 'v18.19.1');
       expect(f.adapter.installedVersions['/usr/bin/npm'], '9.2.0');
       expect(result.version, contains('node'));
@@ -477,6 +485,67 @@ void main() {
     });
   });
 
+  group('apt 自动测速选源（自动检测网络 → 智能切换）', () {
+    test('部署前镜像最快 → sources.list 切换为镜像，出厂源备份 .orig', () async {
+      final f = ToolchainFixture(probe: (url) async {
+        if (url.contains('tuna')) return const Duration(milliseconds: 100);
+        if (url.contains('ports.ubuntu.com')) {
+          return const Duration(seconds: 2);
+        }
+        return const Duration(seconds: 3);
+      });
+      addTearDown(f.dispose);
+
+      final installer = NodeJsInstaller();
+      final result = await installer.install(f.ctx);
+      expect(result.success, isTrue);
+
+      final sources =
+          File('${f.temp.path}/rootfs/etc/apt/sources.list').readAsStringSync();
+      expect(sources, contains('mirrors.tuna.tsinghua.edu.cn'),
+          reason: '测速最快源应写入初始 sources.list');
+      expect(sources, isNot(contains('http://ports.ubuntu.com/ubuntu-ports')),
+          reason: '出厂 HTTP 源被覆盖');
+      expect(
+          File('${f.temp.path}/rootfs/etc/apt/sources.list.orig').existsSync(),
+          isTrue,
+          reason: '切换前必须备份出厂配置');
+    });
+
+    test('官方可达且差距 <= 300ms → 仍选官方（稳定优先）', () async {
+      final f = ToolchainFixture(probe: (url) async {
+        if (url.contains('ports.ubuntu.com')) {
+          return const Duration(milliseconds: 400);
+        }
+        if (url.contains('tuna')) return const Duration(milliseconds: 300);
+        return const Duration(milliseconds: 350);
+      });
+      addTearDown(f.dispose);
+
+      final installer = NodeJsInstaller();
+      await installer.install(f.ctx);
+
+      final sources =
+          File('${f.temp.path}/rootfs/etc/apt/sources.list').readAsStringSync();
+      expect(sources, contains('https://ports.ubuntu.com/ubuntu-ports'),
+          reason: '官方 HTTPS 可达时优先官方');
+    });
+
+    test('测速全部不可达 → 保持出厂源（不写镜像，由 fallback 兜底）', () async {
+      final f = ToolchainFixture(probe: (_) async => null);
+      addTearDown(f.dispose);
+
+      final installer = NodeJsInstaller();
+      await installer.install(f.ctx);
+
+      final sources =
+          File('${f.temp.path}/rootfs/etc/apt/sources.list').readAsStringSync();
+      expect(sources, contains('http://ports.ubuntu.com/ubuntu-ports'),
+          reason: '测速失败必须保持当前源');
+      expect(sources, isNot(contains('tuna')));
+    });
+  });
+
   group('Git / Python 安装器', () {
     test('Git 缺失 → apt install → 验证', () async {
       final f = ToolchainFixture();
@@ -486,7 +555,8 @@ void main() {
       final result = await installer.install(f.ctx);
 
       expect(result.success, isTrue);
-      expect(f.adapter.log, contains('/usr/bin/apt-get install -y git'));
+      expect(f.adapter.log,
+          contains('/usr/bin/apt-get install -y --no-install-recommends git'));
       expect(f.adapter.installedVersions['/usr/bin/git'], '2.43.0');
     });
 
@@ -510,8 +580,10 @@ void main() {
       final result = await installer.install(f.ctx);
 
       expect(result.success, isTrue);
-      expect(f.adapter.log,
-          contains('/usr/bin/apt-get install -y python3 python3-pip'));
+      expect(
+          f.adapter.log,
+          contains(
+              '/usr/bin/apt-get install -y --no-install-recommends python3 python3-pip'));
       expect(f.adapter.installedVersions['/usr/bin/python3'], '3.12.3');
       expect(result.version, contains('pip'));
     });

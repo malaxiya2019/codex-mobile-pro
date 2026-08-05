@@ -12,13 +12,13 @@ import '../../../runtime/runtime_manager.dart';
 
 /// 状态
 enum DeployState {
-  idle,       // 未开始
-  checking,   // 检测中
-  completed,  // 检测完成
+  idle, // 未开始
+  checking, // 检测中
+  completed, // 检测完成
   installing, // 安装中
-  verifying,  // 验证中
-  repairing,  // 修复环境中
-  error,      // 出错（检测失败 或 部署失败）
+  verifying, // 验证中
+  repairing, // 修复环境中
+  error, // 出错（检测失败 或 部署失败）
 }
 
 /// 部署中心状态
@@ -65,7 +65,9 @@ class DeployStatus {
   String get summary {
     if (state == DeployState.idle) return '点击「开始检测」检查环境';
     if (state == DeployState.checking) return '正在检测...';
-    if (state == DeployState.installing) return currentProgress?.message ?? '安装中...';
+    if (state == DeployState.installing) {
+      return currentProgress?.message ?? '安装中...';
+    }
     if (state == DeployState.verifying) return '验证环境中...';
     if (state == DeployState.repairing) return '修复环境中...';
     if (state == DeployState.error) return '出错: $errorMessage';
@@ -80,12 +82,21 @@ class DeployStatus {
   /// 是否正在修复环境
   bool get isRepairing => state == DeployState.repairing;
 
+  /// 是否处于进行中状态（安装 / 验证 / 修复）。
+  ///
+  /// 进行中时 UI 必须隐藏旧的检测结果卡片（deploy_page），
+  /// 否则用户会看到「部署中 git 30%」与「部署前 Node exit=127」
+  /// 同时并存 —— APK-240 真机反馈的「打开就 30%」状态混叠根因。
+  bool get isBusy =>
+      state == DeployState.installing ||
+      state == DeployState.verifying ||
+      state == DeployState.repairing;
+
   /// 网络是否正常（用于安装前预检）
   bool get networkOk {
     if (detectionResult == null) return true;
-    final networkResult = detectionResult!.basic
-        .where((r) => r.id == 'network')
-        .firstOrNull;
+    final networkResult =
+        detectionResult!.basic.where((r) => r.id == 'network').firstOrNull;
     if (networkResult == null) return true;
     return networkResult.status == DetectionStatus.installed;
   }
@@ -93,9 +104,8 @@ class DeployStatus {
   /// 网络错误建议
   String? get networkSuggestion {
     if (detectionResult == null) return null;
-    final networkResult = detectionResult!.basic
-        .where((r) => r.id == 'network')
-        .firstOrNull;
+    final networkResult =
+        detectionResult!.basic.where((r) => r.id == 'network').firstOrNull;
     if (networkResult == null) return null;
     if (networkResult.status == DetectionStatus.installed) return null;
     return networkResult.missingHint;
@@ -187,9 +197,8 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
       final suggestion = state.networkSuggestion;
       state = state.copyWith(
         state: DeployState.error,
-        errorMessage: suggestion != null
-            ? '❌ 网络不可用\n$suggestion'
-            : '❌ 网络不可用\n请检查网络连接后重试',
+        errorMessage:
+            suggestion != null ? '❌ 网络不可用\n$suggestion' : '❌ 网络不可用\n请检查网络连接后重试',
       );
       return;
     }
@@ -248,9 +257,8 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
       final suggestion = state.networkSuggestion;
       state = state.copyWith(
         state: DeployState.error,
-        errorMessage: suggestion != null
-            ? '❌ 网络不可用\n$suggestion'
-            : '❌ 网络不可用\n请检查网络连接后重试',
+        errorMessage:
+            suggestion != null ? '❌ 网络不可用\n$suggestion' : '❌ 网络不可用\n请检查网络连接后重试',
       );
       return;
     }
@@ -266,7 +274,8 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
 
     final result = await mgr.install(tool);
 
-    final resultMap = Map<RuntimeTool, InstallResult>.from(state.installResults);
+    final resultMap =
+        Map<RuntimeTool, InstallResult>.from(state.installResults);
     resultMap[tool] = result;
 
     if (!result.success) {
@@ -306,12 +315,8 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
       // 修复完成后刷新检测结果（Capability Registry 重建）
       await checkAll();
       state = state.copyWith(
-        state: report.allPassed
-            ? DeployState.completed
-            : DeployState.error,
-        errorMessage: report.allPassed
-            ? null
-            : '环境修复未完全成功:\n${report.summary}',
+        state: report.allPassed ? DeployState.completed : DeployState.error,
+        errorMessage: report.allPassed ? null : '环境修复未完全成功:\n${report.summary}',
       );
       return report;
     } catch (e) {
@@ -364,8 +369,8 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
   /// 分类为「失败组件：npm / Node.js：已安装」，避免误显示
   /// 「部署失败（Node.js）」把已安装的 Node.js 判为失败。
   String _buildFailureMessage(InstallResult result) {
-    final toolName = RuntimeDependency.forTool(result.tool)?.displayName ??
-        result.tool.name;
+    final toolName =
+        RuntimeDependency.forTool(result.tool)?.displayName ?? result.tool.name;
     final phase = result.phase.name;
     final base = result.errorMessage ?? '未知错误';
     final lower = base.toLowerCase();

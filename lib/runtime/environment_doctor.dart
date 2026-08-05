@@ -30,6 +30,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../core/logger/log_service.dart';
+import 'installers/apt_source_manager.dart';
 import 'installers/apt_toolchain_installers.dart';
 import 'installers/npm_toolchain_installers.dart';
 import 'installers/toolchain_context.dart';
@@ -91,13 +92,19 @@ class EnvironmentDoctor {
   final LinuxRuntimeProvider? _linux;
   final LinuxRuntimePaths? _injectedPaths;
 
+  /// 可注入的 apt 源测速探针（透传给 ToolchainContext；测试注入
+  /// 「全部不可达」避免真实 HTTP；生产 null → 默认真实测速）
+  final AptSourceProbe? _aptSourceProbe;
+
   EnvironmentDoctor({
     RuntimeProcessRunner? runner,
     LinuxRuntimeProvider? linux,
     LinuxRuntimePaths? injectedPaths,
+    AptSourceProbe? aptSourceProbe,
   })  : _runner = runner ?? RuntimeProcessRunner(),
         _linux = linux,
-        _injectedPaths = injectedPaths;
+        _injectedPaths = injectedPaths,
+        _aptSourceProbe = aptSourceProbe;
 
   /// 构建工具链执行上下文（与安装链路同通道）
   ToolchainContext _buildContext() {
@@ -105,6 +112,7 @@ class EnvironmentDoctor {
       runner: _runner,
       linux: _linux,
       injectedPaths: _injectedPaths,
+      aptSourceProbe: _aptSourceProbe,
     );
   }
 
