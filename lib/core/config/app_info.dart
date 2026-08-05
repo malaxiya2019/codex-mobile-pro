@@ -4,7 +4,6 @@
 abstract class AppInfo {
   static const name = 'Codex Mobile Pro';
   static const version = '1.0.0';
-  static const buildNumber = '1';
   static const versionLabel = '1.0.0+1';
 
   /// 仓库地址（GitHub）

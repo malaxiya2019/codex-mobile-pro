@@ -159,7 +159,8 @@ class RuntimeManager {
       runner: runner,
       capabilityResolver: _resolver,
     );
-    _ubuntuInstaller = UbuntuRuntimeInstaller(_environment!, _onInstallProgress);
+    _ubuntuInstaller =
+        UbuntuRuntimeInstaller(_environment!, _onInstallProgress);
     _orchestrator = ToolchainOrchestrator()..bindProgress(_onInstallProgress);
 
     // 初始化下载队列
@@ -170,7 +171,7 @@ class RuntimeManager {
     if (recovered > 0) {
       LogService.info('RuntimeMgr', '恢复 $recovered 个未完成的下载任务');
     }
-    
+
     _state = RuntimeManagerState.ready;
     LogService.info('RuntimeMgr', 'Runtime Manager 就绪');
   }
@@ -211,7 +212,8 @@ class RuntimeManager {
 
     try {
       final order = RuntimeDependency.installOrder();
-      LogService.info('RuntimeMgr', '一键部署顺序: ${order.map((t) => t.name).join(" → ")}');
+      LogService.info(
+          'RuntimeMgr', '一键部署顺序: ${order.map((t) => t.name).join(" → ")}');
 
       for (final tool in order) {
         final dep = RuntimeDependency.forTool(tool);
@@ -291,7 +293,8 @@ class RuntimeManager {
         if (tool == RuntimeTool.ubuntu) {
           result = await _ubuntuInstaller!.install();
         } else {
-          result = await orchestrator.installOne(tool, _buildToolchainContext());
+          result =
+              await orchestrator.installOne(tool, _buildToolchainContext());
         }
 
         if (!result.success) {
@@ -331,9 +334,12 @@ class RuntimeManager {
   ) {
     String toolToDetectorId(RuntimeTool t) {
       switch (t) {
-        case RuntimeTool.codexCli: return 'codex';
-        case RuntimeTool.mimo2codex: return 'mimo2codex';
-        default: return t.name;
+        case RuntimeTool.codexCli:
+          return 'codex';
+        case RuntimeTool.mimo2codex:
+          return 'mimo2codex';
+        default:
+          return t.name;
       }
     }
 
@@ -359,7 +365,8 @@ class RuntimeManager {
       if (tool == RuntimeTool.ubuntu) {
         result = await _ubuntuInstaller!.install();
       } else {
-        result = await _orchestrator!.installOne(tool, _buildToolchainContext());
+        result =
+            await _orchestrator!.installOne(tool, _buildToolchainContext());
       }
       return result;
     } finally {
@@ -453,7 +460,7 @@ class RuntimeManager {
 
   /// 下载队列
   DownloadQueueScheduler get downloadQueue => _queue!;
-  
+
   /// 下载队列事件流
   Stream<DownloadProgressEvent> get downloadQueueStream {
     final controller = StreamController<DownloadProgressEvent>.broadcast();
@@ -668,11 +675,6 @@ class RuntimeManager {
   /// 失效指定 Capability 缓存
   void invalidateCapability(CapabilityType type) {
     _resolver?.invalidate(type);
-  }
-
-  /// 失效所有 Capability 缓存
-  void invalidateAllCapabilities() {
-    _resolver?.invalidateAll();
   }
 
   /// 获取已注册的 Provider 列表

@@ -77,7 +77,8 @@ class ArtifactManager {
         code: DeployErrorCode.sha256Mismatch,
         message: '${artifact.name} SHA256 校验失败',
         detail: '期望 ${artifact.sha256}, 实际 $actualSha256',
-        userSuggestion: DeployErrorSuggestions.forCode(DeployErrorCode.sha256Mismatch),
+        userSuggestion:
+            DeployErrorSuggestions.forCode(DeployErrorCode.sha256Mismatch),
       );
     }
 
@@ -100,7 +101,9 @@ class ArtifactManager {
     }
 
     // 清理缓存
-    try { await File(debPath).delete(); } catch (_) {}
+    try {
+      await File(debPath).delete();
+    } catch (_) {}
 
     onProgress?.call(artifact.size, artifact.size, '${artifact.name} 完成');
   }
@@ -138,8 +141,7 @@ class ArtifactManager {
         // followLinks:false 必须显式指定：Android 上悬空符号链接
         // 默认 typeSync 会返回 notFound（内部 stat 而非 lstat），
         // 导致链接不被删除、随后 create 沿链接落空 → ENOENT。
-        final type =
-            FileSystemEntity.typeSync(ancestor, followLinks: false);
+        final type = FileSystemEntity.typeSync(ancestor, followLinks: false);
         final isLink =
             type == FileSystemEntityType.link || Link(ancestor).existsSync();
         if (type == FileSystemEntityType.file) {
@@ -308,8 +310,12 @@ class ArtifactManager {
           return; // ✅ 下载成功
         } catch (e) {
           // 清理临时文件
-          try { await File(partPath).delete(); } catch (_) {}
-          try { await File(destPath).delete(); } catch (_) {}
+          try {
+            await File(partPath).delete();
+          } catch (_) {}
+          try {
+            await File(destPath).delete();
+          } catch (_) {}
 
           final errMsg = e.toString();
           final isRetryable = _retryableErrors.any((kw) => errMsg.contains(kw));
@@ -332,7 +338,8 @@ class ArtifactManager {
           }
 
           // 指数退避：2s, 4s, 8s
-          final delay = Duration(seconds: _retryBaseDelaySeconds << (attempt - 1));
+          final delay =
+              Duration(seconds: _retryBaseDelaySeconds << (attempt - 1));
           await Future.delayed(delay);
         }
       }
@@ -340,12 +347,14 @@ class ArtifactManager {
 
     // 所有 URL 全部失败
     throw DeployError(
-        code: DeployErrorCode.allSourcesExhausted,
-        message: '所有下载源均失败 (${fallbackUrls.length} 个尝试)',
-        detail: errors.join('\n'),
-        userSuggestion: DeployErrorSuggestions.forCode(DeployErrorCode.allSourcesExhausted),
-      );
+      code: DeployErrorCode.allSourcesExhausted,
+      message: '所有下载源均失败 (${fallbackUrls.length} 个尝试)',
+      detail: errors.join('\n'),
+      userSuggestion:
+          DeployErrorSuggestions.forCode(DeployErrorCode.allSourcesExhausted),
+    );
   }
+
   /// 公开的下载方法（仅下载，不解压）
   ///
   /// 使用 artifact 的多镜像 fallback 链尝试下载到 [destPath]。
@@ -360,10 +369,11 @@ class ArtifactManager {
     String region = '',
     bool dnsWorking = true,
   }) async {
-    final urls = fallbackUrls ?? artifact.buildUrlFallbackChain(
-      dnsWorking: dnsWorking,
-      region: region,
-    );
+    final urls = fallbackUrls ??
+        artifact.buildUrlFallbackChain(
+          dnsWorking: dnsWorking,
+          region: region,
+        );
     await _downloadFile(
       fallbackUrls: urls,
       destPath: destPath,
@@ -445,10 +455,11 @@ class ArtifactManager {
 
       if (response.statusCode != 200) {
         throw DeployError(
-            code: DeployErrorCode.httpError,
-            message: '下载失败: HTTP ${response.statusCode} — $url',
-            userSuggestion: DeployErrorSuggestions.forCode(DeployErrorCode.httpError),
-          );
+          code: DeployErrorCode.httpError,
+          message: '下载失败: HTTP ${response.statusCode} — $url',
+          userSuggestion:
+              DeployErrorSuggestions.forCode(DeployErrorCode.httpError),
+        );
       }
 
       final file = File(partPath);
@@ -468,10 +479,11 @@ class ArtifactManager {
       if (actualSize != expectedSize) {
         await file.delete();
         throw DeployError(
-            code: DeployErrorCode.sizeMismatch,
-            message: '文件大小不匹配: 期望 $expectedSize, 实际 $actualSize',
-            userSuggestion: DeployErrorSuggestions.forCode(DeployErrorCode.sizeMismatch),
-          );
+          code: DeployErrorCode.sizeMismatch,
+          message: '文件大小不匹配: 期望 $expectedSize, 实际 $actualSize',
+          userSuggestion:
+              DeployErrorSuggestions.forCode(DeployErrorCode.sizeMismatch),
+        );
       }
 
       await file.rename(destPath);
@@ -502,7 +514,8 @@ class ArtifactManager {
         throw DeployError(
           code: DeployErrorCode.extractionFailed,
           message: '.deb 中没有找到 data.tar.xz 或 data.tar.gz',
-          userSuggestion: DeployErrorSuggestions.forCode(DeployErrorCode.extractionFailed),
+          userSuggestion:
+              DeployErrorSuggestions.forCode(DeployErrorCode.extractionFailed),
         );
       }
       final tarBytes = GZipDecoder().decodeBytes(dataTarGz);
@@ -554,7 +567,8 @@ class ArtifactManager {
     int nameTableOffset = offset;
     while (nameTableOffset < arBytes.length) {
       if (nameTableOffset + headerSize > arBytes.length) break;
-      final header = arBytes.sublist(nameTableOffset, nameTableOffset + headerSize);
+      final header =
+          arBytes.sublist(nameTableOffset, nameTableOffset + headerSize);
       final hName = String.fromCharCodes(
         header.sublist(0, 16).takeWhile((b) => b != 0x2F && b != 0x20),
       );
@@ -644,7 +658,8 @@ class ArtifactManager {
       if (entry.isFile) {
         final tarPath = entry.name;
 
-        if (includeFiles != null && !includeFiles.any((f) => tarPath.contains(f))) {
+        if (includeFiles != null &&
+            !includeFiles.any((f) => tarPath.contains(f))) {
           continue;
         }
 
@@ -678,53 +693,4 @@ class ArtifactManager {
     final bytes = await file.readAsBytes();
     return sha256.convert(bytes).toString();
   }
-
-  /// 检查架构是否支持
-  static bool isSupportedArchitecture() {
-    try {
-      final result = Process.runSync(
-        'getprop', ['ro.product.cpu.abi'],
-      );
-      if (result.exitCode == 0) {
-        final abi = (result.stdout as String).trim();
-        return abi == 'arm64-v8a' || abi == 'aarch64';
-      }
-    } catch (_) {}
-
-    try {
-      final result = Process.runSync('uname', ['-m']);
-      if (result.exitCode == 0) {
-        final arch = (result.stdout as String).trim();
-        return arch == 'aarch64' || arch == 'arm64';
-      }
-    } catch (_) {}
-
-    return true;
-  }
-
-  /// 获取架构显示名
-  static String getArchitectureName() {
-    try {
-      final result = Process.runSync('getprop', ['ro.product.cpu.abi']);
-      if (result.exitCode == 0) {
-        return (result.stdout as String).trim();
-      }
-    } catch (_) {}
-    return 'unknown';
-  }
-
-  /// 将域名 URL 转换为 IP 直连 URL
-  static String? urlToIpDirect(String url) {
-    try {
-      final uri = Uri.parse(url);
-      final host = uri.host;
-      if (RegExp(r'^\d+\.\d+\.\d+\.\d+$').hasMatch(host)) return null;
-      final ips = IpHosts.ipsFor(host);
-      if (ips.isEmpty) return null;
-      return url.replaceFirst(host, ips.first);
-    } catch (_) {
-      return null;
-    }
-  }
 }
-

@@ -69,7 +69,6 @@ class UbuntuRuntimeInstaller {
   /// 解压所需的空间余量（压缩包缓存 + 解压 + 临时文件 / proot / sysdata）
   static const int _spaceMarginBytes = 192 * 1024 * 1024;
 
-
   UbuntuRuntimeInstaller(
     this._env, [
     this._onProgress,
@@ -391,6 +390,7 @@ class UbuntuRuntimeInstaller {
       unawaited(_deleteDirBestEffort(oldDir));
     }
   }
+
   /// 解析解压器可执行文件路径（兼容旧 API，仅返回 busybox 型路径）
   ///
   /// 优先级：
@@ -492,7 +492,6 @@ class UbuntuRuntimeInstaller {
     onProgress(expandedBytes);
   }
 
-
   /// 解压后 rootfs 结构验证（只检查目录/文件存在性）
   ///
   /// 注意：不执行 Ubuntu 内部命令（解压阶段禁止运行 rootfs 内程序）。
@@ -508,8 +507,7 @@ class UbuntuRuntimeInstaller {
       if (await resolv.exists()) {
         final content = await resolv.readAsString();
         final trimmed = content.trim();
-        needsWrite =
-            trimmed.isEmpty ||
+        needsWrite = trimmed.isEmpty ||
             trimmed.contains('127.0.0.53') ||
             !trimmed.contains('nameserver');
       }
@@ -719,32 +717,6 @@ class UbuntuRuntimeInstaller {
   void _report(InstallPhase phase, double progress, String message) {
     _onProgress?.call(RuntimeTool.ubuntu, phase, progress, message);
     LogService.info('UbuntuInstaller', message);
-  }
-
-  /// 下载 artifact 文件（不通过 .deb）—— 仅用于 rootfs 预下载
-  ///
-  /// 保留此方法供未来多 rootfs 下载复用；当前 rootfs 下载直接在
-  /// _installRootfs 内完成（含缓存复用）。
-  Future<String> _downloadArtifact({
-    required RuntimeArtifact artifact,
-    required void Function(int downloaded, int total) onProgress,
-  }) async {
-    final cacheDir = path.join(_env.ubuntuDir, '.cache');
-    await Directory(cacheDir).create(recursive: true);
-
-    final ext = artifact.url.endsWith('.xz') ? '.tar.xz' : '.tar.gz';
-    final destPath = path.join(cacheDir, '${artifact.name}$ext');
-
-    // 使用 ArtifactManager 的多镜像 fallback 下载
-    await ArtifactManager.downloadFile(
-      artifact: artifact,
-      destPath: destPath,
-      expectedSize: artifact.size,
-      expectedSha256: artifact.sha256,
-      onProgress: onProgress,
-    );
-
-    return destPath;
   }
 
   /// 计算文件 SHA256（流式，避免大文件入内存）

@@ -23,12 +23,12 @@ class EditorBuffer {
     required this.filePath,
     List<String>? initialContent,
     EditorSettings? settings,
-  }) : _lines = initialContent ?? [''],
-       _cursor = const CursorPosition(),
-       _selectionStart = const CursorPosition(),
-       _hasSelection = false,
-       _isDirty = false,
-       _settings = settings ?? EditorSettings() {
+  })  : _lines = initialContent ?? [''],
+        _cursor = const CursorPosition(),
+        _selectionStart = const CursorPosition(),
+        _hasSelection = false,
+        _isDirty = false,
+        _settings = settings ?? EditorSettings() {
     _initHighlighter();
   }
 
@@ -201,9 +201,7 @@ class EditorBuffer {
       if (firstPart.trimRight().endsWith('{') ||
           firstPart.trimRight().endsWith('(') ||
           firstPart.trimRight().endsWith('[')) {
-        indent += _settings.insertSpaces
-            ? ' ' * _settings.tabSize
-            : '\t';
+        indent += _settings.insertSpaces ? ' ' * _settings.tabSize : '\t';
       }
     }
 
@@ -353,7 +351,8 @@ class EditorBuffer {
   void _undoInsert(EditAction action) {
     final line = _lines[action.line];
     final len = action.text.length;
-    final newText = line.substring(0, action.column) + line.substring(action.column + len);
+    final newText =
+        line.substring(0, action.column) + line.substring(action.column + len);
     _lines[action.line] = newText;
     _cursor = CursorPosition(line: action.line, column: action.column);
   }
@@ -364,7 +363,9 @@ class EditorBuffer {
         (action.oldText ?? '') +
         line.substring(action.column);
     _lines[action.line] = newText;
-    _cursor = CursorPosition(line: action.line, column: action.column + (action.oldText?.length ?? 0));
+    _cursor = CursorPosition(
+        line: action.line,
+        column: action.column + (action.oldText?.length ?? 0));
   }
 
   void _redoInsert(EditAction action) {
@@ -373,13 +374,15 @@ class EditorBuffer {
         action.text +
         line.substring(action.column);
     _lines[action.line] = newText;
-    _cursor = CursorPosition(line: action.line, column: action.column + action.text.length);
+    _cursor = CursorPosition(
+        line: action.line, column: action.column + action.text.length);
   }
 
   void _redoDelete(EditAction action) {
     final line = _lines[action.line];
     final len = action.oldText?.length ?? 0;
-    final newText = line.substring(0, action.column) + line.substring(action.column + len);
+    final newText =
+        line.substring(0, action.column) + line.substring(action.column + len);
     _lines[action.line] = newText;
     _cursor = CursorPosition(line: action.line, column: action.column);
   }
@@ -442,14 +445,16 @@ class EditorBuffer {
       final firstLine = start.line < end.line ? start : end;
       final lastLine = start.line < end.line ? end : start;
 
-      _lines[firstLine.line] = _lines[firstLine.line].substring(0, firstLine.column) +
-          _lines[lastLine.line].substring(lastLine.column);
+      _lines[firstLine.line] =
+          _lines[firstLine.line].substring(0, firstLine.column) +
+              _lines[lastLine.line].substring(lastLine.column);
       _lines.removeRange(firstLine.line + 1, lastLine.line + 1);
       _cursor = CursorPosition(line: firstLine.line, column: firstLine.column);
     }
 
     _hasSelection = false;
-    _pushUndo(EditAction(type: 'delete', line: -1, column: -1, text: '', oldText: text));
+    _pushUndo(EditAction(
+        type: 'delete', line: -1, column: -1, text: '', oldText: text));
   }
 
   // ── 自动缩进 ──
@@ -470,9 +475,7 @@ class EditorBuffer {
             prevLine.trimRight().endsWith('(') ||
             prevLine.trimRight().endsWith('[') ||
             prevLine.trimRight().endsWith(':')) {
-          extraIndent = _settings.insertSpaces
-              ? ' ' * _settings.tabSize
-              : '\t';
+          extraIndent = _settings.insertSpaces ? ' ' * _settings.tabSize : '\t';
         }
 
         final totalIndent = prevIndent + extraIndent;
@@ -490,12 +493,18 @@ class EditorBuffer {
 
   String _getClosingBracket(String open) {
     switch (open) {
-      case '{': return '}';
-      case '(': return ')';
-      case '[': return ']';
-      case '"': return '"';
-      case "'": return "'";
-      default: return '';
+      case '{':
+        return '}';
+      case '(':
+        return ')';
+      case '[':
+        return ']';
+      case '"':
+        return '"';
+      case "'":
+        return "'";
+      default:
+        return '';
     }
   }
 
@@ -507,46 +516,6 @@ class EditorBuffer {
     final col = _cursor.column;
     final oldText = _lines[line];
     _lines[line] = oldText.substring(0, col) + close + oldText.substring(col);
-  }
-
-  /// 查找匹配的括号位置
-  CursorPosition? findMatchingBracket(CursorPosition pos) {
-    final line = _lines[pos.line];
-    if (pos.column >= line.length) return null;
-
-    final ch = line[pos.column];
-    String open, close;
-    int direction;
-
-    if (ch == '{' || ch == '(' || ch == '[') {
-      open = ch;
-      close = _getClosingBracket(ch);
-      direction = 1;
-    } else if (ch == '}' || ch == ')' || ch == ']') {
-      open = _getClosingBracket(ch);
-      close = ch;
-      direction = -1;
-    } else {
-      return null;
-    }
-
-    int depth = 1;
-    int l = pos.line;
-    int c = pos.column + direction;
-
-    while (l >= 0 && l < _lines.length) {
-      final currentLine = _lines[l];
-      while (c >= 0 && c < currentLine.length) {
-        if (currentLine[c] == open) depth++;
-        if (currentLine[c] == close) depth--;
-        if (depth == 0) return CursorPosition(line: l, column: c);
-        c += direction;
-      }
-      l += direction;
-      c = direction > 0 ? 0 : (_lines[l].length - 1);
-    }
-
-    return null;
   }
 
   // ── 查找/替换 ──
@@ -575,7 +544,8 @@ class EditorBuffer {
     return matches;
   }
 
-  int replaceAll(String query, String replacement, {bool caseSensitive = false}) {
+  int replaceAll(String query, String replacement,
+      {bool caseSensitive = false}) {
     if (query.isEmpty) return 0;
 
     int count = 0;

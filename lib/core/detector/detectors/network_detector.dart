@@ -286,8 +286,8 @@ class NetworkDetector extends Detector {
       final codeStr = (result.stdout as String).trim();
       final code = int.tryParse(codeStr);
 
-      final reachable = result.exitCode == 0 &&
-          code != null && code >= 200 && code < 400;
+      final reachable =
+          result.exitCode == 0 && code != null && code >= 200 && code < 400;
 
       return HttpConnectResult(
         url: url,
@@ -334,7 +334,8 @@ class NetworkDetector extends Detector {
       try {
         final start = DateTime.now();
         final result = await Process.run(
-          'ping', ['-c', '1', '-W', '2', target],
+          'ping',
+          ['-c', '1', '-W', '2', target],
           runInShell: true,
         );
         if (result.exitCode == 0) {
@@ -353,11 +354,6 @@ class NetworkDetector extends Detector {
     return NetworkQuality.poor;
   }
 
-  /// 获取当前系统 DNS 服务器（兼容旧接口）
-  static Future<String?> _getDnsServer() {
-    return DnsResolver.getSystemDnsServer();
-  }
-
   /// 快速网络检查（用于安装前预检）
   ///
   /// 返回 true 表示网络可用，false 表示不可用。
@@ -371,10 +367,5 @@ class NetworkDetector extends Detector {
       'github.com',
     );
     return result.resolved;
-  }
-
-  /// 深度网络检查（尝试所有方式）
-  static Future<NetworkCheckResult> deepCheck() async {
-    return await _checkNetwork();
   }
 }

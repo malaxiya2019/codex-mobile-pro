@@ -108,7 +108,8 @@ class LogService {
     _log(LogLevel.error, 'CRASH', '[$source] $message');
     if (stack != null) {
       final stackStr = stack.toString();
-      _log(LogLevel.error, 'CRASH', '[$source] StackTrace: ${_truncateStack(stackStr)}');
+      _log(LogLevel.error, 'CRASH',
+          '[$source] StackTrace: ${_truncateStack(stackStr)}');
     }
   }
 
@@ -210,12 +211,6 @@ class LogService {
   static Future<void> clearLogs() async {
     await _fileWriter?.clearAll();
     info('LogService', '日志已清理');
-  }
-
-  /// 获取日志总大小
-  static Future<int> getTotalLogSize() async {
-    if (_fileWriter == null) return 0;
-    return _fileWriter!.totalSize();
   }
 
   /// 释放日志资源

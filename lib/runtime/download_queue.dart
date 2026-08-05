@@ -26,21 +26,21 @@ import 'runtime_manifest.dart';
 
 /// 安装任务优先级
 enum InstallPriority {
-  critical,  // 内核级（Termux 环境本身）
-  high,      // 核心运行时（Node.js / Ubuntu rootfs）
-  normal,    // 工具（Git / Python）
-  low,       // 可选组件
+  critical, // 内核级（Termux 环境本身）
+  high, // 核心运行时（Node.js / Ubuntu rootfs）
+  normal, // 工具（Git / Python）
+  low, // 可选组件
   background, // 后台预取
 }
 
 /// 优先级数值映射（越大越优先）
 int priorityValue(InstallPriority p) => switch (p) {
-  InstallPriority.critical => 100,
-  InstallPriority.high => 80,
-  InstallPriority.normal => 60,
-  InstallPriority.low => 40,
-  InstallPriority.background => 20,
-};
+      InstallPriority.critical => 100,
+      InstallPriority.high => 80,
+      InstallPriority.normal => 60,
+      InstallPriority.low => 40,
+      InstallPriority.background => 20,
+    };
 
 /// 下载任务状态
 enum DownloadJobStatus {
@@ -125,7 +125,8 @@ class DownloadJob {
         createdAt: DateTime.parse(json['createdAt'] as String),
         artifact: RuntimeArtifact(
           name: json['artifactName'] as String,
-          type: ArtifactType.values.byName(json['artifactType'] as String? ?? 'deb'),
+          type: ArtifactType.values
+              .byName(json['artifactType'] as String? ?? 'deb'),
           url: json['artifactUrl'] as String,
           size: json['size'] as int? ?? 0,
           sha256: json['sha256'] as String? ?? '',
@@ -203,7 +204,8 @@ class DownloadQueueScheduler {
     if (_backlogDir != null) {
       await Directory(_backlogDir!).create(recursive: true);
     }
-    LogService.info('DownloadQueue', '调度器初始化完成 (maxConcurrent=$_maxConcurrent)');
+    LogService.info(
+        'DownloadQueue', '调度器初始化完成 (maxConcurrent=$_maxConcurrent)');
   }
 
   /// 添加进度监听
@@ -239,17 +241,11 @@ class DownloadQueueScheduler {
     }
 
     _queue.add(job);
-    LogService.info('DownloadQueue', '入队: ${job.label} (pri=${job.priority.name})');
+    LogService.info(
+        'DownloadQueue', '入队: ${job.label} (pri=${job.priority.name})');
 
     if (!_isProcessing) {
       _processNext();
-    }
-  }
-
-  /// 批量入队
-  void enqueueAll(List<DownloadJob> jobs) {
-    for (final job in jobs) {
-      enqueue(job);
     }
   }
 
@@ -296,15 +292,6 @@ class DownloadQueueScheduler {
       LogService.warning('DownloadQueue', 'Backlog 恢复失败: $e');
       return 0;
     }
-  }
-
-  /// 取消所有等待中的任务
-  void cancelPending() {
-    while (_queue.isNotEmpty) {
-      final job = _queue.removeFirst();
-      job.status = DownloadJobStatus.cancelled;
-    }
-    LogService.info('DownloadQueue', '已取消 ${_queue.length} 个等待中的任务');
   }
 
   // ==================================================================
@@ -458,10 +445,12 @@ class DownloadQueueScheduler {
       // 删除 Backlog 文件
       await _removeBacklog(job.id);
     } catch (e) {
-      job.lastError = e is DeployError ? e : DeployError(
-        code: DeployErrorCode.unknown,
-        message: e.toString(),
-      );
+      job.lastError = e is DeployError
+          ? e
+          : DeployError(
+              code: DeployErrorCode.unknown,
+              message: e.toString(),
+            );
       job.retryCount++;
 
       if (job.shouldRetry) {
@@ -479,8 +468,8 @@ class DownloadQueueScheduler {
         ));
       } else {
         job.status = DownloadJobStatus.failed;
-        LogService.warning('DownloadQueue',
-            '失败: ${job.label} — ${job.lastError?.message}');
+        LogService.warning(
+            'DownloadQueue', '失败: ${job.label} — ${job.lastError?.message}');
 
         _notify(DownloadProgressEvent(
           jobId: job.id,

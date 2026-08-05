@@ -620,17 +620,6 @@ class RuntimeDetector {
 
     return results;
   }
-
-  /// 验证环境变量
-  Future<Map<String, bool>> verifyEnv() async {
-    final env = Platform.environment;
-    return {
-      'PATH': env['PATH'] != null,
-      'HOME': env['HOME'] != null,
-      'SHELL': env['SHELL'] != null,
-      'TERM': env['TERM'] != null,
-    };
-  }
 }
 
 /// 验证结果

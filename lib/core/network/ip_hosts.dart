@@ -15,16 +15,16 @@ class IpHosts {
   /// 主映射表：域名 → 候选 IP 列表（按优先级排序）
   static const Map<String, List<String>> _entries = {
     'github.com': [
-      '140.82.112.4',    // lb-140-82-112-4-fra.github.com
-      '140.82.112.3',    // lb-140-82-112-3-fra.github.com
-      '20.205.243.166',  // github.com (Singapore)
+      '140.82.112.4', // lb-140-82-112-4-fra.github.com
+      '140.82.112.3', // lb-140-82-112-3-fra.github.com
+      '20.205.243.166', // github.com (Singapore)
     ],
     'api.github.com': [
-      '140.82.112.10',   // api.github.com
+      '140.82.112.10', // api.github.com
       '140.82.112.9',
     ],
     'packages.termux.dev': [
-      '188.114.96.0',    // packages.termux.dev (Cloudflare)
+      '188.114.96.0', // packages.termux.dev (Cloudflare)
       '188.114.97.0',
     ],
     'raw.githubusercontent.com': [
@@ -40,13 +40,13 @@ class IpHosts {
       '185.199.111.133',
     ],
     'codeload.github.com': [
-      '140.82.112.9',    // codeload.github.com
+      '140.82.112.9', // codeload.github.com
     ],
     '1.1.1.1': [
-      '1.1.1.1',         // Cloudflare DNS (自身就是 IP)
+      '1.1.1.1', // Cloudflare DNS (自身就是 IP)
     ],
     'dns.google': [
-      '8.8.8.8',         // Google DNS
+      '8.8.8.8', // Google DNS
       '8.8.4.4',
     ],
   };
@@ -64,24 +64,6 @@ class IpHosts {
   /// 获取域名的所有候选 IP
   static List<String> ipsFor(String host) {
     return _entries[host] ?? [];
-  }
-
-  /// 是否已知该域名
-  static bool knows(String host) => _entries.containsKey(host);
-
-  /// 测试时，能否 ping 通所有已知主机
-  static int get knownHostCount => _entries.length;
-  static int get totalIpCount =>
-      _entries.values.fold(0, (sum, ips) => sum + ips.length);
-
-  /// 可读的映射表摘要
-  static String get summary {
-    final buf = StringBuffer('IP 硬编码映射表：\n');
-    for (final entry in _entries.entries) {
-      buf.writeln('  ${entry.key} → ${entry.value.join(", ")}');
-    }
-    buf.writeln('共 $_knownHostCount 个域名，$totalIpCount 个 IP');
-    return buf.toString();
   }
 
   static int get _knownHostCount => _entries.length;

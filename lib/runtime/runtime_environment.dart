@@ -156,46 +156,6 @@ class RuntimeEnvironment {
 
   /// ─── Linux Runtime 环境（Ubuntu rootfs）─────────────────────
 
-  Map<String, String> _buildUbuntuEnvironment() {
-    // Linux Runtime 的核心路径
-    final rootfsPath = ubuntuRootfsDir;
-
-    // PATH: 优先使用 rootfs 中的系统 bin，回退到 Android 系统 bin
-    final paths = <String>[
-      path.join(rootfsPath, 'usr', 'local', 'sbin'),
-      path.join(rootfsPath, 'usr', 'local', 'bin'),
-      path.join(rootfsPath, 'usr', 'sbin'),
-      path.join(rootfsPath, 'usr', 'bin'),
-      path.join(rootfsPath, 'sbin'),
-      path.join(rootfsPath, 'bin'),
-      ubuntuBinDir, // proot 安装目录
-      '/system/bin',
-      '/system/xbin',
-    ];
-
-    final validPaths = paths.where((p) => Directory(p).existsSync()).toList();
-    final pathStr = _deduplicatePath(validPaths.join(':'));
-
-    // HOME: rootfs 内默认 home
-    final homeDir = path.join(rootfsPath, 'root');
-
-    final env = <String, String>{
-      'HOME': homeDir,
-      'PATH': pathStr,
-      'SHELL': path.join(rootfsPath, 'usr', 'bin', 'bash'),
-      'TERM': 'xterm-256color',
-      'PWD': homeDir,
-      'TMPDIR': path.join(rootfsPath, 'tmp'),
-      'LANG': 'en_US.UTF-8',
-      'LC_ALL': 'en_US.UTF-8',
-      'USER': 'root',
-      'LOGNAME': 'root',
-      'PROOT_LOADER': ubuntuLoaderPath,
-    };
-
-    return env;
-  }
-
   /// ─── 安装状态检测 ───────────────────────────────────────────
 
   bool isUbuntuInstalled() {

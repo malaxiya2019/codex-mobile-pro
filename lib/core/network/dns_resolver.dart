@@ -43,7 +43,8 @@ class DnsResolverStats {
   int ipHardcodeOk = 0;
   int cacheHit = 0;
 
-  int get total => systemOk + systemFail + dohOk + dohFail + ipHardcodeOk + cacheHit;
+  int get total =>
+      systemOk + systemFail + dohOk + dohFail + ipHardcodeOk + cacheHit;
   int get success => systemOk + dohOk + ipHardcodeOk + cacheHit;
 
   String get summary {
@@ -96,7 +97,7 @@ class DnsResolver {
 
   /// DoH 端点
   static const _dohEndpoints = [
-    'https://dns.google/resolve?name=HOST&type=A',       // Google DoH
+    'https://dns.google/resolve?name=HOST&type=A', // Google DoH
     'https://cloudflare-dns.com/dns-query?name=HOST&type=A', // Cloudflare DoH
   ];
 
@@ -126,7 +127,8 @@ class DnsResolver {
     }
 
     // ─── 步骤 2：系统 DNS ───────────────────────────────────────
-    final systemResult = await _resolveSystemDns(host, timeoutMs: options.timeoutMs);
+    final systemResult =
+        await _resolveSystemDns(host, timeoutMs: options.timeoutMs);
     if (systemResult.resolved) {
       stats.systemOk++;
       if (options.writeCache) {
@@ -143,7 +145,8 @@ class DnsResolver {
     // ─── 步骤 3：DNS-over-HTTPS ────────────────────────────────
     if (options.allowDoh) {
       for (final endpoint in _dohEndpoints) {
-        final dohResult = await _resolveDoh(host, endpoint, timeoutMs: options.timeoutMs);
+        final dohResult =
+            await _resolveDoh(host, endpoint, timeoutMs: options.timeoutMs);
         if (dohResult.resolved) {
           stats.dohOk++;
           if (options.writeCache) {
@@ -298,8 +301,10 @@ class DnsResolver {
         'curl',
         [
           '-s',
-          '--max-time', '${(timeoutMs / 1000).ceil()}',
-          '-H', 'accept: application/dns-json',
+          '--max-time',
+          '${(timeoutMs / 1000).ceil()}',
+          '-H',
+          'accept: application/dns-json',
           url,
         ],
         runInShell: true,
@@ -315,7 +320,8 @@ class DnsResolver {
           if (answers != null && answers.isNotEmpty) {
             for (final answer in answers) {
               final type = answer['type'] as int;
-              if (type == 1 || type == 28) { // A or AAAA record
+              if (type == 1 || type == 28) {
+                // A or AAAA record
                 final ip = answer['data'] as String;
                 return DnsResolution(
                   host: host,
@@ -413,32 +419,12 @@ class DnsResolver {
     return result.resolved;
   }
 
-  /// 深度检查（尝试所有解析器，通常 < 5s）
-  static Future<bool> deepCheck(String host) async {
-    final result = await resolve(
-      host,
-      options: DnsResolveOptions.deep,
-    );
-    return result.resolved;
-  }
-
-  /// 批量解析多个域名
-  static Future<Map<String, DnsResolution>> resolveAll(
-    List<String> hosts, {
-    DnsResolveOptions options = DnsResolveOptions.default_,
-  }) async {
-    final results = <String, DnsResolution>{};
-    for (final host in hosts) {
-      results[host] = await resolve(host, options: options);
-    }
-    return results;
-  }
-
   /// 获取当前系统 DNS 服务器
   static Future<String?> getSystemDnsServer() async {
     try {
       final result = await Process.run(
-        'getprop', ['net.dns1'],
+        'getprop',
+        ['net.dns1'],
         runInShell: true,
       );
       if (result.exitCode == 0) {
@@ -449,7 +435,8 @@ class DnsResolver {
 
     try {
       final result = await Process.run(
-        'getprop', ['net.dns2'],
+        'getprop',
+        ['net.dns2'],
         runInShell: true,
       );
       if (result.exitCode == 0) {

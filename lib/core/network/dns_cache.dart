@@ -35,32 +35,34 @@ class DnsCacheEntry {
   /// 是否已过期
   bool get isExpired {
     final age = DateTime.now().difference(timestamp);
-    final effectiveTtl = ttlSeconds < 30 ? 30 : (ttlSeconds > 3600 ? 3600 : ttlSeconds);
+    final effectiveTtl =
+        ttlSeconds < 30 ? 30 : (ttlSeconds > 3600 ? 3600 : ttlSeconds);
     return age.inSeconds > effectiveTtl;
   }
 
   /// 剩余有效秒数
   int get remainingSeconds {
     final age = DateTime.now().difference(timestamp).inSeconds;
-    final effectiveTtl = ttlSeconds < 30 ? 30 : (ttlSeconds > 3600 ? 3600 : ttlSeconds);
+    final effectiveTtl =
+        ttlSeconds < 30 ? 30 : (ttlSeconds > 3600 ? 3600 : ttlSeconds);
     return (effectiveTtl - age).clamp(0, effectiveTtl);
   }
 
   Map<String, dynamic> toJson() => {
-    'host': host,
-    'ip': ip,
-    'resolved': resolved,
-    'timestamp': timestamp.toIso8601String(),
-    'ttl': ttlSeconds,
-  };
+        'host': host,
+        'ip': ip,
+        'resolved': resolved,
+        'timestamp': timestamp.toIso8601String(),
+        'ttl': ttlSeconds,
+      };
 
   factory DnsCacheEntry.fromJson(Map<String, dynamic> json) => DnsCacheEntry(
-    host: json['host'],
-    ip: json['ip'],
-    resolved: json['resolved'],
-    timestamp: DateTime.parse(json['timestamp']),
-    ttlSeconds: json['ttl'] ?? 30,
-  );
+        host: json['host'],
+        ip: json['ip'],
+        resolved: json['resolved'],
+        timestamp: DateTime.parse(json['timestamp']),
+        ttlSeconds: json['ttl'] ?? 30,
+      );
 }
 
 /// DNS 缓存管理器
@@ -143,22 +145,6 @@ class DnsCache {
           await file.delete();
         }
       } catch (_) {}
-    }
-  }
-
-  /// 持久化缓存到文件
-  static Future<void> persist() async {
-    if (_cacheFilePath == null) return;
-    try {
-      final entries = _memoryCache.values
-          .where((e) => !e.isExpired && e.resolved) // 只保存成功的
-          .map((e) => e.toJson())
-          .toList();
-      final json = jsonEncode(entries);
-      await File(_cacheFilePath!).writeAsString(json);
-      fileSaves++;
-    } catch (_) {
-      // 持久化失败不阻塞业务
     }
   }
 

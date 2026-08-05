@@ -27,8 +27,6 @@ class EditorPage extends ConsumerStatefulWidget {
 }
 
 class _EditorPageState extends ConsumerState<EditorPage> {
-  CodeExplainer? _explainer;
-
   @override
   void initState() {
     super.initState();
@@ -37,17 +35,6 @@ class _EditorPageState extends ConsumerState<EditorPage> {
         ref.read(editorProvider.notifier).openFile(widget.initialPath!);
       });
     }
-  }
-
-  /// 获取或创建 CodeExplainer
-  CodeExplainer _getExplainer() {
-    if (_explainer == null) {
-      final aiProvider = ref.read(editorProvider.notifier).aiProvider;
-      if (aiProvider != null) {
-        _explainer = CodeExplainer(aiProvider);
-      }
-    }
-    return _explainer!;
   }
 
   /// 解释选中的代码
@@ -407,7 +394,9 @@ class _EditorPageState extends ConsumerState<EditorPage> {
                     isDark: isDark,
                     inlineCompletion: editorState.inlineCompletion,
                     onAcceptCompletion: () {
-                      ref.read(editorProvider.notifier).acceptInlineCompletion();
+                      ref
+                          .read(editorProvider.notifier)
+                          .acceptInlineCompletion();
                     },
                     onCursorChanged: (_) => setState(() {}),
                   )
@@ -415,8 +404,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
           ),
 
           // 状态栏
-          if (buffer != null)
-            _buildStatusBar(editorState, colorScheme, theme),
+          if (buffer != null) _buildStatusBar(editorState, colorScheme, theme),
         ],
       ),
       // Explain Code 浮动按钮
@@ -498,15 +486,13 @@ class _EditorPageState extends ConsumerState<EditorPage> {
         IconButton(
           icon: const Icon(Icons.search, size: 20),
           tooltip: '查找 (Ctrl+F)',
-          onPressed: () =>
-              ref.read(editorProvider.notifier).toggleFindPanel(),
+          onPressed: () => ref.read(editorProvider.notifier).toggleFindPanel(),
         ),
         // 保存
         IconButton(
           icon: const Icon(Icons.save_outlined, size: 20),
           tooltip: '保存 (Ctrl+S)',
-          onPressed: () =>
-              ref.read(editorProvider.notifier).saveCurrentFile(),
+          onPressed: () => ref.read(editorProvider.notifier).saveCurrentFile(),
         ),
         // 换行切换
         IconButton(
@@ -517,8 +503,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             size: 20,
           ),
           tooltip: editorState.settings.wordWrap ? '取消换行' : '自动换行',
-          onPressed: () =>
-              ref.read(editorProvider.notifier).toggleWordWrap(),
+          onPressed: () => ref.read(editorProvider.notifier).toggleWordWrap(),
         ),
       ],
     );
@@ -536,8 +521,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
           final isActive = tab.id == editorState.activeTabId;
 
           return GestureDetector(
-            onTap: () =>
-                ref.read(editorProvider.notifier).switchTab(tab.id),
+            onTap: () => ref.read(editorProvider.notifier).switchTab(tab.id),
             child: Container(
               constraints: const BoxConstraints(maxWidth: 160),
               padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -549,9 +533,7 @@ class _EditorPageState extends ConsumerState<EditorPage> {
                     : Colors.transparent,
                 border: Border(
                   bottom: BorderSide(
-                    color: isActive
-                        ? colorScheme.primary
-                        : Colors.transparent,
+                    color: isActive ? colorScheme.primary : Colors.transparent,
                     width: 2,
                   ),
                 ),
@@ -586,7 +568,8 @@ class _EditorPageState extends ConsumerState<EditorPage> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                        fontWeight:
+                            isActive ? FontWeight.w600 : FontWeight.normal,
                         color: isActive
                             ? colorScheme.onSurface
                             : colorScheme.onSurfaceVariant,
@@ -642,24 +625,32 @@ class _EditorPageState extends ConsumerState<EditorPage> {
             style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant),
           ),
           const Spacer(),
-          if (editorState.inlineCompletion.state == InlineCompletionState.loading)
+          if (editorState.inlineCompletion.state ==
+              InlineCompletionState.loading)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: SizedBox(
-                width: 10, height: 10,
+                width: 10,
+                height: 10,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2, color: colorScheme.primary,
+                  strokeWidth: 2,
+                  color: colorScheme.primary,
                 ),
               ),
             ),
           if (editorState.inlineCompletion.hasSuggestion)
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: Icon(Icons.auto_awesome, size: 12, color: colorScheme.primary),
+              child: Icon(Icons.auto_awesome,
+                  size: 12, color: colorScheme.primary),
             ),
-          Text('UTF-8', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+          Text('UTF-8',
+              style:
+                  TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
           const SizedBox(width: 12),
-          Text('Tab: ${editorState.settings.tabSize}', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+          Text('Tab: ${editorState.settings.tabSize}',
+              style:
+                  TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
           if (buffer.isDirty) ...[
             const SizedBox(width: 12),
             Icon(Icons.circle, size: 6, color: colorScheme.primary),
@@ -674,12 +665,18 @@ class _EditorPageState extends ConsumerState<EditorPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.code, size: 64, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
+          Icon(Icons.code,
+              size: 64,
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
-          Text('打开文件开始编辑', style: theme.textTheme.titleMedium?.copyWith(color: colorScheme.onSurfaceVariant)),
+          Text('打开文件开始编辑',
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(color: colorScheme.onSurfaceVariant)),
           const SizedBox(height: 8),
-          Text('在文件浏览器中选择文件\n或在终端中打开', textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7))),
+          Text('在文件浏览器中选择文件\n或在终端中打开',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7))),
         ],
       ),
     );
@@ -687,21 +684,36 @@ class _EditorPageState extends ConsumerState<EditorPage> {
 
   String _languageDisplayName(FileLanguage lang) {
     switch (lang) {
-      case FileLanguage.dart: return 'Dart';
-      case FileLanguage.rust: return 'Rust';
-      case FileLanguage.python: return 'Python';
-      case FileLanguage.json: return 'JSON';
-      case FileLanguage.yaml: return 'YAML';
-      case FileLanguage.markdown: return 'Markdown';
-      case FileLanguage.toml: return 'TOML';
-      case FileLanguage.shell: return 'Shell';
-      case FileLanguage.typescript: return 'TypeScript';
-      case FileLanguage.javascript: return 'JavaScript';
-      case FileLanguage.html: return 'HTML';
-      case FileLanguage.css: return 'CSS';
-      case FileLanguage.java: return 'Java';
-      case FileLanguage.cpp: return 'C++';
-      case FileLanguage.unknown: return 'Plain Text';
+      case FileLanguage.dart:
+        return 'Dart';
+      case FileLanguage.rust:
+        return 'Rust';
+      case FileLanguage.python:
+        return 'Python';
+      case FileLanguage.json:
+        return 'JSON';
+      case FileLanguage.yaml:
+        return 'YAML';
+      case FileLanguage.markdown:
+        return 'Markdown';
+      case FileLanguage.toml:
+        return 'TOML';
+      case FileLanguage.shell:
+        return 'Shell';
+      case FileLanguage.typescript:
+        return 'TypeScript';
+      case FileLanguage.javascript:
+        return 'JavaScript';
+      case FileLanguage.html:
+        return 'HTML';
+      case FileLanguage.css:
+        return 'CSS';
+      case FileLanguage.java:
+        return 'Java';
+      case FileLanguage.cpp:
+        return 'C++';
+      case FileLanguage.unknown:
+        return 'Plain Text';
     }
   }
 }
@@ -764,7 +776,8 @@ class ExplainCodeSheet extends StatelessWidget {
                 _sectionHeader('⏱ 时间复杂度', colorScheme),
                 const SizedBox(height: 4),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(8),
@@ -785,7 +798,8 @@ class ExplainCodeSheet extends StatelessWidget {
                 _sectionHeader('💾 空间复杂度', colorScheme),
                 const SizedBox(height: 4),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: colorScheme.secondaryContainer,
                     borderRadius: BorderRadius.circular(8),
@@ -811,9 +825,12 @@ class ExplainCodeSheet extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('${entry.key + 1}. ', style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        Text('${entry.key + 1}. ',
+                            style: theme.textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w600)),
                         Expanded(
-                          child: Text(entry.value, style: theme.textTheme.bodyMedium),
+                          child: Text(entry.value,
+                              style: theme.textTheme.bodyMedium),
                         ),
                       ],
                     ),
@@ -831,7 +848,9 @@ class ExplainCodeSheet extends StatelessWidget {
                     color: colorScheme.errorContainer,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(result.errorMessage!, style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.error)),
+                  child: Text(result.errorMessage!,
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: colorScheme.error)),
                 ),
               ],
             ],
@@ -948,7 +967,9 @@ class _RefactorCodeSheet extends StatelessWidget {
               // 重构说明
               if (result.explanation.isNotEmpty) ...[
                 Text('重构说明',
-                  style: TextStyle(fontWeight: FontWeight.w600, color: colorScheme.primary)),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.primary)),
                 const SizedBox(height: 4),
                 Text(result.explanation, style: theme.textTheme.bodyMedium),
                 const SizedBox(height: 16),
@@ -957,27 +978,33 @@ class _RefactorCodeSheet extends StatelessWidget {
               // 变更列表
               if (result.changes.isNotEmpty) ...[
                 Text('变更清单',
-                  style: TextStyle(fontWeight: FontWeight.w600, color: colorScheme.primary)),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.primary)),
                 const SizedBox(height: 4),
                 ...result.changes.asMap().entries.map((e) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${e.key + 1}. ', style: theme.textTheme.bodySmall),
-                      Expanded(
-                        child: Text(e.value, style: theme.textTheme.bodySmall),
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${e.key + 1}. ',
+                              style: theme.textTheme.bodySmall),
+                          Expanded(
+                            child:
+                                Text(e.value, style: theme.textTheme.bodySmall),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                )),
+                    )),
                 const SizedBox(height: 16),
               ],
 
               // 重构后的代码
               if (result.refactoredCode.isNotEmpty) ...[
                 Text('重构后代码',
-                  style: TextStyle(fontWeight: FontWeight.w600, color: colorScheme.primary)),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.primary)),
                 const SizedBox(height: 4),
                 Container(
                   width: double.infinity,
@@ -1007,7 +1034,7 @@ class _RefactorCodeSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(result.errorMessage!,
-                    style: TextStyle(color: colorScheme.error)),
+                      style: TextStyle(color: colorScheme.error)),
                 ),
               ],
             ],
@@ -1050,19 +1077,23 @@ class _TestGenSheet extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.science_outlined, color: colorScheme.primary, size: 20),
+                  Icon(Icons.science_outlined,
+                      color: colorScheme.primary, size: 20),
                   const SizedBox(width: 8),
                   Text('AI 生成测试', style: theme.textTheme.titleMedium),
                   const Spacer(),
                   if (result.testFileName.isNotEmpty)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(result.testFileName,
-                        style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: colorScheme.onSurfaceVariant)),
                     ),
                   const SizedBox(width: 8),
                   IconButton(
@@ -1072,7 +1103,6 @@ class _TestGenSheet extends StatelessWidget {
                 ],
               ),
               const Divider(),
-
               if (result.isValid) ...[
                 Container(
                   width: double.infinity,
@@ -1092,7 +1122,6 @@ class _TestGenSheet extends StatelessWidget {
                   ),
                 ),
               ],
-
               if (result.hasError && result.errorMessage != null) ...[
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -1101,7 +1130,7 @@ class _TestGenSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(result.errorMessage!,
-                    style: TextStyle(color: colorScheme.error)),
+                      style: TextStyle(color: colorScheme.error)),
                 ),
               ],
             ],
@@ -1145,7 +1174,8 @@ class _FixBugSheet extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.bug_report_outlined, color: colorScheme.primary, size: 20),
+                  Icon(Icons.bug_report_outlined,
+                      color: colorScheme.primary, size: 20),
                   const SizedBox(width: 8),
                   Text('AI 修复建议', style: theme.textTheme.titleMedium),
                   const Spacer(),
@@ -1156,7 +1186,6 @@ class _FixBugSheet extends StatelessWidget {
                 ],
               ),
               const Divider(),
-
               if (result.hasError && result.error != null) ...[
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -1165,12 +1194,12 @@ class _FixBugSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(result.error!,
-                    style: TextStyle(color: colorScheme.error)),
+                      style: TextStyle(color: colorScheme.error)),
                 ),
               ],
-
               if (result.hasSuggestions)
-                ...result.suggestions.map((s) => _buildSuggestionCard(s, colorScheme, theme)),
+                ...result.suggestions
+                    .map((s) => _buildSuggestionCard(s, colorScheme, theme)),
             ],
           ),
         );
@@ -1178,7 +1207,8 @@ class _FixBugSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildSuggestionCard(FixSuggestion s, ColorScheme colorScheme, ThemeData theme) {
+  Widget _buildSuggestionCard(
+      FixSuggestion s, ColorScheme colorScheme, ThemeData theme) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -1190,30 +1220,32 @@ class _FixBugSheet extends StatelessWidget {
               children: [
                 Icon(Icons.error_outline, size: 16, color: colorScheme.error),
                 const SizedBox(width: 6),
-                const Text('错误原因', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text('错误原因',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
               ],
             ),
             const SizedBox(height: 4),
             Text(s.reason, style: theme.textTheme.bodyMedium),
             const SizedBox(height: 8),
-
             Row(
               children: [
-                Icon(Icons.build_outlined, size: 16, color: colorScheme.primary),
+                Icon(Icons.build_outlined,
+                    size: 16, color: colorScheme.primary),
                 const SizedBox(width: 6),
-                const Text('修复方案', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text('修复方案',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
               ],
             ),
             const SizedBox(height: 4),
             Text(s.description, style: theme.textTheme.bodySmall),
             const SizedBox(height: 8),
-
             if (s.hasValidPatch) ...[
               Row(
                 children: [
                   Icon(Icons.code, size: 16, color: colorScheme.tertiary),
                   const SizedBox(width: 6),
-                  const Text('修复代码', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text('修复代码',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
                 ],
               ),
               const SizedBox(height: 4),

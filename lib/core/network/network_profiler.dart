@@ -67,25 +67,24 @@ class NetworkProfile {
   });
 
   /// 是否需要降级下载策略
-  bool get needsDegradation =>
-      !dnsWorking || quality == NetworkQuality.poor;
+  bool get needsDegradation => !dnsWorking || quality == NetworkQuality.poor;
 
   /// 推荐的最大并发下载数
   int get recommendedConcurrency => switch (quality) {
-    NetworkQuality.excellent => 4,
-    NetworkQuality.good => 3,
-    NetworkQuality.fair => 2,
-    NetworkQuality.poor => 1,
-    NetworkQuality.unknown => 2,
-  };
+        NetworkQuality.excellent => 4,
+        NetworkQuality.good => 3,
+        NetworkQuality.fair => 2,
+        NetworkQuality.poor => 1,
+        NetworkQuality.unknown => 2,
+      };
 }
 
 /// 网络性能分析器
 class NetworkProfiler {
   /// 探测目标
   static const _latencyTargets = [
-    '1.1.1.1',      // Cloudflare DNS（IP 直连，不依赖 DNS）
-    '8.8.8.8',      // Google DNS
+    '1.1.1.1', // Cloudflare DNS（IP 直连，不依赖 DNS）
+    '8.8.8.8', // Google DNS
   ];
 
   /// 收集完整的网络信息
@@ -151,7 +150,8 @@ class NetworkProfiler {
         if (result.exitCode == 0) {
           // 从输出中提取延迟
           final stdout = result.stdout as String;
-          final timeMatch = RegExp(r'time[=<]\s*(\d+\.?\d*)\s*ms').firstMatch(stdout);
+          final timeMatch =
+              RegExp(r'time[=<]\s*(\d+\.?\d*)\s*ms').firstMatch(stdout);
           if (timeMatch != null) {
             final time = double.parse(timeMatch.group(1)!);
             if (time.toInt() < minLatency) {
@@ -172,7 +172,8 @@ class NetworkProfiler {
     try {
       // 检查 Wi-Fi
       final wifiResult = await Process.run(
-        'cmd', ['wifi', 'get-connection-info'],
+        'cmd',
+        ['wifi', 'get-connection-info'],
         runInShell: true,
       );
       if (wifiResult.exitCode == 0) {
@@ -186,7 +187,8 @@ class NetworkProfiler {
     try {
       // 检查是否有默认路由
       final routeResult = await Process.run(
-        'ip', ['route', 'show', 'default'],
+        'ip',
+        ['route', 'show', 'default'],
         runInShell: true,
       );
       if (routeResult.exitCode == 0) {
@@ -204,7 +206,8 @@ class NetworkProfiler {
   /// 获取系统 DNS 服务器
   static Future<String?> _getSystemDnsServer() async {
     try {
-      final result = await Process.run('getprop', ['net.dns1'], runInShell: true);
+      final result =
+          await Process.run('getprop', ['net.dns1'], runInShell: true);
       if (result.exitCode == 0) {
         final dns = (result.stdout as String).trim();
         if (dns.isNotEmpty) return dns;
@@ -212,7 +215,8 @@ class NetworkProfiler {
     } catch (_) {}
 
     try {
-      final result = await Process.run('getprop', ['net.dns2'], runInShell: true);
+      final result =
+          await Process.run('getprop', ['net.dns2'], runInShell: true);
       if (result.exitCode == 0) {
         final dns = (result.stdout as String).trim();
         if (dns.isNotEmpty) return dns;
@@ -225,12 +229,15 @@ class NetworkProfiler {
   /// 获取本地 IP
   static Future<String?> _getLocalIp() async {
     try {
-      final result = await Process.run('ip', ['route', 'show', 'default'], runInShell: true);
+      final result = await Process.run('ip', ['route', 'show', 'default'],
+          runInShell: true);
       if (result.exitCode == 0) {
-        final devMatch = RegExp(r'dev\s+(\S+)').firstMatch(result.stdout as String);
+        final devMatch =
+            RegExp(r'dev\s+(\S+)').firstMatch(result.stdout as String);
         if (devMatch != null) {
           final dev = devMatch.group(1)!;
-          final ipResult = await Process.run('ip', ['addr', 'show', dev], runInShell: true);
+          final ipResult =
+              await Process.run('ip', ['addr', 'show', dev], runInShell: true);
           if (ipResult.exitCode == 0) {
             final ipMatch = RegExp(r'inet\s+(\d+\.\d+\.\d+\.\d+)')
                 .firstMatch(ipResult.stdout as String);
@@ -266,25 +273,5 @@ class NetworkProfiler {
     if (latencyMs < 150) return NetworkQuality.good;
     if (latencyMs < 500) return NetworkQuality.fair;
     return NetworkQuality.poor;
-  }
-
-  /// 快速检测网络是否可用（< 2s）
-  static Future<bool> quickHealthCheck() async {
-    try {
-      // 先 IP 直连检测（不依赖 DNS）
-      final result = await Process.run(
-        'curl',
-        ['-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '2',
-         'https://1.1.1.1'],
-        runInShell: true,
-      );
-      if (result.exitCode == 0) {
-        final code = int.tryParse((result.stdout as String).trim());
-        return code != null && code >= 200 && code < 400;
-      }
-      return false;
-    } catch (_) {
-      return false;
-    }
   }
 }
