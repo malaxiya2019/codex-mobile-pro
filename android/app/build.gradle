@@ -5,17 +5,32 @@ plugins {
 }
 
 android {
-    // ── 固定 debug 签名（仓库 android/debug.keystore）──
-    // 之前依赖 AGP 默认 ~/.android/debug.keystore，在 GitHub CI 上
-    // AGP 每次构建都会自动生成随机 keystore，导致每个 APK 签名都不同，
-    // 必须卸载才能安装新版。这里显式指定 storeFile，确保所有构建
-    // （本地/CI）使用同一证书，支持覆盖安装升级。
+// ── 签名配置 ──
+// debug：固定仓库 android/debug.keystore。debug 签名的 keyAlias/密码公开是
+// Android 生态常识（AGP 默认 debug.keystore 就是 androiddebugkey/android），
+// 保留它保证所有构建（本地/CI）的 debug APK 签名一致，支持覆盖安装升级。
+// release：独立 upload keystore（codex-release），私钥只保存在 GitHub
+// Actions secrets（RELEASE_KEYSTORE_BASE64 / RELEASE_KEYSTORE_PASSWORD），
+// 公开仓库不泄露 release 签名私钥。CI 通过环境变量注入 keystore 路径与密码；
+// 本地构建未设置环境变量时 fallback 到 debug 签名（仅供本地开发调试，不发布）。
+def releaseStorePath = System.getenv('RELEASE_KEYSTORE_PATH')
+def releaseStorePass = System.getenv('RELEASE_KEYSTORE_PASSWORD')
+def releaseSigningReady = releaseStorePath != null && !releaseStorePath.isEmpty()
+
     signingConfigs {
         debug {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
             storeFile file('../debug.keystore')
             storePassword 'android'
+        }
+        if (releaseSigningReady) {
+            release {
+                keyAlias 'codex-release'
+                keyPassword releaseStorePass
+                storeFile file(releaseStorePath)
+                storePassword releaseStorePass
+            }
         }
     }
 
@@ -56,8 +71,13 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            signingConfig signingConfigs.debug
-            // TODO: Sprint 9 — 配置正式签名
+            if (releaseSigningReady) {
+                // CI 注入独立 release keystore（私钥来自 GitHub Actions secret）
+                signingConfig signingConfigs.release
+            } else {
+                // 本地开发未配置 release keystore 时，fallback 到 debug 签名
+                signingConfig signingConfigs.debug
+            }
         }
     }
 

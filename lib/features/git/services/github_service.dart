@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../../core/logger/log_service.dart';
 import '../models/git_repository.dart';
@@ -19,6 +19,13 @@ class GitHubService {
   // static const String _clientId = .Ov23li123456789abcdef.; // 占位，实际需注册
   static const String _tokenKey = 'github_token';
   static const String _userKey = 'github_user';
+
+  /// Token/用户信息存储：使用 flutter_secure_storage（Android 上 AES-GCM + KeyStore），
+  /// 不写入 SharedPreferences 明文文件。
+  final FlutterSecureStorage _storage;
+
+  GitHubService({FlutterSecureStorage? storage})
+      : _storage = storage ?? const FlutterSecureStorage();
 
   String? _token;
 
@@ -38,12 +45,11 @@ class GitHubService {
   /// 加载已保存的 Token
   Future<bool> loadToken() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString(_tokenKey);
+      final token = await _storage.read(key: _tokenKey);
       if (token != null) {
         _token = token;
         // 加载用户信息
-        final userJson = prefs.getString(_userKey);
+        final userJson = await _storage.read(key: _userKey);
         if (userJson != null) {
           _userInfo = jsonDecode(userJson) as Map<String, dynamic>;
         }
@@ -59,8 +65,7 @@ class GitHubService {
   Future<void> saveToken(String token) async {
     _token = token;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_tokenKey, token);
+      await _storage.write(key: _tokenKey, value: token);
     } catch (e) {
       LogService.error('GitHub', '保存 Token 失败: $e');
     }
@@ -71,9 +76,8 @@ class GitHubService {
     _token = null;
     _userInfo = null;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_tokenKey);
-      await prefs.remove(_userKey);
+      await _storage.delete(key: _tokenKey);
+      await _storage.delete(key: _userKey);
     } catch (e) {
       LogService.error('GitHub', '清除 Token 失败: $e');
     }
@@ -157,8 +161,7 @@ class GitHubService {
         _userInfo = user;
         await saveToken(token);
         // 保存用户信息
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(_userKey, jsonEncode(user));
+        await _storage.write(key: _userKey, value: jsonEncode(user));
         return user;
       } else {
         _token = null;
@@ -177,8 +180,7 @@ class GitHubService {
     final data = await _apiGet('/user');
     if (data != null) {
       _userInfo = data;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_userKey, jsonEncode(data));
+      await _storage.write(key: _userKey, value: jsonEncode(data));
     }
     return data;
   }

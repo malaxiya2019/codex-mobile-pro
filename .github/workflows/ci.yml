@@ -88,6 +88,21 @@ jobs:
           cp android/debug.keystore "$HOME/.android/debug.keystore"
           # 固定签名指纹（SHA256）用于核对每次构建使用同一密钥
           sha256sum "$HOME/.android/debug.keystore"
+      - name: Decode release keystore from secrets (stable release signing)
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "⚠️  RELEASE_KEYSTORE_BASE64 secret 未配置，release 将 fallback 到 debug 签名"
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/codex-release.keystore"
+          echo "RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/codex-release.keystore" >> "$GITHUB_ENV"
+          echo "RELEASE_KEYSTORE_PASSWORD=$KEYSTORE_PASS" >> "$GITHUB_ENV"
+          keytool -list -keystore "$RUNNER_TEMP/codex-release.keystore" \
+            -alias codex-release -storepass "$KEYSTORE_PASS" 2>/dev/null \
+            | grep -E 'Alias name|Valid from'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -127,8 +142,8 @@ jobs:
         # 配合固定 keystore 实现无缝覆盖升级（无需卸载重装）。
         run: flutter build apk --debug --build-number=${{ github.run_number }} --build-name=1.0.0
       - name: Build Android APK (release)
-        # release 同样使用仓库固定 debug.keystore 签名（build.gradle: release.signingConfig = debug），
-        # versionCode 与 debug 一致（同签名同 code 可互相覆盖安装）。
+        # release 使用独立 upload keystore（codex-release，私钥来自 Actions secret），
+        # 不再复用仓库内公开的 debug.keystore。versionCode 与 debug 一致。
         run: flutter build apk --release --build-number=${{ github.run_number }} --build-name=1.0.0
 
       - name: Verify APK signature (must match fixed keystore)
@@ -149,9 +164,15 @@ jobs:
             exit 1
           fi
           echo "✅ APK 签名证书匹配固定 keystore"
-      - name: Verify APK signature (release, must match fixed keystore)
+      - name: Verify APK signature (release, must match release keystore)
         run: |
-          EXPECTED="b1307e1488fe7cad36f0cac5ab2d1f0ce581e0c06afc74d391584a6bf2b93dd3"
+          if [ -z "$RELEASE_KEYSTORE_PATH" ]; then
+            echo "⚠️  release keystore 未配置，跳过 release 签名校验"
+            exit 0
+          fi
+          EXPECTED=$(keytool -list -keystore "$RELEASE_KEYSTORE_PATH" -alias codex-release \
+            -storepass "$RELEASE_KEYSTORE_PASSWORD" -v 2>/dev/null \
+            | grep -m1 'SHA256:' | awk '{print $2}' | tr -d ':' | tr 'A-Z' 'a-z')
           SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
           APKSIGNER=$(ls "$SDK_ROOT"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
           if [ -z "$APKSIGNER" ]; then
@@ -159,14 +180,14 @@ jobs:
             exit 0
           fi
           ACTUAL=$("$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk \
-            | grep "certificate SHA-256 digest" | awk '{print $NF}')
+            | grep "certificate SHA-256 digest" | awk '{print $NF}' | tr -d ':' | tr 'A-Z' 'a-z')
           echo "expected: $EXPECTED"
           echo "actual:   $ACTUAL"
           if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "❌ release APK 签名证书与固定 keystore 不匹配！覆盖安装会失败。"
+            echo "❌ release APK 签名证书与 release keystore 不匹配！覆盖安装会失败。"
             exit 1
           fi
-          echo "✅ release APK 签名证书匹配固定 keystore"
+          echo "✅ release APK 签名证书匹配独立 release keystore"
 
       - name: Upload APK
         uses: actions/upload-artifact@v5
