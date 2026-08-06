@@ -1,7 +1,9 @@
 import 'package:codex_mobile_pro/features/git/models/git_repository.dart';
 import 'package:codex_mobile_pro/features/git/services/git_service.dart';
 import 'package:codex_mobile_pro/features/git/services/github_service.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('GitResult', () {
@@ -160,6 +162,57 @@ void main() {
       final service = GitHubService();
       expect(service.isLoggedIn, false);
       expect(service.username, isNull);
+    });
+
+    test('loadToken 从旧版 SharedPreferences 迁移明文 Token', () async {
+      SharedPreferences.setMockInitialValues({
+        'github_token': 'ghp_legacy',
+        'github_user': '{"login":"octocat"}',
+      });
+      FlutterSecureStorage.setMockInitialValues({});
+
+      final service = GitHubService();
+      expect(service.isLoggedIn, false);
+
+      final ok = await service.loadToken();
+      expect(ok, isTrue);
+      expect(service.accessToken, 'ghp_legacy');
+      expect(service.username, 'octocat');
+
+      // 已迁移到 secure storage
+      const storage = FlutterSecureStorage();
+      expect(await storage.read(key: 'github_token'), 'ghp_legacy');
+      // 旧位置已清理
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('github_token'), isNull);
+      expect(prefs.getString('github_user'), isNull);
+    });
+
+    test('loadToken 无旧值时返回 false（不迁移）', () async {
+      SharedPreferences.setMockInitialValues({});
+      FlutterSecureStorage.setMockInitialValues({});
+
+      final service = GitHubService();
+      final ok = await service.loadToken();
+      expect(ok, isFalse);
+      expect(service.isLoggedIn, false);
+    });
+
+    test('loadToken secure storage 有值时不再读旧位置', () async {
+      SharedPreferences.setMockInitialValues({
+        'github_token': 'ghp_legacy',
+      });
+      FlutterSecureStorage.setMockInitialValues({
+        'github_token': 'ghp_secure',
+      });
+
+      final service = GitHubService();
+      final ok = await service.loadToken();
+      expect(ok, isTrue);
+      // secure storage 值优先，旧位置不覆盖
+      expect(service.accessToken, 'ghp_secure');
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('github_token'), 'ghp_legacy');
     });
 
     test('Token 管理', () async {

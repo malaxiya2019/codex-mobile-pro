@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/logger/log_service.dart';
 import '../models/git_repository.dart';
@@ -43,9 +44,14 @@ class GitHubService {
   String? get username => _userInfo?['login'];
 
   /// 加载已保存的 Token
+  ///
+  /// 兼容迁移：9679cba 之前 GitHub token 存 SharedPreferences 明文。首次加载时
+  /// 若 secure storage 为空，会从旧位置读取并迁移（写入 secure storage 后清理旧值），
+  /// 避免老用户升级后登录态丢失。
   Future<bool> loadToken() async {
     try {
-      final token = await _storage.read(key: _tokenKey);
+      var token = await _storage.read(key: _tokenKey);
+      token ??= await _migrateLegacyToken();
       if (token != null) {
         _token = token;
         // 加载用户信息
@@ -59,6 +65,31 @@ class GitHubService {
       LogService.error('GitHub', '加载 Token 失败: $e');
     }
     return false;
+  }
+
+  /// 旧版明文 Token 迁移（SharedPreferences → secure storage）
+  ///
+  /// 返回迁移后的 token；无旧值或迁移失败返回 null。旧用户信息（github_user）也一并迁移。
+  static Future<String?> _migrateLegacyToken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final legacyToken = prefs.getString(_tokenKey);
+      if (legacyToken == null || legacyToken.isEmpty) return null;
+
+      const storage = FlutterSecureStorage();
+      await storage.write(key: _tokenKey, value: legacyToken);
+      final legacyUser = prefs.getString(_userKey);
+      if (legacyUser != null && legacyUser.isNotEmpty) {
+        await storage.write(key: _userKey, value: legacyUser);
+      }
+      await prefs.remove(_tokenKey);
+      await prefs.remove(_userKey);
+      LogService.info('GitHub', '已迁移旧版明文 Token 至 secure storage');
+      return legacyToken;
+    } catch (e) {
+      LogService.error('GitHub', '旧版 Token 迁移失败: $e');
+      return null;
+    }
   }
 
   /// 保存 Token
