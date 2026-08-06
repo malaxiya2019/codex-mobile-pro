@@ -98,11 +98,13 @@ jobs:
             exit 0
           fi
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/codex-release.keystore"
+          if [ ! -s "$RUNNER_TEMP/codex-release.keystore" ]; then
+            echo "❌ keystore 解码结果为空"
+            exit 1
+          fi
+          echo "✅ release keystore 解码成功 ($(wc -c < "$RUNNER_TEMP/codex-release.keystore") bytes)"
           echo "RELEASE_KEYSTORE_PATH=$RUNNER_TEMP/codex-release.keystore" >> "$GITHUB_ENV"
           echo "RELEASE_KEYSTORE_PASSWORD=$KEYSTORE_PASS" >> "$GITHUB_ENV"
-          keytool -list -keystore "$RUNNER_TEMP/codex-release.keystore" \
-            -alias codex-release -storepass "$KEYSTORE_PASS" 2>/dev/null \
-            | grep -E 'Alias name|Valid from'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -165,14 +167,13 @@ jobs:
           fi
           echo "✅ APK 签名证书匹配固定 keystore"
       - name: Verify APK signature (release, must match release keystore)
+        env:
+          EXPECTED: ${{ secrets.RELEASE_KEYSTORE_SHA256 }}
         run: |
-          if [ -z "$RELEASE_KEYSTORE_PATH" ]; then
-            echo "⚠️  release keystore 未配置，跳过 release 签名校验"
+          if [ -z "$EXPECTED" ]; then
+            echo "⚠️  RELEASE_KEYSTORE_SHA256 secret 未配置，跳过 release 签名校验"
             exit 0
           fi
-          EXPECTED=$(keytool -list -keystore "$RELEASE_KEYSTORE_PATH" -alias codex-release \
-            -storepass "$RELEASE_KEYSTORE_PASSWORD" -v 2>/dev/null \
-            | grep -m1 'SHA256:' | awk '{print $2}' | tr -d ':' | tr 'A-Z' 'a-z')
           SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
           APKSIGNER=$(ls "$SDK_ROOT"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
           if [ -z "$APKSIGNER" ]; then
