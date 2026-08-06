@@ -67,7 +67,7 @@ void main() {
 
   group('CommandCategory', () {
     test('包含所有类别', () {
-      expect(CommandCategory.values.length, 5);
+      expect(CommandCategory.values.length, 6);
     });
 
     test('Flutter 类别正确', () {
@@ -83,6 +83,11 @@ void main() {
     test('Python 类别正确', () {
       expect(CommandCategory.python.name, 'Python');
       expect(CommandCategory.python.icon, '🐍');
+    });
+
+    test('Codex 类别正确', () {
+      expect(CommandCategory.codex.name, 'Codex');
+      expect(CommandCategory.codex.icon, '🤖');
     });
   });
 
@@ -140,6 +145,21 @@ void main() {
       expect(names, contains('git-status'));
       expect(names, contains('git-commit'));
       expect(names, contains('git-push'));
+    });
+
+    test('Codex 包含启动命令', () {
+      final codexCmds = mgr.getByCategory(CommandCategory.codex);
+      final names = codexCmds.map((c) => c.id).toSet();
+      expect(names, contains('codex-cyo-zh'));
+      expect(names, contains('codex-cyo'));
+      expect(names, contains('codex-cy'));
+      expect(names, contains('codex-cs'));
+      expect(names, contains('codex-c'));
+      expect(names, contains('codex-cp-status'));
+      // 命令内容与 rootfs bashrc-additions.sh 定义一致
+      final cyoCmd = codexCmds.firstWhere((c) => c.id == 'codex-cyo-zh');
+      expect(cyoCmd.command, 'cyo --zh');
+      expect(cyoCmd.category, CommandCategory.codex);
     });
 
     test('切换收藏', () {

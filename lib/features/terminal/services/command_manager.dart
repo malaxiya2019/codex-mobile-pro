@@ -4,7 +4,8 @@ enum CommandCategory {
   rust('Rust', '🦀'),
   python('Python', '🐍'),
   general('通用', '⚙️'),
-  git('Git', '🔗');
+  git('Git', '🔗'),
+  codex('Codex', '🤖');
 
   final String name;
   final String icon;
@@ -279,6 +280,52 @@ class CommandManager {
         command: 'git log --oneline -10',
         description: '查看提交历史',
         category: CommandCategory.git,
+      ),
+    ]);
+
+    // ── Codex（rootfs 内 bashrc-additions.sh 定义的快捷命令） ──
+    _commands.addAll([
+      const QuickCommand(
+        id: 'codex-cyo-zh',
+        name: 'cyo --zh',
+        command: 'cyo --zh',
+        description: '启动 Codex（YOLO 免确认 + 中文）',
+        category: CommandCategory.codex,
+      ),
+      const QuickCommand(
+        id: 'codex-cyo',
+        name: 'cyo',
+        command: 'cyo',
+        description: '启动 Codex（YOLO 免确认）',
+        category: CommandCategory.codex,
+      ),
+      const QuickCommand(
+        id: 'codex-cy',
+        name: 'cy',
+        command: 'cy',
+        description: '智能启动 Codex（直连 DeepSeek）',
+        category: CommandCategory.codex,
+      ),
+      const QuickCommand(
+        id: 'codex-cs',
+        name: 'cs',
+        command: 'cs',
+        description: '安全模式（按需确认）',
+        category: CommandCategory.codex,
+      ),
+      const QuickCommand(
+        id: 'codex-c',
+        name: 'c',
+        command: 'c',
+        description: '快捷 codex',
+        category: CommandCategory.codex,
+      ),
+      const QuickCommand(
+        id: 'codex-cp-status',
+        name: 'cp-status',
+        command: 'cp-status',
+        description: '查看 codex / mimo / thread 进程',
+        category: CommandCategory.codex,
       ),
     ]);
 
