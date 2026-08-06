@@ -187,9 +187,14 @@ class AiClient {
   }
 
   /// 健康检查
+  ///
+  /// 使用 OpenAI 兼容标准的 `GET /v1/models` 作为存在性探测。
+  /// 历史 bug：探测的是非标准的 `/health`，而本地代理（mimo2codex）没有
+  /// 该路由返回 404 → 健康检查永远失败 → DeepSeekProvider 永不 ready →
+  /// streamChat 直接返回空流 → ChatEngine 显示「⚠️ 未收到有效回复」。
   Future<bool> healthCheck() async {
     try {
-      final uri = Uri.parse('${config.baseUrl}/health');
+      final uri = Uri.parse('${config.baseUrl}/models');
       final response = await _httpClient.get(uri).timeout(const Duration(seconds: 5));
       return response.statusCode == 200;
     } catch (_) {

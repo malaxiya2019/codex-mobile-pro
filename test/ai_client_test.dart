@@ -207,13 +207,19 @@ void main() {
   });
 
   group('AiClient.healthCheck', () {
-    test('200 返回 true', () async {
+    test('200 返回 true（探测 /models 端点而非 /health）', () async {
       when(() => mockClient.get(any<Uri>())).thenAnswer(
         (_) async => http.Response('OK', 200),
       );
 
       final result = await aiClient.healthCheck();
       expect(result, true);
+
+      // 回归：必须探测 OpenAI 兼容的 /v1/models（mimo2codex 无 /health 路由，
+      // 若探测 /health 会 404 → provider 永不 ready → 「未收到有效回复」）
+      final captured = verify(() => mockClient.get(captureAny())).captured;
+      expect(captured.single, isA<Uri>());
+      expect((captured.single as Uri).path, '/v1/models');
     });
 
     test('非 200 返回 false', () async {

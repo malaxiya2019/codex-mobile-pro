@@ -573,8 +573,20 @@ class AIProviderManager implements IAIProviderManager {
       for (final reg in _registrations) {
         try {
           final healthy = await reg.provider.healthCheck();
-          if (healthy && !reg.enabled) {
-            reg.enabled = true;
+          if (healthy) {
+            // failover 禁用后自恢复
+            if (!reg.enabled) reg.enabled = true;
+            // 自愈：health 通过但 provider 仍非 ready（如 App 启动早于代理、
+            // 或初始化瞬时失败）时重新初始化，避免 streamChat 拿到空流后
+            // 一直显示「⚠️ 未收到有效回复」。
+            if (reg.provider.status != AiProviderStatus.ready &&
+                reg.provider.status != AiProviderStatus.initializing) {
+              await reg.provider.initialize();
+              if (reg.provider.status == AiProviderStatus.ready &&
+                  _activeProviderName == null) {
+                _activeProviderName = reg.provider.name;
+              }
+            }
           }
         } catch (_) {}
       }

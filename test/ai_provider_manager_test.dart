@@ -68,6 +68,60 @@ class MockAiProvider extends AiProvider {
   void dispose() {}
 }
 
+
+/// 可自愈的模拟 Provider：初始 status 非 ready，healthCheck 通过后
+/// initialize() 会把 status 恢复为 ready（模拟代理晚于 App 启动的场景）
+class RecoverableMockProvider extends AiProvider {
+  AiProviderStatus _status;
+  int initializeCount = 0;
+
+  RecoverableMockProvider({AiProviderStatus status = AiProviderStatus.error})
+      : _status = status;
+
+  @override
+  String get name => 'Recoverable';
+
+  @override
+  AiProviderStatus get status => _status;
+
+  @override
+  Future<void> initialize() async {
+    initializeCount++;
+    _status = AiProviderStatus.ready;
+  }
+
+  @override
+  Future<bool> healthCheck() async => true;
+
+  @override
+  Future<List<InlineCompletion>> getInlineCompletions({
+    required InlineCompletionRequest request,
+    CompletionTriggerKind triggerKind = CompletionTriggerKind.automatic,
+    CancelToken? cancelToken,
+  }) async => [];
+
+  @override
+  Future<String> chat({
+    required List<ChatMessageInput> messages,
+    double temperature = 0.7,
+    int maxTokens = 4096,
+    CancelToken? cancelToken,
+  }) async => 'ok';
+
+  @override
+  Stream<String> streamChat({
+    required List<ChatMessageInput> messages,
+    double temperature = 0.7,
+    int maxTokens = 4096,
+    CancelToken? cancelToken,
+  }) async* {
+    yield 'hi';
+  }
+
+  @override
+  void dispose() {}
+}
+
 void main() {
   group('TokenUsage', () {
     test('创建 Token 用量记录', () {
@@ -340,6 +394,33 @@ void main() {
       expect(priorities[0], ProviderPriority.primary);
       expect(priorities[1], ProviderPriority.fallback);
       expect(priorities[2], ProviderPriority.secondary);
+    });
+  });
+
+  group('健康检查自愈', () {
+    test('health 通过后自动重新 initialize 恢复 ready', () async {
+      // 默认 status 即 error，显式传参会被 analyzer 判为冗余
+      final provider = RecoverableMockProvider();
+      final manager = AIProviderManager(
+        config: const AIProviderManagerConfig(
+          healthCheckInterval: Duration(milliseconds: 20),
+        ),
+      );
+
+      manager.register(provider, priority: ProviderPriority.primary);
+
+      // 注册时 provider 非 ready → 不应被选为活动 provider
+      expect(provider.status, AiProviderStatus.error);
+      expect(manager.activeProviderName, isNull);
+
+      // 等待健康检查 timer 至少触发一轮（20ms 周期，等 150ms）
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+
+      expect(provider.initializeCount, greaterThan(0));
+      expect(provider.status, AiProviderStatus.ready);
+      expect(manager.activeProviderName, 'Recoverable');
+
+      manager.dispose();
     });
   });
 }
