@@ -80,6 +80,9 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                 // ── 顶部状态卡片 ──
                 _buildSummaryCard(context, status),
 
+                // ── 部署完成：Codex 启动指引（codex 就绪时显示） ──
+                if (_isCodexReady(status)) _buildCodexLaunchGuide(context),
+
                 const SizedBox(height: 16),
 
                 // ── 网络状态警告（DNS 失败时显示） ──
@@ -299,6 +302,85 @@ class _DeployPageState extends ConsumerState<DeployPage> {
           ),
         ),
       ],
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // Codex 启动指引（部署完成后自动提示）
+  // ════════════════════════════════════════════════════════════════
+
+  /// Codex CLI 是否已就绪（部署完成且检测为已安装）
+  bool _isCodexReady(DeployStatus status) {
+    if (status.state != DeployState.completed ||
+        status.detectionResult == null) {
+      return false;
+    }
+    return status.detectionResult!.coding
+        .any((r) => r.id == 'codex' && r.status == DetectionStatus.installed);
+  }
+
+  /// 部署完成后的 Codex 启动指引卡片
+  Widget _buildCodexLaunchGuide(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(top: 16),
+      color: colorScheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.terminal, size: 22),
+                const SizedBox(width: 8),
+                Text(
+                  '🚀 启动 Codex CLI',
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Codex 已就绪。打开底部导航「终端」，输入以下任一命令启动：',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 8),
+            _guideCommand('cyo --zh', 'YOLO 免确认 + 中文（推荐）'),
+            _guideCommand('cyo', 'YOLO 免确认'),
+            _guideCommand('cs', '安全模式（按需确认）'),
+            const SizedBox(height: 8),
+            Text(
+              '也可以在终端快捷命令面板点「Codex」分类一键发送。',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 指引卡片内的一行命令说明
+  Widget _guideCommand(String cmd, String desc) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            cmd,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(child: Text(desc)),
+        ],
+      ),
     );
   }
 

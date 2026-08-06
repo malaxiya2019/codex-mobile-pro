@@ -109,6 +109,13 @@ class CodexCliInstaller extends ToolchainInstaller {
     }
     report(ctx, InstallPhase.completed, 1.0, 'Codex CLI 安装完成');
     await _injectShellAdditions(ctx);
+    // 启动指引（部署中心进度区展示，覆盖一键部署与单工具两条路径）
+    report(
+      ctx,
+      InstallPhase.completed,
+      1.0,
+      '✅ Codex 已就绪：首页「终端」→ 输入 cyo --zh（中文）或 cs（安全模式）即可启动',
+    );
     return success(vCodex);
   }
 
