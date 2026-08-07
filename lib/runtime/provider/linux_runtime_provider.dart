@@ -161,6 +161,15 @@ class LinuxRuntimeProvider implements IRuntimeProvider {
 
   LinuxRuntimePaths? _cachedPaths;
 
+  /// 使缓存的路径失效（覆盖安装 / 路径变更后自愈用）。
+  ///
+  /// 下次 [resolvePaths] 会重新解析，并强制 [NativeProot] 重新查询
+  /// nativeLibraryDir（Android 会返回当前 session 的最新路径）。
+  void invalidatePathCache() {
+    _cachedPaths = null;
+    NativeProot.resetCache();
+  }
+
   // ─── 路径解析 ────────────────────────────────────────────────
 
   /// 获取 Linux Runtime 路径（懒加载 RuntimeEnvironment）
@@ -170,7 +179,23 @@ class LinuxRuntimeProvider implements IRuntimeProvider {
   /// 保证 detect/healthCheck 不因环境问题崩溃。
   Future<LinuxRuntimePaths> resolvePaths() async {
     if (_paths != null) return _paths;
-    if (_cachedPaths != null) return _cachedPaths!;
+    // 缓存带有效性校验：proot 路径来自 nativeLibraryDir
+    // （/data/app/~~<rand>==/.../lib/arm64），覆盖安装/系统清理后
+    // 旧路径会失效（真机 AI 对话「可执行文件不存在」即此场景）。
+    // 失效 → 清缓存 + 强制 NativeProot 重新查询（Android 返回新
+    // session 路径），避免继续使用已删除的旧路径。
+    if (_cachedPaths != null) {
+      final cached = _cachedPaths!;
+      if (File(cached.prootExecutable).existsSync()) {
+        return cached;
+      }
+      LogService.warning(
+        'LinuxProvider',
+        '缓存 proot 路径已失效，重新解析: ${cached.prootExecutable}',
+      );
+      _cachedPaths = null;
+      NativeProot.resetCache();
+    }
 
     // 先解析 rootfs（native 与 fallback 共用同一 rootfs 来源）
     String rootfsDir;

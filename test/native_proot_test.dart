@@ -111,5 +111,46 @@ void main() {
 
       expect(await NativeProot.ensureInstalled(), isNull);
     });
+
+    test('缓存命中但路径失效（覆盖安装后旧 session 被删）→ 重新查询新路径', () async {
+      // 第一次：dir1 就绪 → 建立进程内缓存
+      final dir1 = Directory('${tmp.path}/nativelib1')..createSync();
+      createFakeProot(dir1);
+      File('${dir1.path}/libloader.so').writeAsStringSync('static-loader');
+      NativeProot.nativeLibDirQueryOverride = () async => dir1.path;
+
+      final first = await NativeProot.ensureInstalled();
+      expect(first, isNotNull);
+      expect(first!.prootExecutable, '${dir1.path}/libproot.so');
+
+      // 模拟覆盖安装：旧 session 目录被删，Android 返回新 nativeLibraryDir
+      dir1.deleteSync(recursive: true);
+      final dir2 = Directory('${tmp.path}/nativelib2')..createSync();
+      createFakeProot(dir2);
+      File('${dir2.path}/libloader.so').writeAsStringSync('static-loader');
+      NativeProot.nativeLibDirQueryOverride = () async => dir2.path;
+
+      final second = await NativeProot.ensureInstalled();
+      expect(second, isNotNull);
+      expect(second!.prootExecutable, '${dir2.path}/libproot.so',
+          reason: '缓存路径失效后应重新查询并返回新 session 路径');
+    });
+
+    test('缓存有效（文件仍存在）→ 直接命中缓存，不重新查询', () async {
+      final dir = Directory('${tmp.path}/nativelib')..createSync();
+      createFakeProot(dir);
+      File('${dir.path}/libloader.so').writeAsStringSync('static-loader');
+      var queryCount = 0;
+      NativeProot.nativeLibDirQueryOverride = () async {
+        queryCount++;
+        return dir.path;
+      };
+
+      final first = await NativeProot.ensureInstalled();
+      final second = await NativeProot.ensureInstalled();
+      expect(first, isNotNull);
+      expect(second, isNotNull);
+      expect(queryCount, 1, reason: '缓存有效时不应重新查询 nativeLibraryDir');
+    });
   });
 }

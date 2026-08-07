@@ -14,6 +14,10 @@ class FakeLocalExecution extends LocalProcessExecution {
   final List<String> outputChunks;
   final int exitCode;
   final bool cancelledResult;
+
+  /// 前 N 次 execute 返回「启动失败」（模拟 proot 路径失效 ENOENT）。
+  final int failFirstCount;
+  int executeCalls = 0;
   RuntimeProcessRequest? lastRequest;
   int cancelCalls = 0;
 
@@ -21,6 +25,7 @@ class FakeLocalExecution extends LocalProcessExecution {
     this.outputChunks = const [],
     this.exitCode = 0,
     this.cancelledResult = false,
+    this.failFirstCount = 0,
   });
 
   @override
@@ -31,7 +36,15 @@ class FakeLocalExecution extends LocalProcessExecution {
 
   @override
   Future<RuntimeProcessResult> execute(RuntimeProcessRequest request) async {
+    executeCalls++;
     lastRequest = request;
+    if (executeCalls <= failFirstCount) {
+      return RuntimeProcessResult(
+        exitCode: -1,
+        error: '可执行文件不存在: ${request.executable}',
+        request: request,
+      );
+    }
     for (final chunk in outputChunks) {
       request.onStdoutChunk?.call(chunk);
     }
@@ -56,7 +69,6 @@ class RecordingListener implements CodexEventListener {
   void onCodexExit(int code) => exitCode = code;
 }
 
-/// 假 rootfs 工具
 class FakeRootfs {
   final Directory rootfs;
   final bool hasCodex;
@@ -343,6 +355,51 @@ void main() {
 
       // 每次 stop() 都转发到内部执行器的 requestCancel（幂等，Completer 只 complete 一次）
       expect(inner.cancelCalls, 2);
+    });
+
+    test('proot 启动失败（路径失效）→ 刷新路径缓存后自动重试一次成功', () async {
+      const jsonl = '''
+{"type":"thread.started","thread_id":"019fretry"}
+{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}
+''';
+      final inner = FakeLocalExecution(
+        outputChunks: [jsonl],
+        failFirstCount: 1,
+      );
+      final runner = CodexRunner(
+        provider: fakeRootfs.provider(),
+        inner: inner,
+      );
+      final listener = RecordingListener();
+
+      final result = await runner.run(
+        prompt: '重试',
+        hostWorkingDir: workspace.path,
+        listener: listener,
+      );
+
+      expect(inner.executeCalls, 2, reason: '首次启动失败后应自动重试一次');
+      expect(result.isSuccess, isTrue);
+      expect(listener.events, isNotEmpty);
+    });
+
+    test('proot 启动失败且重试仍失败 → 如实返回启动失败（不无限重试）', () async {
+      final inner = FakeLocalExecution(failFirstCount: 5);
+      final runner = CodexRunner(
+        provider: fakeRootfs.provider(),
+        inner: inner,
+      );
+      final listener = RecordingListener();
+
+      final result = await runner.run(
+        prompt: '重试仍失败',
+        hostWorkingDir: workspace.path,
+        listener: listener,
+      );
+
+      expect(inner.executeCalls, 2, reason: '只重试一次，不再无限重试');
+      expect(result.isSuccess, isFalse);
+      expect(result.error, contains('启动 codex 失败'));
     });
   });
 }

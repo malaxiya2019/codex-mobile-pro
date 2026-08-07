@@ -31,6 +31,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../../core/logger/log_service.dart';
 import '../../runtime/process/process_runner.dart';
 import '../../runtime/process/runner_models.dart';
 import '../../runtime/provider/linux_runtime_provider.dart';
@@ -203,80 +204,139 @@ class CodexRunner {
           ? '$systemPrompt\n\n$prompt'
           : prompt;
 
-      // ─── 5. 统一生成 PRoot 参数（绑定用户工作目录）──────────
+      // ─── 5. 组装 PRoot 参数 + 执行（带失败自愈重试）─────────
       final codexBin = _toRootfsPath(paths.rootfsDir, codexExecutable);
-      // `exec` 关键字让 bash 进程替换为 codex，信号直接送达 codex
-      final innerCommand =
-          'exec $codexBin exec --json --skip-git-repo-check '
-          '--dangerously-bypass-approvals-and-sandbox '
-          '"\$CODEX_PROMPT" </dev/null';
-
-      final arguments = <String>[
-        '-r', paths.rootfsDir,
-        ...LinuxRuntimeProvider.prootBindArguments(),
-        '-b', hostWorkingDir, guestWorkspaceDir,
-        '-w', guestWorkspaceDir,
-        '/bin/bash',
-        '-lc',
-        innerCommand,
-      ];
-
-      // ─── 6. 环境合并：Linux 基础环境 + key + prompt ─────────
-      final hostTmpDir = '${paths.rootfsDir}/tmp';
-      try {
-        await Directory(hostTmpDir).create(recursive: true);
-      } catch (_) {}
-      final environment = _provider.buildEnvironment(paths);
-      environment['PROOT_TMP_DIR'] = hostTmpDir;
-      environment['DEEPSEEK_API_KEY'] = apiKey;
-      // prompt 经环境变量传递，避免 shell 转义（可含引号/换行）
-      environment['CODEX_PROMPT'] = fullPrompt;
-
-      // ─── 7. 执行（带流式 stdout 解析 + 超时）────────────────
-      final lineBuffer = StringBuffer();
-      var threadId = '';
-
-      final request = RuntimeProcessRequest(
-        executable: paths.prootExecutable,
-        arguments: arguments,
-        environment: environment,
-        workingDirectory: guestWorkspaceDir,
+      var outcome = await _runProotOnce(
+        paths: paths,
+        codexBin: codexBin,
+        hostWorkingDir: hostWorkingDir,
+        fullPrompt: fullPrompt,
+        apiKey: apiKey,
         timeout: timeout,
-        label: 'proot:codex-exec',
-        onStdoutChunk: (chunk) {
-          threadId = _consumeChunk(
-            chunk,
-            lineBuffer,
-            listener,
-            currentThreadId: threadId,
-          );
-        },
+        listener: listener,
       );
 
-      final result = await _inner.execute(request);
+      // ─── 6. 自愈重试：proot 可执行路径（nativeLibraryDir）───
+      // 覆盖安装 / 系统清理后旧 session 路径（/data/app/~~<rand>==/
+      // .../lib/arm64）会失效，`Process.start` → ENOENT（真机 AI
+      // 对话「启动 codex 失败: 可执行文件不存在」即此场景）。
+      // 刷新路径缓存、重新解析 nativeLibraryDir 后重试一次；
+      // 仍失败则如实返回错误（已带完整诊断上下文）。
+      if (outcome.failedToStart) {
+        LogService.warning(
+          'CodexRunner',
+          'proot 启动失败，刷新路径缓存后重试: ${outcome.result.error}',
+        );
+        _provider.invalidatePathCache();
+        final freshPaths = await _provider.resolvePaths();
+        final freshCodexBin =
+            _toRootfsPath(freshPaths.rootfsDir, codexExecutable);
+        outcome = await _runProotOnce(
+          paths: freshPaths,
+          codexBin: freshCodexBin,
+          hostWorkingDir: hostWorkingDir,
+          fullPrompt: fullPrompt,
+          apiKey: apiKey,
+          timeout: timeout,
+          listener: listener,
+        );
+      }
+      return outcome.result;
+    } catch (e) {
+      return CodexRunResult(exitCode: -1, error: 'codex 执行异常: $e');
+    }
+  }
 
-      // ─── 8. 解析尾随缓冲（最后一行可能无换行）───────────────
-      _flushLineBuffer(lineBuffer, listener);
+  /// 组装 PRoot 参数并执行一轮 codex（供失败自愈重试复用）。
+  ///
+  /// 返回执行结果（CodexRunResult）、解析到的 threadId，以及
+  /// failedToStart 标记（进程未能启动，如 proot 路径 ENOENT）。
+  Future<({CodexRunResult result, String threadId, bool failedToStart})>
+  _runProotOnce({
+    required LinuxRuntimePaths paths,
+    required String codexBin,
+    required String hostWorkingDir,
+    required String fullPrompt,
+    required String apiKey,
+    required Duration? timeout,
+    required CodexEventListener listener,
+  }) async {
+    // `exec` 关键字让 bash 进程替换为 codex，信号直接送达 codex
+    final innerCommand =
+        'exec $codexBin exec --json --skip-git-repo-check '
+        '--dangerously-bypass-approvals-and-sandbox '
+        '"\$CODEX_PROMPT" </dev/null';
 
-      if (result.failedToStart) {
-        return CodexRunResult(
+    final arguments = <String>[
+      '-r', paths.rootfsDir,
+      ...LinuxRuntimeProvider.prootBindArguments(),
+      '-b', hostWorkingDir, guestWorkspaceDir,
+      '-w', guestWorkspaceDir,
+      '/bin/bash',
+      '-lc',
+      innerCommand,
+    ];
+
+    // 环境合并：Linux 基础环境 + key + prompt
+    // （prompt 经环境变量传递，避免 shell 转义：可含引号/换行）
+    final hostTmpDir = '${paths.rootfsDir}/tmp';
+    try {
+      await Directory(hostTmpDir).create(recursive: true);
+    } catch (_) {}
+    final environment = _provider.buildEnvironment(paths);
+    environment['PROOT_TMP_DIR'] = hostTmpDir;
+    environment['DEEPSEEK_API_KEY'] = apiKey;
+    environment['CODEX_PROMPT'] = fullPrompt;
+
+    final lineBuffer = StringBuffer();
+    var threadId = '';
+
+    final request = RuntimeProcessRequest(
+      executable: paths.prootExecutable,
+      arguments: arguments,
+      environment: environment,
+      workingDirectory: guestWorkspaceDir,
+      timeout: timeout,
+      label: 'proot:codex-exec',
+      onStdoutChunk: (chunk) {
+        threadId = _consumeChunk(
+          chunk,
+          lineBuffer,
+          listener,
+          currentThreadId: threadId,
+        );
+      },
+    );
+
+    final result = await _inner.execute(request);
+
+    // 解析尾随缓冲（最后一行可能无换行）
+    _flushLineBuffer(lineBuffer, listener);
+
+    if (result.failedToStart) {
+      return (
+        result: CodexRunResult(
           exitCode: result.exitCode,
           error: '启动 codex 失败: ${result.error}',
           threadId: threadId.isEmpty ? null : threadId,
-        );
-      }
+        ),
+        threadId: threadId,
+        failedToStart: true,
+      );
+    }
 
-      return CodexRunResult(
+    return (
+      result: CodexRunResult(
         exitCode: result.exitCode,
         timedOut: result.timedOut,
         cancelled: result.cancelled,
         cleanupTimedOut: result.cleanupTimedOut,
         error: result.error,
         threadId: threadId.isEmpty ? null : threadId,
-      );
-    } catch (e) {
-      return CodexRunResult(exitCode: -1, error: 'codex 执行异常: $e');
-    }
+      ),
+      threadId: threadId,
+      failedToStart: false,
+    );
   }
 
   // ─── JSONL 解析 ─────────────────────────────────────────────

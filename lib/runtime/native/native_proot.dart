@@ -69,11 +69,13 @@ class NativeProot {
 
   static NativeProotInstallResult? _cached;
 
-  /// 重置进程内缓存（测试用）。
+  /// 重置进程内缓存。
   ///
-  /// nativeLibraryDir 由系统在安装时固定，生产环境无需重置；
-  /// 单测通过 nativeLibDirQueryOverride 注入不同目录时需要清理。
-  @visibleForTesting
+  /// nativeLibraryDir 是安装 session 相关路径
+  /// （`/data/app/~~<rand>==/.../lib/arm64`），覆盖安装 / 系统清理后
+  /// 旧路径会失效（`Process.start` → ENOENT），此时生产代码调用
+  /// 本方法强制重新查询；单测通过 nativeLibDirQueryOverride 注入
+  /// 不同目录时也用它清理。
   static void resetCache() {
     _cached = null;
   }
@@ -109,10 +111,25 @@ class NativeProot {
   /// 返回 null 表示不可用（非 Android / 文件缺失 / --version 冒烟
   /// 失败），调用方回退现有 rootfs 内 proot。
   ///
-  /// 结果进程内缓存：nativeLibraryDir 由系统在安装时固定，重复
-  /// 查询无意义；--version 冒烟只执行一次。
+  /// 结果进程内缓存，但带有效性校验：nativeLibraryDir 是安装
+  /// session 相关路径（`/data/app/~~<rand>==/<pkg>-<rand>==/lib/arm64`），
+  /// 覆盖安装/系统清理后旧路径会失效（`Process.start` → ENOENT，
+  /// 真机 AI 对话「启动 codex 失败: 可执行文件不存在」即此场景）。
+  /// 缓存命中时先校验 proot/loader 文件仍存在；失效则清缓存重新
+  /// 查询（Android 会返回新 session 的 nativeLibraryDir）。
   static Future<NativeProotInstallResult?> ensureInstalled() async {
-    if (_cached != null) return _cached;
+    final cached = _cached;
+    if (cached != null) {
+      if (File(cached.prootExecutable).existsSync() &&
+          File(cached.loaderPath).existsSync()) {
+        return cached;
+      }
+      LogService.warning(
+        'NativeProot',
+        '缓存 nativeLibraryDir 路径已失效，重新查询: ${cached.prootExecutable}',
+      );
+      _cached = null;
+    }
 
     final dir = await _queryNativeLibDir();
     if (dir == null || dir.isEmpty) return null;
