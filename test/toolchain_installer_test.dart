@@ -702,6 +702,47 @@ void main() {
       expect(bashrc.readAsStringSync(), isNot(contains('NEW')));
     });
 
+    test('Codex 已安装（skipped）→ 幂等补注入 Shell 快捷命令', () async {
+      // 真机根因复刻：修复前部署的旧 rootfs codex 已装、.bashrc 无快捷命令；
+      // 升级 App 后重跑部署走「已安装，跳过」分支，若此处不注入则
+      // cyo/cy/cs 永不恢复（自愈路径缺失）。
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/codex'] = '0.9.0';
+
+      const sample = '# Codex Mobile Pro — Shell 快捷命令\n'
+          'cyo() { echo cyo; }\n';
+      final installer =
+          CodexCliInstaller(loadShellAdditions: () async => sample);
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(result.version, contains('已安装'), reason: '已安装应走 skipped 分支');
+      final bashrc = File('${f.temp.path}/rootfs/root/.bashrc');
+      expect(bashrc.existsSync(), isTrue, reason: 'skipped 分支也应补注入');
+      expect(bashrc.readAsStringSync(), contains('cyo()'));
+    });
+
+    test('Codex 已安装 + .bashrc 已注入 → 不重复追加（幂等）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/codex'] = '0.9.0';
+      final bashrc = File('${f.temp.path}/rootfs/root/.bashrc');
+      bashrc.createSync(recursive: true);
+      bashrc.writeAsStringSync('# Codex Mobile Pro — 已存在\ncyo() { echo old; }\n');
+
+      var loadCalls = 0;
+      final installer = CodexCliInstaller(loadShellAdditions: () async {
+        loadCalls++;
+        return '# Codex Mobile Pro — NEW\ncyo() { echo new; }\n';
+      });
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(loadCalls, 0, reason: 'skipped 分支已注入时也不得重复读取/追加');
+      expect(bashrc.readAsStringSync(), isNot(contains('NEW')));
+    });
+
     test('Shell 快捷命令注入失败 → 不阻断 Codex 安装', () async {
       final f = ToolchainFixture();
       addTearDown(f.dispose);

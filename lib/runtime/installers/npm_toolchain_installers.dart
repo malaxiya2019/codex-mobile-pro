@@ -72,6 +72,9 @@ class CodexCliInstaller extends ToolchainInstaller {
     final ver = await installedVersion(ctx);
     if (ver != null) {
       report(ctx, InstallPhase.completed, 1.0, '已安装，跳过');
+      // 自愈：修复前部署的旧 rootfs codex 已装但 .bashrc 无快捷命令，
+      // 幂等补注入 cyo/cy/cs（含标记则跳过），避免「已安装跳过→永不注入」。
+      await _injectShellAdditions(ctx);
       return success(ver, skipped: true);
     }
 
