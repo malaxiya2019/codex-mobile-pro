@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/ai/ai_message.dart';
 import '../../../core/ai/chat_engine.dart';
+import '../../../core/ai/codex_chat_engine.dart';
+import '../../project/providers/project_provider.dart';
 import '../providers/chat_provider.dart';
 
 class AiChatPage extends ConsumerStatefulWidget {
@@ -93,6 +95,9 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       ),
       body: Column(
         children: [
+          // ── 工作目录选择条 ──
+          _buildWorkspaceBar(theme, colorScheme, state),
+
           // ── 消息列表 ──
           Expanded(
             child: state.messages.isEmpty
@@ -200,7 +205,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           Text('AI 编程助手', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(
-            '输入问题开始对话\n支持代码生成、解释、调试',
+            '输入问题开始对话\nAI 可真实读写选定的项目目录、执行命令',
             textAlign: TextAlign.center,
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: colorScheme.onSurfaceVariant),
@@ -305,6 +310,9 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
                         ),
+
+                      // 工具调用状态（Codex 命令执行）
+                      if (!isUser) _buildToolCalls(msg, theme, colorScheme),
 
                       // 时间戳 + 重试按钮
                       if (!isStreaming && msg.content.isNotEmpty)
@@ -512,6 +520,232 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ── 工作目录选择 ─────────────────────────────────────────
+
+  Widget _buildWorkspaceBar(
+    ThemeData theme,
+    ColorScheme colorScheme,
+    ChatState state,
+  ) {
+    final dir = state.workspaceDir;
+    return Material(
+      color: colorScheme.surfaceContainerLow,
+      child: InkWell(
+        onTap: _showWorkspacePicker,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              Icon(Icons.folder_outlined,
+                  size: 16, color: colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  dir ?? '工作目录：默认（App 文档目录）',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: dir == null
+                        ? colorScheme.onSurfaceVariant
+                        : colorScheme.onSurface,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.arrow_drop_down,
+                  size: 18, color: colorScheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 弹出工作目录选择（默认目录 / 已创建项目）
+  Future<void> _showWorkspacePicker() async {
+    final projects = ref.read(projectProvider).projects;
+    final notifier = ref.read(chatProvider.notifier);
+    final currentWorkspaceDir = ref.read(chatProvider).workspaceDir;
+
+    final selected = await showModalBottomSheet<String?>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: Text(
+                '选择 AI 工作目录',
+                style: Theme.of(ctx).textTheme.titleMedium,
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.smartphone_outlined),
+              title: const Text('默认（App 文档目录）'),
+              subtitle: const Text('不绑定具体项目'),
+              trailing: currentWorkspaceDir == null
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: () => Navigator.pop(ctx),
+            ),
+            if (projects.isNotEmpty) ...[
+              const Divider(),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  '我的项目',
+                  style: Theme.of(ctx).textTheme.labelMedium?.copyWith(
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: projects.length,
+                  itemBuilder: (ctx, i) {
+                    final p = projects[i];
+                    final isSelected = currentWorkspaceDir == p.path;
+                    return ListTile(
+                      leading: const Icon(Icons.folder_outlined),
+                      title: Text(
+                        p.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        p.path,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: isSelected ? const Icon(Icons.check) : null,
+                      onTap: () => Navigator.pop(ctx, p.path),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+
+    // null = 默认目录；String = 选中的项目路径
+    notifier.setWorkspaceDir(selected is String ? selected : null);
+  }
+
+  // ── 工具调用状态（Codex 命令执行）──────────────────────────
+
+  Widget _buildToolCalls(
+    ChatMessage msg,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    final raw = msg.metadata?['codex_tool_calls'];
+    if (raw is! List || raw.isEmpty) return const SizedBox.shrink();
+
+    final calls = raw
+        .map((e) => CodexToolCall.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        children: [
+          for (final call in calls)
+            _buildToolCallTile(call, theme, colorScheme),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToolCallTile(
+    CodexToolCall call,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    final isRunning = call.status == 'in_progress';
+    final isError = call.status == 'error';
+    final IconData icon;
+    final Color color;
+    if (isRunning) {
+      icon = Icons.terminal;
+      color = Colors.orange;
+    } else if (isError) {
+      icon = Icons.close;
+      color = Colors.red;
+    } else {
+      icon = Icons.check_circle_outline;
+      color = Colors.green;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  call.command,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isRunning)
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          if (call.exitCode != null && !isRunning)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                '退出码 ${call.exitCode}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: 10,
+                  color: isError ? Colors.red : colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          if (call.output.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                call.output.trim(),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 10,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

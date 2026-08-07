@@ -74,14 +74,27 @@ class LocalProcessExecution implements IExecutionAdapter {
   /// 外部取消信号（测试注入）。null 表示无外部取消（保持原行为）。
   final Future<void>? cancelSignal;
 
+  /// 实例级取消（供运行中动态停止，如 AI 停止生成）。
+  final Completer<void> _dynamicCancel = Completer<void>();
+
   LocalProcessExecution({
     this.cleanupTimeout = const Duration(seconds: 10),
     this.killWaitTimeout = const Duration(seconds: 3),
     this.cancelSignal,
   });
 
-  /// 永不完成的 Future（无外部取消信号时的占位）
-  static final Future<void> _neverCancel = Completer<void>().future;
+  /// 请求取消当前（或下一次）执行。
+  ///
+  /// 与构造参数 [cancelSignal] 取并集：任一触发即取消。
+  void requestCancel() {
+    if (!_dynamicCancel.isCompleted) _dynamicCancel.complete();
+  }
+
+  /// 合并外部与实例级取消信号
+  Future<void> _effectiveCancel() {
+    if (cancelSignal == null) return _dynamicCancel.future;
+    return Future.any([cancelSignal!, _dynamicCancel.future]);
+  }
 
   @override
   String get id => 'local';
@@ -145,7 +158,7 @@ class LocalProcessExecution implements IExecutionAdapter {
         });
       }
 
-      final cancelFuture = cancelSignal ?? _neverCancel;
+      final cancelFuture = _effectiveCancel();
       cancelFuture.then((_) {
         if (!reasonCompleter.isCompleted) {
           reasonCompleter.complete(_ExitReason.cancel);
@@ -157,7 +170,11 @@ class LocalProcessExecution implements IExecutionAdapter {
       final stderrBuf = StringBuffer();
       final stdoutSub = process.stdout
           .transform(const SystemEncoding().decoder)
-          .listen((data) => stdoutBuf.write(data));
+          .listen((data) {
+        stdoutBuf.write(data);
+        // 流式回调：只读消费 stdout 增量（如 codex --json 事件流）
+        request.onStdoutChunk?.call(data);
+      });
       final stderrSub = process.stderr
           .transform(const SystemEncoding().decoder)
           .listen((data) => stderrBuf.write(data));

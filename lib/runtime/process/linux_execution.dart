@@ -117,6 +117,7 @@ class LinuxExecutionAdapter implements IExecutionAdapter {
       workingDirectory: request.workingDirectory,
       timeout: request.timeout,
       label: 'proot:${request.label ?? request.executable}',
+      onStdoutChunk: request.onStdoutChunk,
     );
 
     final result = await _inner.execute(wrapped);

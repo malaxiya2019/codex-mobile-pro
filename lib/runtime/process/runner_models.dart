@@ -63,6 +63,13 @@ class RuntimeProcessRequest {
   /// 自定义标签（用于日志/诊断）
   final String? label;
 
+  /// 流式 stdout 回调（可选）
+  ///
+  /// 每收到一段 stdout 增量就调用一次。用于需要实时消费
+  /// 输出流的场景（如 `codex exec --json` 的 JSONL 事件流）。
+  /// 只读消费，不改变输出收集逻辑；null 表示不回调。
+  final void Function(String chunk)? onStdoutChunk;
+
   const RuntimeProcessRequest({
     required this.executable,
     this.arguments = const [],
@@ -73,6 +80,7 @@ class RuntimeProcessRequest {
     this.stdin,
     this.runtimeId,
     this.label,
+    this.onStdoutChunk,
   });
 
   /// 创建带有 shell 包装的请求副本
@@ -93,6 +101,7 @@ class RuntimeProcessRequest {
       stdin: stdin,
       runtimeId: runtimeId,
       label: label,
+      onStdoutChunk: onStdoutChunk,
     );
   }
 
