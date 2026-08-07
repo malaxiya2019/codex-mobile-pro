@@ -758,6 +758,65 @@ void main() {
       expect(result.success, isTrue);
       expect(result.version, contains('0.9.0'));
     });
+
+    test('Codex CLI 安装成功 → 写 ~/.codex/config.toml（DeepSeek 直连）', () async {
+      // 真机根因复刻：终端 `codex`/`cyo --zh` 进 Welcome to Codex 登录引导，
+      // 因 App 部署从不写 config.toml（codex 默认要求 ChatGPT 登录）。
+      // 修复：安装成功后写 DeepSeek 直连配置（env_key=DEEPSEEK_API_KEY）。
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+      f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
+
+      final installer =
+          CodexCliInstaller(loadShellAdditions: () async => '# Codex Mobile Pro\n');
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      final config = File('${f.temp.path}/rootfs/root/.codex/config.toml');
+      expect(config.existsSync(), isTrue);
+      final content = config.readAsStringSync();
+      expect(content, contains('model_provider = "deepseek"'));
+      expect(content, contains('[model_providers.deepseek]'));
+      expect(content, contains('env_key = "DEEPSEEK_API_KEY"'));
+      expect(content, contains('base_url = "https://api.deepseek.com"'));
+    });
+
+    test('Codex 已安装（skipped）→ 补写 config.toml（自愈）', () async {
+      // 旧 rootfs 升级 App 后重跑部署走 skipped 分支，也应补写
+      // config.toml，否则 codex 仍弹登录引导。
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/codex'] = '0.9.0';
+
+      final installer =
+          CodexCliInstaller(loadShellAdditions: () async => '# Codex Mobile Pro\n');
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(result.version, contains('已安装'), reason: '已安装应走 skipped 分支');
+      final config = File('${f.temp.path}/rootfs/root/.codex/config.toml');
+      expect(config.existsSync(), isTrue, reason: 'skipped 分支也应补写 config.toml');
+      expect(config.readAsStringSync(), contains('[model_providers.deepseek]'));
+    });
+
+    test('config.toml 已配置 → 不重写（幂等）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/codex'] = '0.9.0';
+      final config = File('${f.temp.path}/rootfs/root/.codex/config.toml');
+      config.createSync(recursive: true);
+      config.writeAsStringSync(
+          'model = "custom-model"\n[model_providers.deepseek]\nname = "Keep"\n');
+
+      final installer =
+          CodexCliInstaller(loadShellAdditions: () async => '# Codex Mobile Pro\n');
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(config.readAsStringSync(), contains('custom-model'),
+          reason: '已配置时应保持用户自定义内容不覆盖');
+    });
   });
 
   group('ToolchainOrchestrator', () {

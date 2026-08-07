@@ -49,6 +49,26 @@ class CodexCliInstaller extends ToolchainInstaller {
   /// Shell 快捷命令内容加载器（测试注入用；null = 从 asset 读取）
   final Future<String> Function()? loadShellAdditions;
 
+  /// Codex CLI 配置文件内容（DeepSeek 直连）
+  ///
+  /// 让终端 `codex` / `cyo` 直接用 DEEPSEEK_API_KEY（bashrc-additions.sh
+  /// 从 ~/.mimo2codex/.env export），跳过 ChatGPT 登录引导
+  /// （否则 codex 首次运行弹 Welcome to Codex 要求 Sign in）。
+  /// 与 codex_runner.dart（App 内 AI 对话）同一套模型提供方配置。
+  static const String codexConfigToml = '''
+model = "deepseek-chat"
+model_provider = "deepseek"
+
+[model_providers.deepseek]
+name = "DeepSeek"
+base_url = "https://api.deepseek.com"
+env_key = "DEEPSEEK_API_KEY"
+wire_api = "responses"
+''';
+
+  /// config.toml 已配置的幂等标记
+  static const String codexConfigMarker = '[model_providers.deepseek]';
+
   CodexCliInstaller({this.loadShellAdditions});
 
   @override
@@ -73,8 +93,11 @@ class CodexCliInstaller extends ToolchainInstaller {
     if (ver != null) {
       report(ctx, InstallPhase.completed, 1.0, '已安装，跳过');
       // 自愈：修复前部署的旧 rootfs codex 已装但 .bashrc 无快捷命令，
-      // 幂等补注入 cyo/cy/cs（含标记则跳过），避免「已安装跳过→永不注入」。
+      // 幂等补注入 cyo/cy/cs（含标记则跳过），避免「已安装跳过→永不注入」；
+      // 同时补写 ~/.codex/config.toml（DeepSeek 直连），否则终端 codex
+      // 会弹 ChatGPT 登录引导。
       await _injectShellAdditions(ctx);
+      await _writeCodexConfig(ctx);
       return success(ver, skipped: true);
     }
 
@@ -112,6 +135,7 @@ class CodexCliInstaller extends ToolchainInstaller {
     }
     report(ctx, InstallPhase.completed, 1.0, 'Codex CLI 安装完成');
     await _injectShellAdditions(ctx);
+    await _writeCodexConfig(ctx);
     // 启动指引（部署中心进度区展示，覆盖一键部署与单工具两条路径）
     report(
       ctx,
@@ -158,6 +182,35 @@ class CodexCliInstaller extends ToolchainInstaller {
   Future<String> _resolveShellAdditions() async {
     if (loadShellAdditions != null) return loadShellAdditions!();
     return rootBundle.loadString(shellAdditionsAsset);
+  }
+
+  /// 写入 rootfs `~/.codex/config.toml`（DeepSeek 直连，幂等）
+  ///
+  /// 真机现象：终端 `codex` / `cyo --zh` 进 Welcome to Codex 登录引导
+  /// （Sign in with ChatGPT / Device Code / API key）。根因是 App 部署
+  /// 只 npm install codex，从不写 config.toml，codex 默认要求登录。
+  /// 修复：写入 [codexConfigToml]，codex 读取 `env_key` 指向的环境变量
+  /// DEEPSEEK_API_KEY（由 bashrc-additions.sh 从 ~/.mimo2codex/.env
+  /// export），直连 DeepSeek、跳过登录。
+  ///
+  /// 幂等：已含 [codexConfigMarker] → 跳过。失败不阻断安装。
+  Future<void> _writeCodexConfig(ToolchainContext ctx) async {
+    try {
+      final paths = await ctx.resolvePaths();
+      final config = File('${paths.rootfsDir}/root/.codex/config.toml');
+
+      if (config.existsSync() &&
+          config.readAsStringSync().contains(codexConfigMarker)) {
+        report(ctx, InstallPhase.completed, 1.0, 'Codex 已配置 DeepSeek 直连');
+        return;
+      }
+
+      await config.parent.create(recursive: true);
+      await config.writeAsString(codexConfigToml);
+      report(ctx, InstallPhase.completed, 1.0, 'Codex 已配置 DeepSeek 直连');
+    } catch (e) {
+      LogService.warning('Toolchain', 'Codex config 写入失败（不阻断安装）: $e');
+    }
   }
 }
 

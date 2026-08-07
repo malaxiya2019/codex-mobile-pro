@@ -81,9 +81,17 @@ cyo() {
         --zh)
             shift
             echo "[cyo] 中文 YOLO 模式"
+            # 用户额外 prompt 合并进 ZH_PROMPT，只传一个位置参数
+            # （codex 只接受一个 PROMPT，双参数会报 unexpected argument）
+            local FULL_PROMPT="$ZH_PROMPT"
+            if [ "$#" -gt 0 ]; then
+                FULL_PROMPT="$ZH_PROMPT
+
+$*"
+            fi
             CODEX_SANDBOX_NETWORK_DISABLED=0 \
             codex --dangerously-bypass-approvals-and-sandbox \
-            "$ZH_PROMPT" "$@"
+            "$FULL_PROMPT"
             ;;
         --en)
             shift
