@@ -25,7 +25,7 @@ class FakeCodexRunner extends CodexRunner {
     CodexRunResult? result,
   }) : eventsToEmit = events ?? const [],
        result = result ?? const CodexRunResult(exitCode: 0),
-       super(provider: LinuxRuntimeProvider(), inner: LocalProcessExecution());
+       super(provider: LinuxRuntimeProvider(), processExecution: LocalProcessExecution());
 
   @override
   Future<CodexRunResult> run({

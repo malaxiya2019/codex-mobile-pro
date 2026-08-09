@@ -1,7 +1,12 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+import '../../../runtime/process/linux_execution.dart';
+import '../../../runtime/process/process_runner.dart';
+import '../../../runtime/process/runner_models.dart';
+import '../../../runtime/provider/linux_runtime_provider.dart';
 import '../models/git_repository.dart';
+import 'git_path_mapper.dart';
 
 /// Git 操作结果
 class GitResult {
@@ -26,39 +31,67 @@ class GitResult {
 /// - 提交管理：add, commit, log, diff
 /// - 远程操作：push, pull, fetch, remote
 class GitService {
-  static const String _gitBin = 'git';
+  /// rootfs 内 git 可执行文件（经 PRoot → Ubuntu 24.04，git 2.43.0）
+  static const String _gitBin = '/usr/bin/git';
 
-  /// 执行 git 命令
+  final RuntimeProcessRunner _runner;
+
+  /// [runner] 可注入（测试用）。默认自建
+  /// `RuntimeProcessRunner + LinuxExecutionAdapter`，
+  /// 使所有 git 命令统一运行在 Linux Runtime（PRoot → Ubuntu rootfs），
+  /// 与部署中心检测/安装共用同一执行通道，不再依赖 Android 宿主 PATH
+  /// （修复 `/system/bin/sh: git: inaccessible or not found`）。
+  GitService({RuntimeProcessRunner? runner, LinuxRuntimeProvider? linux})
+      : _runner = runner ?? _buildDefaultRunner(linux);
+
+  /// 构建默认 runner：复用现有 PRoot 执行机制（不重复实现）
+  static RuntimeProcessRunner _buildDefaultRunner(LinuxRuntimeProvider? linux) {
+    final runner = RuntimeProcessRunner();
+    runner.registerAdapter(
+      LinuxExecutionAdapter(linux ?? LinuxRuntimeProvider()),
+    );
+    return runner;
+  }
+
+  /// 执行 git 命令（统一入口，全部经 Runtime → PRoot）
+  ///
+  /// [workingDirectory] 为 Android 宿主路径，自动映射为 guest 路径
+  /// 并附加 PRoot bind；[bindPath] 为额外需要映射的宿主路径
+  /// （如 clone 目标目录）。
   Future<GitResult> _runGit(
     List<String> args, {
     String? workingDirectory,
+    String? bindPath,
     Duration timeout = const Duration(seconds: 60),
   }) async {
+    // 收集需要映射进 PRoot guest 的宿主路径
+    final hostPaths = <String>{};
+    if (workingDirectory != null) hostPaths.add(workingDirectory);
+    if (bindPath != null) hostPaths.add(bindPath);
+
+    // extraBinds 通道要求纯 bind 串（LinuxExecutionAdapter 自动加 `-b`），
+    // 因此这里用 GitPathMapper.bindPath 而非 bindArguments，避免重复 `-b`。
+    final binds = <String>[];
+    for (final p in hostPaths) {
+      final bind = GitPathMapper.bindPath(p);
+      if (!binds.contains(bind)) binds.add(bind);
+    }
+
     try {
-      final process = await Process.start(
-        _gitBin,
-        args,
-        workingDirectory: workingDirectory,
-        runInShell: true,
+      final result = await _runner.run(
+        RuntimeProcessRequest(
+          runtimeId: 'linux',
+          executable: _gitBin,
+          arguments: args,
+          workingDirectory: workingDirectory == null
+              ? null
+              : GitPathMapper.hostToGuest(workingDirectory),
+          extraBinds: binds.isEmpty ? null : binds,
+          timeout: timeout,
+          label: 'git:${args.isEmpty ? '?' : args.first}',
+        ),
       );
-
-      final stdout = process.stdout.transform(utf8.decoder).join();
-      final stderr = process.stderr.transform(utf8.decoder).join();
-
-      final exitCode = await process.exitCode.timeout(timeout);
-
-      return GitResult(
-        success: exitCode == 0,
-        output: await stdout,
-        error: await stderr,
-        exitCode: exitCode,
-      );
-    } on TimeoutException {
-      return const GitResult(
-        success: false,
-        error: '命令执行超时',
-        exitCode: -1,
-      );
+      return _toGitResult(result);
     } catch (e) {
       return GitResult(
         success: false,
@@ -66,6 +99,56 @@ class GitService {
         exitCode: -1,
       );
     }
+  }
+
+  /// 将 Runtime 执行结果转换为 GitResult
+  ///
+  /// 关键：Runtime 未就绪（LinuxExecutionAdapter 返回 failedToStart +
+  /// 「Linux Runtime 未初始化」）时给出明确提示，替代 Android 宿主
+  /// `/system/bin/sh: git: inaccessible or not found` 的误导性报错。
+  GitResult _toGitResult(RuntimeProcessResult result) {
+    if (result.failedToStart) {
+      final err = result.error ?? '';
+      if (err.contains('Linux Runtime 未初始化') ||
+          err.contains('Linux Runtime')) {
+        return GitResult(
+          success: false,
+          error: 'Coding Runtime 未就绪，请先部署 Linux Runtime。\n$err',
+          exitCode: -1,
+        );
+      }
+      return GitResult(
+        success: false,
+        error: 'Git 启动失败: $err',
+        exitCode: -1,
+      );
+    }
+    if (result.timedOut) {
+      return const GitResult(
+        success: false,
+        error: '命令执行超时',
+        exitCode: -2,
+      );
+    }
+    return GitResult(
+      success: result.isSuccess,
+      output: result.stdout,
+      error: result.stderr.isEmpty
+          ? (result.isSuccess
+              ? null
+              : 'git 执行失败 (exit=${result.exitCode})')
+          : result.stderr,
+      exitCode: result.exitCode,
+    );
+  }
+
+  /// 执行任意 git 命令（供 GitWorkflowProvider 等复用同一执行器）
+  Future<GitResult> execute(
+    String workingDirectory,
+    List<String> args, {
+    Duration timeout = const Duration(seconds: 60),
+  }) {
+    return _runGit(args, workingDirectory: workingDirectory, timeout: timeout);
   }
 
   /// 检查 git 是否可用
@@ -92,13 +175,23 @@ class GitService {
     String? branch,
     bool shallow = false,
   }) async {
+    // destination 为 Android 宿主路径 → 映射为 guest 路径（/sdcard/...），
+    // 并附加 bind 让 PRoot 内 git 能写入宿主目录。
     final args = ['clone'];
     if (shallow) args.add('--depth=1');
     if (branch != null) {
       args.addAll(['--branch', branch]);
     }
-    args.addAll([url, destination]);
-    return _runGit(args, timeout: const Duration(seconds: 300));
+    args.addAll([url, GitPathMapper.hostToGuest(destination)]);
+    // bind destination 的父目录（clone 前已存在）而非 destination 本身：
+    // PRoot 对不存在的 host 目录 bind 会在 rootfs 内创建隔离目录，
+    // git 的写入不会落盘到 Android 宿主。
+    final parentDir = Directory(destination).parent.path;
+    return _runGit(
+      args,
+      bindPath: parentDir,
+      timeout: const Duration(seconds: 300),
+    );
   }
 
   /// 获取仓库状态

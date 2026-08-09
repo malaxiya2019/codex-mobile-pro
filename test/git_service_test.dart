@@ -5,6 +5,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'capability/fake_runner.dart';
+
 void main() {
   group('GitResult', () {
     test('创建成功结果', () {
@@ -243,9 +245,167 @@ void main() {
   });
 
   group('GitService', () {
-    test('GitService 可创建', () {
+    test('GitService 可创建（默认 runner 安全）', () {
       final service = GitService();
       expect(service, isNotNull);
+    });
+  });
+
+  group('GitService 统一 Runtime 执行入口', () {
+    test('clone 请求走 runtimeId=linux + /usr/bin/git + guest 路径映射',
+        () async {
+      final runner = FakeProcessRunner();
+      runner.when(
+        '/usr/bin/git clone https://github.com/malaxiya2019/codex-mobile-pro.git /sdcard/repos/codex-mobile-pro',
+        const FakeCommandResult( stdout: 'done\n'),
+      );
+      final service = GitService(runner: runner);
+
+      final result = await service.clone(
+        'https://github.com/malaxiya2019/codex-mobile-pro.git',
+        '/storage/emulated/0/repos/codex-mobile-pro',
+      );
+
+      expect(result.success, isTrue);
+      expect(runner.executedRequests, hasLength(1));
+      final req = runner.executedRequests.first;
+      // 统一入口：Linux Runtime（PRoot → Ubuntu rootfs），绝不依赖宿主 PATH
+      expect(req.runtimeId, 'linux');
+      expect(req.executable, '/usr/bin/git');
+      expect(req.arguments, contains('/sdcard/repos/codex-mobile-pro'));
+      expect(req.arguments, isNot(contains('/storage/emulated/0')));
+      // clone 无 workingDirectory；bind 目标是已存在的父目录
+      expect(req.workingDirectory, isNull);
+      expect(req.extraBinds, isNotNull);
+      // extraBinds 只含纯 bind 串（LinuxExecutionAdapter 自动加 `-b`），
+      // 绝不能包含 '-b' 本身，否则会生成重复的 `-b -b` 参数
+      expect(req.extraBinds, isNot(contains('-b')));
+      expect(req.extraBinds, contains('/storage/emulated/0:/sdcard'));
+    });
+
+    test('clone bind 父目录而非不存在的目标目录', () async {
+      final runner = FakeProcessRunner();
+      runner.when(
+        '/usr/bin/git clone https://github.com/x/y.git /sdcard/yy',
+        const FakeCommandResult( stdout: 'ok\n'),
+      );
+      final service = GitService(runner: runner);
+
+      await service.clone(
+        'https://github.com/x/y.git',
+        '/storage/emulated/0/yy',
+      );
+
+      final req = runner.executedRequests.first;
+      // destination=/storage/emulated/0/yy 的父目录 = /storage/emulated/0
+      expect(req.extraBinds, contains('/storage/emulated/0:/sdcard'));
+      expect(req.extraBinds, isNot(contains('/storage/emulated/0/yy')));
+    });
+
+    test('status 请求带 workingDirectory 映射 + extraBinds', () async {
+      final runner = FakeProcessRunner();
+      final service = GitService(runner: runner);
+      const repoPath = '/data/data/com.codexmobile.app/app_flutter/git/repo';
+      runner.when(
+        '/usr/bin/git rev-parse --abbrev-ref HEAD',
+        const FakeCommandResult( stdout: 'main\n'),
+      );
+      runner.when(
+        '/usr/bin/git status --porcelain',
+        const FakeCommandResult(),
+      );
+      runner.when(
+        '/usr/bin/git rev-list --count --left-right @{upstream}...HEAD',
+        const FakeCommandResult( stdout: '0\t0\n'),
+      );
+
+      final status = await service.status(repoPath);
+
+      expect(status.currentBranch, 'main');
+      expect(status.isClean, isTrue);
+      expect(runner.executedRequests, isNotEmpty);
+      final first = runner.executedRequests.first;
+      expect(first.runtimeId, 'linux');
+      expect(first.executable, '/usr/bin/git');
+      // 非 /storage 路径原样映射；extraBinds 同名 bind（无 `-b` 前缀）
+      expect(first.workingDirectory, repoPath);
+      expect(first.extraBinds, isNot(contains('-b')));
+      expect(first.extraBinds, contains(repoPath));
+    });
+
+    test('execute() 复用同一 Runtime 入口（GitWorkflowProvider 路径）',
+        () async {
+      final runner = FakeProcessRunner();
+      runner.when(
+        '/usr/bin/git status --porcelain',
+        const FakeCommandResult( stdout: ' M file.dart\n'),
+      );
+      final service = GitService(runner: runner);
+
+      final result = await service.execute(
+        '/data/data/com.codexmobile.app/app_flutter/git/repo',
+        ['status', '--porcelain'],
+      );
+
+      expect(result.success, isTrue);
+      final req = runner.executedRequests.single;
+      expect(req.runtimeId, 'linux');
+      expect(req.executable, '/usr/bin/git');
+    });
+
+    test('Runtime 未就绪 → 明确提示「Coding Runtime 未就绪，请先部署 Linux Runtime」',
+        () async {
+      final runner = FakeProcessRunner();
+      runner.when(
+        '/usr/bin/git --version',
+        const FakeCommandResult(
+          exitCode: -1,
+          error: 'Linux Runtime 未初始化\n[proot] null\n[loader] null\n[bash] 缺失',
+        ),
+      );
+      final service = GitService(runner: runner);
+
+      final result = await service.execute(
+        '/data/data/com.codexmobile.app/app_flutter/git/repo',
+        ['--version'],
+      );
+
+      expect(result.success, isFalse);
+      expect(
+        result.error,
+        contains('Coding Runtime 未就绪，请先部署 Linux Runtime'),
+      );
+      // 绝不出现 Android 宿主的误导性报错
+      expect(result.error, isNot(contains('/system/bin/sh')));
+    });
+
+    test('超时 → 明确「命令执行超时」', () async {
+      final runner = FakeProcessRunner();
+      runner.when(
+        '/usr/bin/git --version',
+        const FakeCommandResult(timedOut: true),
+      );
+      final service = GitService(runner: runner);
+
+      final result = await service.execute(
+        '/data/data/com.codexmobile.app/app_flutter/git/repo',
+        ['--version'],
+      );
+
+      expect(result.success, isFalse);
+      expect(result.error, contains('命令执行超时'));
+    });
+
+    test('getVersion 返回真实版本输出', () async {
+      final runner = FakeProcessRunner();
+      runner.when(
+        '/usr/bin/git --version',
+        const FakeCommandResult( stdout: 'git version 2.43.0\n'),
+      );
+      final service = GitService(runner: runner);
+
+      final version = await service.getVersion();
+      expect(version, 'git version 2.43.0');
     });
   });
 }

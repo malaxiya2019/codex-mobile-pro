@@ -180,6 +180,87 @@ void main() {
       expect(args, isNot(contains('PROOT_TMP_DIR')));
     });
   });
+
+  group('LinuxExecutionAdapter extraBinds', () {
+    test('extraBinds 展开为 -b 参数并在 rootfs 创建 guest 目录', () async {
+      final paths = readyPaths(tmp);
+      // 已存在的宿主目录（模拟 git 工作区父目录）
+      final hostDir = Directory('${tmp.path}/host-workdir');
+      hostDir.createSync(recursive: true);
+
+      final capture = _CaptureAdapter();
+      final adapter = LinuxExecutionAdapter(
+        LinuxRuntimeProvider(paths: paths),
+        inner: capture,
+      );
+
+      await adapter.execute(RuntimeProcessRequest(
+        runtimeId: 'linux',
+        executable: '/usr/bin/git',
+        arguments: ['status'],
+        extraBinds: [hostDir.path],
+        workingDirectory: hostDir.path,
+      ));
+
+      final args = capture.lastRequest!.arguments.join(' ');
+      // 统一 PRoot 参数：-b 展开 + -w workingDirectory 透传
+      expect(args, contains('-b ${hostDir.path}'));
+      expect(args, contains('-w ${hostDir.path}'));
+      // guest 侧目标目录在 rootfs 内创建（bind 落点）
+      expect(
+        Directory('${paths.rootfsDir}${hostDir.path}').existsSync(),
+        isTrue,
+      );
+      // wrapped 请求把 workingDirectory 透传给宿主 Process.start
+      expect(capture.lastRequest!.workingDirectory, hostDir.path);
+    });
+
+    test('host:guest 格式 → guest 侧使用冒号后路径', () async {
+      final paths = readyPaths(tmp);
+      final hostDir = Directory('${tmp.path}/host2');
+      hostDir.createSync(recursive: true);
+
+      final capture = _CaptureAdapter();
+      final adapter = LinuxExecutionAdapter(
+        LinuxRuntimeProvider(paths: paths),
+        inner: capture,
+      );
+
+      await adapter.execute(RuntimeProcessRequest(
+        runtimeId: 'linux',
+        executable: '/usr/bin/git',
+        arguments: ['clone'],
+        extraBinds: ['${hostDir.path}:/sdcard'],
+      ));
+
+      final args = capture.lastRequest!.arguments.join(' ');
+      expect(args, contains('-b ${hostDir.path}:/sdcard'));
+      expect(Directory('${paths.rootfsDir}/sdcard').existsSync(), isTrue);
+    });
+
+    test('不存在 host 目录 → 不创建 guest 目录但 -b 保留（不致命）', () async {
+      final paths = readyPaths(tmp);
+      final capture = _CaptureAdapter();
+      final adapter = LinuxExecutionAdapter(
+        LinuxRuntimeProvider(paths: paths),
+        inner: capture,
+      );
+
+      await adapter.execute(RuntimeProcessRequest(
+        runtimeId: 'linux',
+        executable: '/usr/bin/git',
+        arguments: ['status'],
+        extraBinds: ['${tmp.path}/not-exist/x'],
+      ));
+
+      final args = capture.lastRequest!.arguments.join(' ');
+      expect(args, contains('-b ${tmp.path}/not-exist/x'));
+      expect(
+        Directory('${paths.rootfsDir}${tmp.path}/not-exist/x').existsSync(),
+        isFalse,
+      );
+    });
+  });
 }
 
 /// 捕获 wrapped request（验证 PROOT_TMP_DIR 等环境注入）

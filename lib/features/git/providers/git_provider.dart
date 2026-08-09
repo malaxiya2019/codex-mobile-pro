@@ -1,12 +1,25 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../runtime/runtime_manager.dart';
+
 import '../models/git_repository.dart';
 import '../services/git_service.dart';
 import '../services/github_service.dart';
 
 // ── 单例服务 ──
 
-final gitServiceProvider = Provider<GitService>((ref) => GitService());
+/// 复用 RuntimeManager 共享 ProcessRunner（已注册 LinuxExecutionAdapter →
+/// PRoot → Ubuntu rootfs /usr/bin/git），保证 GitHub 页面的 Git 操作
+/// 与部署中心检测/安装走同一条执行链路，不再依赖 Android 宿主 PATH。
+/// 若 RuntimeManager 未初始化（processRunner 为 null），GitService 回退到
+/// 自建 LinuxExecutionAdapter，行为一致（未部署时明确提示部署 Linux Runtime）。
+final gitServiceProvider = Provider<GitService>((ref) {
+  final manager = RuntimeManager.instance;
+  return GitService(
+    runner: manager.processRunner,
+    linux: manager.linuxProvider,
+  );
+});
 
 final gitHubServiceProvider = Provider<GitHubService>((ref) => GitHubService());
 

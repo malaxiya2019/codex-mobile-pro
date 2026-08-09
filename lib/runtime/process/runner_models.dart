@@ -70,6 +70,23 @@ class RuntimeProcessRequest {
   /// 只读消费，不改变输出收集逻辑；null 表示不回调。
   final void Function(String chunk)? onStdoutChunk;
 
+  /// 额外的 PRoot bind 挂载（仅 runtimeId='linux' 时生效）
+  ///
+  /// 每项格式与 PRoot `-b` 相同：`hostPath[:guestPath]`。
+  /// guestPath 省略时 guest 侧使用与 host 相同的路径。
+  /// 用于把 Android 宿主目录映射进 PRoot guest，供 git 等
+  /// rootfs 内工具访问宿主工作区（如 clone 目标目录）。
+  /// 由 LinuxExecutionAdapter 统一展开为 `-b` 参数并创建 guest 目录。
+  final List<String>? extraBinds;
+
+  /// 内层 bash -lc 命令原文（仅 runtimeId='linux' 时生效）。
+  ///
+  /// 设置后 LinuxExecutionAdapter 直接将其作为 `/bin/bash -lc <innerCommand>`
+  /// 的内层命令，不再拼接 `executable + arguments`。用于需要 `exec` 前缀
+  /// （进程替换，保证信号直达）或 shell 重定向（如 `</dev/null`）的特殊
+  /// 内层命令场景（如 codex exec 流式执行）。
+  final String? innerCommand;
+
   const RuntimeProcessRequest({
     required this.executable,
     this.arguments = const [],
@@ -81,6 +98,8 @@ class RuntimeProcessRequest {
     this.runtimeId,
     this.label,
     this.onStdoutChunk,
+    this.extraBinds,
+    this.innerCommand,
   });
 
   /// 创建带有 shell 包装的请求副本
@@ -102,6 +121,8 @@ class RuntimeProcessRequest {
       runtimeId: runtimeId,
       label: label,
       onStdoutChunk: onStdoutChunk,
+      extraBinds: extraBinds,
+      innerCommand: innerCommand,
     );
   }
 

@@ -17,6 +17,11 @@ class FakeLocalExecution extends LocalProcessExecution {
 
   /// 前 N 次 execute 返回「启动失败」（模拟 proot 路径失效 ENOENT）。
   final int failFirstCount;
+
+  /// 启动失败时使用的错误信息（默认模拟 ENOENT；可注入「Linux Runtime
+  /// 未初始化」验证明确提示映射）。
+  String? failWithMessage;
+
   int executeCalls = 0;
   RuntimeProcessRequest? lastRequest;
   int cancelCalls = 0;
@@ -41,7 +46,7 @@ class FakeLocalExecution extends LocalProcessExecution {
     if (executeCalls <= failFirstCount) {
       return RuntimeProcessResult(
         exitCode: -1,
-        error: '可执行文件不存在: ${request.executable}',
+        error: failWithMessage ?? '可执行文件不存在: ${request.executable}',
         request: request,
       );
     }
@@ -74,11 +79,26 @@ class FakeRootfs {
   final bool hasCodex;
   final String? apiKey;
 
-  FakeRootfs._(this.rootfs, {required this.hasCodex, this.apiKey});
+  /// 是否模拟「Runtime 已就绪」（proot/loader/bash 文件齐全）。
+  ///
+  /// true（默认）时 LinuxExecutionAdapter 的就绪检查通过，请求会
+  /// 委托到内层执行器（FakeLocalExecution）；false 时这三个关键
+  /// 文件缺失，适配器直接返回「Linux Runtime 未初始化」——用于验证
+  /// 「Coding Runtime 未就绪」明确提示（新架构：适配器先做就绪检查，
+  /// 未就绪不会走到内层执行器）。
+  final bool runtimeReady;
+
+  FakeRootfs._(
+    this.rootfs, {
+    required this.hasCodex,
+    this.apiKey,
+    required this.runtimeReady,
+  });
 
   static Future<FakeRootfs> create({
     bool hasCodex = true,
     String? apiKey = 'test-key-123',
+    bool runtimeReady = true,
   }) async {
     final rootfs = await Directory.systemTemp.createTemp('codex-rootfs-test');
     if (hasCodex) {
@@ -90,7 +110,20 @@ class FakeRootfs {
       await envFile.create(recursive: true);
       await envFile.writeAsString('DS_API_KEY=$apiKey\n');
     }
-    return FakeRootfs._(rootfs, hasCodex: hasCodex, apiKey: apiKey);
+    if (runtimeReady) {
+      // LinuxExecutionAdapter 就绪检查要求 proot/loader/bash 三个关键
+      // 文件存在，否则请求不会委托到内层执行器（也就无法模拟 codex
+      // JSONL 输出/启动失败/取消等执行期行为）。
+      await File('/fake/proot').create(recursive: true);
+      await File('/fake/loader').create(recursive: true);
+      await File('${rootfs.path}/usr/bin/bash').create(recursive: true);
+    }
+    return FakeRootfs._(
+      rootfs,
+      hasCodex: hasCodex,
+      apiKey: apiKey,
+      runtimeReady: runtimeReady,
+    );
   }
 
   LinuxRuntimeProvider provider() => LinuxRuntimeProvider(
@@ -139,7 +172,7 @@ void main() {
       final inner = FakeLocalExecution(outputChunks: [jsonl]);
       final runner = CodexRunner(
         provider: fakeRootfs.provider(),
-        inner: inner,
+        processExecution: inner,
       );
       final listener = RecordingListener();
 
@@ -206,7 +239,7 @@ void main() {
       ]);
       final runner = CodexRunner(
         provider: fakeRootfs.provider(),
-        inner: inner,
+        processExecution: inner,
       );
       final listener = RecordingListener();
 
@@ -234,7 +267,7 @@ void main() {
       final inner = FakeLocalExecution(outputChunks: ['x']);
       final runner = CodexRunner(
         provider: noCodex.provider(),
-        inner: inner,
+        processExecution: inner,
       );
       final listener = RecordingListener();
 
@@ -257,7 +290,7 @@ void main() {
       final inner = FakeLocalExecution(outputChunks: ['x']);
       final runner = CodexRunner(
         provider: noKey.provider(),
-        inner: inner,
+        processExecution: inner,
       );
       final listener = RecordingListener();
 
@@ -271,14 +304,14 @@ void main() {
       expect(result.error, contains('DeepSeek API Key'));
     });
 
-    test('自动创建宿主工作目录并绑定到 /workspace', () async {
+    test('自动创建宿主工作目录，经统一 runner 绑定到 /workspace', () async {
       final nested = Directory(
         '${workspace.path}/a/b/c',
       );
       final inner = FakeLocalExecution();
       final runner = CodexRunner(
         provider: fakeRootfs.provider(),
-        inner: inner,
+        processExecution: inner,
       );
 
       await runner.run(
@@ -288,23 +321,144 @@ void main() {
       );
 
       expect(nested.existsSync(), isTrue);
-      // 校验组装好的 proot 参数：绑定 host→/workspace，工作目录 /workspace
+      // wrapped 请求 = LinuxExecutionAdapter 生成的完整 PRoot argv
       final request = inner.lastRequest!;
       expect(request.executable, '/fake/proot');
       final args = request.arguments;
+      // rootfs
       expect(args, contains('-r'));
       expect(args[args.indexOf('-r') + 1], fakeRootfs.rootfs.path);
-      // prootBindArguments 里已有 -b /proc -b /dev -b /sys，
-      // 最后的绑定是 -b <host> /workspace；-w 后是 /workspace
-      expect(args, contains('-b'));
-      final wsIdx = args.indexOf('/workspace');
-      expect(wsIdx, greaterThan(0));
-      expect(args[wsIdx - 1], nested.path);
+      // 修正后的 bind 格式：-b <host>:/workspace（单参数，冒号分隔）
+      expect(args, contains('${nested.path}:/workspace'));
+      // -w /workspace（guest 工作目录）
       expect(args, contains('-w'));
       expect(args[args.indexOf('-w') + 1], '/workspace');
+      // 宿主端 cwd 守卫：/workspace 在宿主不存在 → 不透传给 Process.start
+      expect(request.workingDirectory, isNull);
+      // 内层 bash 命令：exec 前缀 + codex exec --json + $CODEX_PROMPT + </dev/null
+      final lcIdx = args.indexOf('-lc');
+      final innerCommand = args[lcIdx + 1];
+      expect(innerCommand, startsWith('exec /usr/local/bin/codex exec --json'));
+      expect(innerCommand, contains('--skip-git-repo-check'));
+      expect(innerCommand, contains('--dangerously-bypass-approvals-and-sandbox'));
+      expect(innerCommand, contains('"\$CODEX_PROMPT"'));
+      expect(innerCommand, endsWith('</dev/null'));
       // 环境变量注入
       expect(request.environment?['DEEPSEEK_API_KEY'], 'test-key-123');
       expect(request.environment?['CODEX_PROMPT'], contains('hi'));
+      // 宿主端 PRoot 临时目录（适配器统一注入）
+      expect(request.environment?['PROOT_TMP_DIR'],
+          '${fakeRootfs.rootfs.path}/tmp');
+    });
+
+    test('Runtime 未就绪 → 明确提示 Coding Runtime 未就绪（替代 ENOENT）', () async {
+      // proot/loader/bash 三个关键文件缺失 → 适配器直接返回未就绪，
+      // 不会走到内层执行器（executeCalls 恒为 0）。
+      final noRuntime = await FakeRootfs.create(runtimeReady: false);
+      addTearDown(noRuntime.dispose);
+
+      final inner = FakeLocalExecution();
+      final runner = CodexRunner(
+        provider: noRuntime.provider(),
+        processExecution: inner,
+      );
+      final listener = RecordingListener();
+
+      final result = await runner.run(
+        prompt: 'hi',
+        hostWorkingDir: workspace.path,
+        listener: listener,
+      );
+
+      expect(result.exitCode, -1);
+      expect(result.error, contains('Coding Runtime 未就绪'));
+      expect(result.error, contains('请先部署 Linux Runtime'));
+      // 不再出现误导性的 /system/bin/sh 或裸 ENOENT
+      expect(result.error, isNot(contains('/system/bin/sh')));
+      // 未就绪 → 未启动任何进程（不伪造成功，也不调用内层执行器）
+      expect(inner.executeCalls, 0);
+    });
+
+
+    test('workspace .codex 含宿主绝对路径 → 自动遮蔽为干净阴影', () async {
+      // 模拟 codex 0.147 的 project config 污染：工作区 .codex/config.toml
+      // 的 model_catalog_json 指向 Android 宿主绝对路径（PRoot 内 ENOENT）
+      final codexDir = Directory('${workspace.path}/.codex');
+      await codexDir.create(recursive: true);
+      await File('${codexDir.path}/config.toml').writeAsString(
+        'model_catalog_json = '
+        '"/data/user/0/com.codexmobile.app/app_flutter/.codex/deepseek-models.json"\n',
+      );
+
+      final inner = FakeLocalExecution();
+      final runner = CodexRunner(
+        provider: fakeRootfs.provider(),
+        processExecution: inner,
+      );
+
+      final result = await runner.run(
+        prompt: 'hi',
+        hostWorkingDir: workspace.path,
+        listener: RecordingListener(),
+      );
+
+      expect(result.isSuccess, isTrue);
+      final request = inner.lastRequest!;
+      final args = request.arguments;
+      // 原始 workspace bind 仍在
+      expect(args, contains('${workspace.path}:/workspace'));
+      // 追加 .codex 阴影 bind（-b <shadowDir>:/workspace/.codex）
+      final shadowBinds = args.where((a) => a.endsWith(':/workspace/.codex'));
+      expect(shadowBinds, hasLength(1));
+      final shadow = shadowBinds.first;
+      final shadowHost = shadow.split(':').first;
+      // 阴影目录真实存在（rootfs tmp 内）
+      expect(Directory(shadowHost).existsSync(), isTrue);
+      // 阴影目录为空（无 config.toml → 空 project layer，不读宿主路径）
+      expect(File('$shadowHost/config.toml').existsSync(), isFalse);
+    });
+
+    test('workspace .codex 干净或不存在 → 不遮蔽', () async {
+      // 场景 1：无 .codex
+      final inner = FakeLocalExecution();
+      final runner = CodexRunner(
+        provider: fakeRootfs.provider(),
+        processExecution: inner,
+      );
+
+      await runner.run(
+        prompt: 'hi',
+        hostWorkingDir: workspace.path,
+        listener: RecordingListener(),
+      );
+
+      var args = inner.lastRequest!.arguments;
+      expect(args.where((a) => a.endsWith(':/workspace/.codex')), isEmpty);
+      expect(args, contains('${workspace.path}:/workspace'));
+
+      // 场景 2：.codex/config.toml 干净（无宿主绝对路径）
+      final codexDir = Directory('${workspace.path}/.codex');
+      await codexDir.create(recursive: true);
+      await File('${codexDir.path}/config.toml').writeAsString(
+        'model = "deepseek-chat"\n'
+        '[model_providers.deepseek]\n'
+        'base_url = "https://api.deepseek.com"\n',
+      );
+
+      final inner2 = FakeLocalExecution();
+      final runner2 = CodexRunner(
+        provider: fakeRootfs.provider(),
+        processExecution: inner2,
+      );
+
+      await runner2.run(
+        prompt: 'hi',
+        hostWorkingDir: workspace.path,
+        listener: RecordingListener(),
+      );
+
+      args = inner2.lastRequest!.arguments;
+      expect(args.where((a) => a.endsWith(':/workspace/.codex')), isEmpty);
     });
 
     test('非零退出码传播', () async {
@@ -314,7 +468,7 @@ void main() {
       );
       final runner = CodexRunner(
         provider: fakeRootfs.provider(),
-        inner: inner,
+        processExecution: inner,
       );
 
       final result = await runner.run(
@@ -331,7 +485,7 @@ void main() {
       final inner = FakeLocalExecution(cancelledResult: true);
       final runner = CodexRunner(
         provider: fakeRootfs.provider(),
-        inner: inner,
+        processExecution: inner,
       );
 
       final result = await runner.run(
@@ -347,7 +501,7 @@ void main() {
       final inner = FakeLocalExecution();
       final runner = CodexRunner(
         provider: fakeRootfs.provider(),
-        inner: inner,
+        processExecution: inner,
       );
 
       runner.stop();
@@ -368,7 +522,7 @@ void main() {
       );
       final runner = CodexRunner(
         provider: fakeRootfs.provider(),
-        inner: inner,
+        processExecution: inner,
       );
       final listener = RecordingListener();
 
@@ -387,7 +541,7 @@ void main() {
       final inner = FakeLocalExecution(failFirstCount: 5);
       final runner = CodexRunner(
         provider: fakeRootfs.provider(),
-        inner: inner,
+        processExecution: inner,
       );
       final listener = RecordingListener();
 

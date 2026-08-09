@@ -143,7 +143,7 @@ class GitWorkflowProvider {
 
       final result = await _gitService.execute(
         repoPath,
-        ['push', remote, branch],
+        ['push', remote, branch!],
       );
 
       if (result.exitCode != 0) {

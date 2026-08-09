@@ -1,10 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../core/ai/ai_provider.dart';
 import '../../../core/logger/log_service.dart';
 import '../../editor/providers/editor_provider.dart';
 import '../models/git_repository.dart';
+import '../providers/git_provider.dart';
 import '../services/git_service.dart';
 
 /// Git 操作页面
@@ -25,7 +29,7 @@ class GitOperationsPage extends ConsumerStatefulWidget {
 }
 
 class _GitOperationsPageState extends ConsumerState<GitOperationsPage> {
-  final _gitService = GitService();
+  GitService get _gitService => ref.read(gitServiceProvider);
   bool _isCloning = false;
   String? _clonePath;
   String? _cloneError;
@@ -227,8 +231,14 @@ class _GitOperationsPageState extends ConsumerState<GitOperationsPage> {
     });
 
     try {
-      const home = '/storage/emulated/0';
-      final destDir = '$home/${widget.repo.name}';
+      // 目标目录：App 文档目录下（Android 应用可直接访问，无需存储权限）。
+      // getApplicationDocumentsDirectory() 在 Android 上返回 App 私有目录
+      // （/data/user/0/<pkg>/app_flutter），经 GitPathMapper 同名 bind 映射
+      // 进 PRoot guest，git 可真实写入宿主目录。
+      final docs = await getApplicationDocumentsDirectory();
+      final baseDir = '${docs.path}/git';
+      await Directory(baseDir).create(recursive: true);
+      final destDir = '$baseDir/${widget.repo.name}';
 
       final result = await _gitService.clone(
         widget.repo.cloneUrl!,

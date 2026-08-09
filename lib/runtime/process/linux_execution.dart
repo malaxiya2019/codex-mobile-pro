@@ -71,14 +71,40 @@ class LinuxExecutionAdapter implements IExecutionAdapter {
     }
 
     // ─── 转换 rootfs 内路径 ────────────────────────────────────
+    // 内层命令：默认拼接 executable + arguments；设置 innerCommand 时
+    // 原样使用（支持 exec 进程替换 / shell 重定向等特殊命令，如 codex）。
     final innerExecutable = _toRootfsPath(paths.rootfsDir, request.executable);
-    final command = [innerExecutable, ...request.arguments].join(' ');
+    final command =
+        request.innerCommand ?? [innerExecutable, ...request.arguments].join(' ');
+
+    // ─── 额外 bind：宿主目录映射进 guest（git 工作区等）────────
+    //
+    // request.extraBinds（格式 `hostPath[:guestPath]`）由业务层生成，
+    // 用于把 Android 宿主目录挂载进 PRoot guest。目录型 bind 会
+    // best-effort 在 rootfs 中创建 guest 目标，避免 PRoot 因目标
+    // 不存在而回退（如 git clone 到 /sdcard/... 之前先建 /sdcard）。
+    final extraBinds = request.extraBinds ?? const [];
+    for (final bind in extraBinds) {
+      final hostPath = bind.split(':').first;
+      if (Directory(hostPath).existsSync()) {
+        final guest = _guestPathOfBind(bind);
+        try {
+          Directory('${paths.rootfsDir}$guest').createSync(recursive: true);
+        } catch (e) {
+          LogService.debug('LinuxExec', '创建 bind guest 目录失败: $guest ($e)');
+        }
+      }
+    }
 
     // ─── 统一生成 PRoot 参数 ───────────────────────────────────
     final arguments = <String>[
       '-r',
       paths.rootfsDir,
       ...LinuxRuntimeProvider.prootBindArguments(),
+      for (final bind in extraBinds) ...[
+        '-b',
+        bind,
+      ],
       if (request.workingDirectory != null) ...[
         '-w',
         request.workingDirectory!,
@@ -110,11 +136,21 @@ class LinuxExecutionAdapter implements IExecutionAdapter {
       environment.addAll(request.environment!);
     }
 
+    // ─── 宿主端 cwd 守卫 ───────────────────────────────────────
+    // request.workingDirectory 是 guest 路径（-w 已用），但 wrapped 请求
+    // 会把它原样传给宿主 Process.start。若该路径在 Android 宿主不存在
+    // （如 codex 的 /workspace 或 git 的 /sdcard/xxx 尚未创建），
+    // Process.start 会抛 ENOENT，被误报为「可执行文件不存在」。
+    // → 宿主端仅当目录真实存在时才透传；否则省略（PRoot -w 仍生效）。
+    final hostCwd = (request.workingDirectory != null &&
+            Directory(request.workingDirectory!).existsSync())
+        ? request.workingDirectory
+        : null;
     final wrapped = RuntimeProcessRequest(
       executable: paths.prootExecutable,
       arguments: arguments,
       environment: environment,
-      workingDirectory: request.workingDirectory,
+      workingDirectory: hostCwd,
       timeout: request.timeout,
       label: 'proot:${request.label ?? request.executable}',
       onStdoutChunk: request.onStdoutChunk,
@@ -183,5 +219,14 @@ class LinuxExecutionAdapter implements IExecutionAdapter {
       return rel.startsWith('/') ? rel : '/$rel';
     }
     return executable;
+  }
+
+  /// 提取 bind 串（`host[:guest]`）的 guest 路径。
+  ///
+  /// 无 `:` 时 guest 与 host 同路径；有 `:` 时取冒号后部分。
+  static String _guestPathOfBind(String bind) {
+    final idx = bind.lastIndexOf(':');
+    if (idx == -1) return bind;
+    return bind.substring(idx + 1);
   }
 }
