@@ -569,4 +569,86 @@ void main() {
       expect(result.error, contains('启动 codex 失败'));
     });
   });
+  group('真实 codex 0.147 JSONL 解析（repro 捕获的真实 stdout）', () {
+    late FakeRootfs fakeRootfs;
+    late Directory workspace;
+
+    setUp(() async {
+      fakeRootfs = await FakeRootfs.create();
+      workspace = await Directory.systemTemp.createTemp('codex-ws-test');
+    });
+
+    tearDown(() async {
+      await fakeRootfs.dispose();
+      if (workspace.existsSync()) {
+        await workspace.delete(recursive: true);
+      }
+    });
+    test('真实「只回复 OK」stdout → 提取 agent_message text = OK', () async {
+      // 数据来源：~/repro/audit_stdout.jsonl（真实 PRoot + Ubuntu noble + codex-cli
+      // 0.147.0 执行「只回复 OK」的 stdout，逐行原样拷贝，含无害 fallback error 事件）
+      const realStdout = r'''
+{"type":"thread.started","thread_id":"019febf6-5b13-7931-a9e8-b122e5b52336"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Ignored unsupported project-local config keys in /workspace/.codex/config.toml: model_provider, model_providers. If you want these settings to apply, manually set them in your user-level config.toml."}}
+{"type":"item.completed","item":{"id":"item_1","type":"error","message":"Ignored unsupported project-local config keys in /workspace/.codex/config.toml: model_provider, model_providers. If you want these settings to apply, manually set them in your user-level config.toml."}}
+{"type":"item.completed","item":{"id":"item_2","type":"error","message":"Model metadata for `deepseek-chat` not found. Defaulting to fallback metadata; this can degrade performance and cause issues."}}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"OK"}}
+{"type":"turn.completed","usage":{"input_tokens":10012,"cached_input_tokens":9856,"cache_write_input_tokens":0,"output_tokens":27,"reasoning_output_tokens":25}}
+''';
+
+      final inner = FakeLocalExecution(outputChunks: [realStdout]);
+      final runner = CodexRunner(
+        provider: fakeRootfs.provider(),
+        processExecution: inner,
+      );
+      final listener = RecordingListener();
+
+      final result = await runner.run(
+        prompt: '只回复 OK',
+        hostWorkingDir: workspace.path,
+        listener: listener,
+      );
+
+      expect(result.isSuccess, isTrue);
+      expect(result.exitCode, 0);
+      final agents = listener.events.whereType<CodexAgentMessage>().toList();
+      expect(agents, hasLength(1), reason: '真实 stdout 只含一个 agent_message');
+      expect(agents.single.text, 'OK');
+    });
+
+    test('真实「介绍一下自己」stdout → 提取完整自我介绍（多行 \n 不丢失）', () async {
+      // 数据来源：~/repro/audit_appsim_stdout.jsonl（App 文档目录模拟 + 完整 systemPrompt
+      // + 用户 prompt「介绍一下自己」的真实 stdout；agent_message 含 \n\n 与 markdown 反引号）
+      const realStdout = r'''
+{"type":"thread.started","thread_id":"019febf9-9912-7171-9d09-9310ff079c46"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Model metadata for `deepseek-chat` not found. Defaulting to fallback metadata; this can degrade performance and cause issues."}}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"你好!我是 Codex,一个运行在终端里的 AI 编程助手,可以直接在命令行环境中帮你处理各种编码任务。\n\n**我能做什么**\n- 读取、搜索和修改项目文件,支持多种编程语言\n- 运行命令、构建项目、执行测试来验证代码\n- 调试问题、修复 bug、重构代码\n- 解释代码逻辑、撰写文档、生成测试用例\n- 处理 Git 操作(除非你明确要求,否则我不会擅自提交)\n\n**我的工作方式**\n- 先理解你的需求,必要时制定分步计划\n- 逐步操作并随时汇报进展,保持透明\n- 尽量做到精准、不过度修改,尊重现有代码风格\n- 完成后用简洁的中文总结改动,并给出可点击的文件路径\n\n当前工作目录是 `/workspace`,你可以直接让我在这个目录里干活。有什么想让我帮忙的吗?比如看看项目结构、修个 bug,或者从零开始写点什么?"}}
+{"type":"turn.completed","usage":{"input_tokens":10053,"cached_input_tokens":9984,"cache_write_input_tokens":0,"output_tokens":227,"reasoning_output_tokens":26}}
+''';
+
+      final inner = FakeLocalExecution(outputChunks: [realStdout]);
+      final runner = CodexRunner(
+        provider: fakeRootfs.provider(),
+        processExecution: inner,
+      );
+      final listener = RecordingListener();
+
+      final result = await runner.run(
+        prompt: '介绍一下自己',
+        hostWorkingDir: workspace.path,
+        listener: listener,
+      );
+
+      expect(result.isSuccess, isTrue);
+      final agents = listener.events.whereType<CodexAgentMessage>().toList();
+      expect(agents, hasLength(1));
+      final text = agents.single.text;
+      expect(text, startsWith('你好!我是 Codex'));
+      expect(text, contains('\n\n**我能做什么**'), reason: 'JSON 内的 \\n 应被解码为真实换行');
+      expect(text, contains('当前工作目录是 `/workspace`'));
+    });
+  });
 }
+
