@@ -79,6 +79,12 @@ class FakeRootfs {
   final bool hasCodex;
   final String? apiKey;
 
+  /// proot/loader 可执行文件路径。与 rootfs 同处系统临时目录 —— 此前
+  /// 写死 `/fake/proot` 在文件系统根创建，CI runner 非 root 无法写 `/`，
+  /// 导致 setUp 抛 PathAccessException、全部用例失败。
+  final String prootExecutable;
+  final String loaderPath;
+
   /// 是否模拟「Runtime 已就绪」（proot/loader/bash 文件齐全）。
   ///
   /// true（默认）时 LinuxExecutionAdapter 的就绪检查通过，请求会
@@ -93,6 +99,8 @@ class FakeRootfs {
     required this.hasCodex,
     this.apiKey,
     required this.runtimeReady,
+    required this.prootExecutable,
+    required this.loaderPath,
   });
 
   static Future<FakeRootfs> create({
@@ -101,6 +109,9 @@ class FakeRootfs {
     bool runtimeReady = true,
   }) async {
     final rootfs = await Directory.systemTemp.createTemp('codex-rootfs-test');
+    // 与 rootfs 同处临时目录（CI runner 非 root，不能写文件系统根 /）
+    final prootExecutable = '${rootfs.path}/proot';
+    final loaderPath = '${rootfs.path}/loader';
     if (hasCodex) {
       final codex = File('${rootfs.path}/usr/local/bin/codex');
       await codex.create(recursive: true);
@@ -114,8 +125,8 @@ class FakeRootfs {
       // LinuxExecutionAdapter 就绪检查要求 proot/loader/bash 三个关键
       // 文件存在，否则请求不会委托到内层执行器（也就无法模拟 codex
       // JSONL 输出/启动失败/取消等执行期行为）。
-      await File('/fake/proot').create(recursive: true);
-      await File('/fake/loader').create(recursive: true);
+      await File(prootExecutable).create(recursive: true);
+      await File(loaderPath).create(recursive: true);
       await File('${rootfs.path}/usr/bin/bash').create(recursive: true);
     }
     return FakeRootfs._(
@@ -123,14 +134,16 @@ class FakeRootfs {
       hasCodex: hasCodex,
       apiKey: apiKey,
       runtimeReady: runtimeReady,
+      prootExecutable: prootExecutable,
+      loaderPath: loaderPath,
     );
   }
 
   LinuxRuntimeProvider provider() => LinuxRuntimeProvider(
     paths: LinuxRuntimePaths(
-      prootExecutable: '/fake/proot',
+      prootExecutable: prootExecutable,
       rootfsDir: rootfs.path,
-      loaderPath: '/fake/loader',
+      loaderPath: loaderPath,
     ),
   );
 
@@ -323,7 +336,7 @@ void main() {
       expect(nested.existsSync(), isTrue);
       // wrapped 请求 = LinuxExecutionAdapter 生成的完整 PRoot argv
       final request = inner.lastRequest!;
-      expect(request.executable, '/fake/proot');
+      expect(request.executable, fakeRootfs.prootExecutable);
       final args = request.arguments;
       // rootfs
       expect(args, contains('-r'));
