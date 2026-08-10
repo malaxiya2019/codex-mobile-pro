@@ -376,6 +376,56 @@ void main() {
       engine.dispose();
     });
 
+    test('空回复 + exitCode!=0 + stderr 错误 → UI 显示真实诊断', () async {
+      final runner = FakeCodexRunner(
+        result: const CodexRunResult(
+          exitCode: 1,
+          stderr: 'Error: No such file or directory (os error 2)',
+        ),
+      );
+      final engine = CodexChatEngine(runner: runner, defaultWorkspaceDir: '/ws');
+      final session = engine.createSession();
+
+      await for (final _ in engine.streamMessage(
+        sessionId: session.sessionId,
+        content: 'hi',
+      )) {}
+
+      final last = session.messages.last;
+      expect(last.content, contains('⚠️ 未收到有效回复'));
+      expect(last.content, contains('exitCode=1'));
+      expect(last.content, contains('No such file or directory'));
+      expect(engine.getGenerationStatus(session.sessionId),
+          GenerationStatus.error);
+      engine.dispose();
+    });
+
+    test('空回复 + stdout 真实错误事件（401）→ 显示诊断，无害 config 警告被排除', () async {
+      final runner = FakeCodexRunner(
+        result: const CodexRunResult(
+          exitCode: 1,
+          stdout: '{"type":"error","message":"Ignored unsupported project-local config keys in /workspace/.codex/config.toml: model_provider, model_providers. If you want these settings to apply, manually set them in your user-level config.toml."}\n'
+              '{"type":"error","message":"unexpected status 401 Unauthorized: Authentication Fails, Your api key: ****3456 is invalid, url: https://api.deepseek.com/responses"}\n'
+              '{"type":"turn.failed","error":{"message":"unexpected status 401 Unauthorized: Authentication Fails, Your api key: ****3456 is invalid, url: https://api.deepseek.com/responses"}}',
+        ),
+      );
+      final engine = CodexChatEngine(runner: runner, defaultWorkspaceDir: '/ws');
+      final session = engine.createSession();
+
+      await for (final _ in engine.streamMessage(
+        sessionId: session.sessionId,
+        content: 'hi',
+      )) {}
+
+      final last = session.messages.last;
+      expect(last.content, contains('⚠️ 未收到有效回复'));
+      expect(last.content, contains('401'));
+      expect(last.content, contains('api key'));
+      // 无害 config 警告不进入诊断
+      expect(last.content, isNot(contains('Ignored unsupported project-local config keys')));
+      engine.dispose();
+    });
+
     test('stopGeneration → runner.stop 被调用 + 占位替换为已停止', () async {
       final runner = GateCodexRunner(events: _happyEvents());
       final engine = CodexChatEngine(runner: runner, defaultWorkspaceDir: '/ws');

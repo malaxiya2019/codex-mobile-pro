@@ -18,6 +18,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'ai_message.dart';
 import 'chat_engine.dart';
@@ -391,12 +392,17 @@ class CodexChatEngine implements IChatEngine {
     final fullContent = textBuffer.toString();
     if (fullContent.isEmpty) {
       _generationStatuses[sessionId] = GenerationStatus.error;
+      final diag = _buildNoReplyDiagnostic(result);
+      final content = diag == null
+          ? '⚠️ 未收到有效回复'
+          : '⚠️ 未收到有效回复\n\n[诊断] 未解析到 agent_message\n$diag';
       session.replaceLastMessage(ChatMessage(
         id: _generateId(),
         role: ChatRole.assistant,
-        content: '⚠️ 未收到有效回复',
+        content: content,
         timestamp: DateTime.now(),
         metadata: {
+          'exitCode': result.exitCode.toString(),
           'workspaceDir': workspaceDir,
           'codex_tool_calls': toolCalls.map((t) => t.toJson()).toList(),
         },
@@ -581,6 +587,74 @@ class CodexChatEngine implements IChatEngine {
     final cleaned = content.replaceAll(RegExp(r'\s+'), ' ').trim();
     if (cleaned.length <= 30) return cleaned;
     return '${cleaned.substring(0, 30)}...';
+  }
+
+  /// 空回复时构造真实诊断（仅当存在真实失败信号时返回非 null）。
+  ///
+  /// 触发条件（满足其一）：
+  ///  1. exitCode != 0 —— codex 崩溃/退出非 0（ENOENT、API 401 等真实失败）
+  ///  2. stderr 非空且非无害提示（如 codex 的 stdin 提示行）
+  ///  3. stdout 含真实错误事件（type=error / turn.failed，排除无害 config 警告）
+  ///
+  /// 排除的无害噪音：
+  ///  - "Ignored unsupported project-local config keys ..."（config 键忽略警告）
+  ///  - "Defaulting to fallback metadata ..."（模型元数据降级警告）
+  ///  - "Reading additional input from stdin..."（stdin 非 TTY 提示）
+  String? _buildNoReplyDiagnostic(CodexRunResult result) {
+    final lines = <String>[];
+
+    if (result.exitCode != 0) {
+      lines.add('exitCode=${result.exitCode}');
+    }
+
+    final stderr = result.stderr.trim();
+    if (stderr.isNotEmpty &&
+        !stderr.contains('Reading additional input from stdin')) {
+      lines.add('stderr: $stderr');
+    }
+
+    // stdout JSONL：提取真实错误事件，去重、排除无害警告
+    final errorMessages = <String>{};
+    for (final raw in const LineSplitter().convert(result.stdout)) {
+      final line = raw.trim();
+      if (line.isEmpty) continue;
+      Object? decoded;
+      try {
+        decoded = jsonDecode(line);
+      } catch (_) {
+        continue;
+      }
+      if (decoded is! Map<String, dynamic>) continue;
+      String? message;
+      if (decoded['type'] == 'error' && decoded['message'] is String) {
+        message = decoded['message'] as String;
+      } else if (decoded['type'] == 'turn.failed') {
+        final err = decoded['error'];
+        if (err is Map && err['message'] is String) {
+          message = err['message'] as String;
+        }
+      }
+      if (message == null || message.isEmpty) continue;
+      if (_isBenignCodexMessage(message)) continue;
+      errorMessages.add(message);
+    }
+    for (final m in errorMessages.take(3)) {
+      lines.add('codex: $m');
+    }
+
+    if (lines.isEmpty) return null;
+    return lines.join('\n');
+  }
+
+  /// codex 输出中的无害警告（不影响对话回复，不纳入诊断）
+  bool _isBenignCodexMessage(String message) {
+    if (message.contains('Ignored unsupported project-local config keys')) {
+      return true;
+    }
+    if (message.contains('Defaulting to fallback metadata')) {
+      return true;
+    }
+    return false;
   }
 }
 

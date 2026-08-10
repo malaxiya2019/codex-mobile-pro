@@ -124,6 +124,12 @@ class CodexRunResult {
   final String? error;
   final String? threadId;
 
+  /// codex 进程 stdout（JSONL 事件原始文本；诊断用，正常回复不依赖它）
+  final String stdout;
+
+  /// codex 进程 stderr（codex 启动/运行错误常写在此；诊断用）
+  final String stderr;
+
   const CodexRunResult({
     required this.exitCode,
     this.timedOut = false,
@@ -131,6 +137,8 @@ class CodexRunResult {
     this.cleanupTimedOut = false,
     this.error,
     this.threadId,
+    this.stdout = '',
+    this.stderr = '',
   });
 
   bool get isSuccess => exitCode == 0 && !cancelled && !timedOut;
@@ -403,6 +411,8 @@ class CodexRunner {
           exitCode: result.exitCode,
           error: _startupErrorMessage(result.error),
           threadId: threadId.isEmpty ? null : threadId,
+          stdout: result.stdout,
+          stderr: result.stderr,
         ),
         threadId: threadId,
         failedToStart: true,
@@ -417,6 +427,8 @@ class CodexRunner {
         cleanupTimedOut: result.cleanupTimedOut,
         error: result.error,
         threadId: threadId.isEmpty ? null : threadId,
+        stdout: result.stdout,
+        stderr: result.stderr,
       ),
       threadId: threadId,
       failedToStart: false,
