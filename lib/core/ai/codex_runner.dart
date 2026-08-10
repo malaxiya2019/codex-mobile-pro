@@ -130,6 +130,11 @@ class CodexRunResult {
   /// codex 进程 stderr（codex 启动/运行错误常写在此；诊断用）
   final String stderr;
 
+  /// [AI-DEBUG] 全链路诊断文本（多行）：命令/路径/exitCode/stdout 全文/
+  /// stderr 全文/解析事件统计/agent_message 提取。供 ChatEngine 在失败或
+  /// 空回复时展示、正常回复时写入 metadata。临时取证用，取证完成后移除。
+  final String debugLog;
+
   const CodexRunResult({
     required this.exitCode,
     this.timedOut = false,
@@ -139,9 +144,24 @@ class CodexRunResult {
     this.threadId,
     this.stdout = '',
     this.stderr = '',
+    this.debugLog = '',
   });
 
   bool get isSuccess => exitCode == 0 && !cancelled && !timedOut;
+
+  CodexRunResult copyWith({
+    String? debugLog,
+  }) => CodexRunResult(
+        exitCode: exitCode,
+        timedOut: timedOut,
+        cancelled: cancelled,
+        cleanupTimedOut: cleanupTimedOut,
+        error: error,
+        threadId: threadId,
+        stdout: stdout,
+        stderr: stderr,
+        debugLog: debugLog ?? this.debugLog,
+      );
 }
 
 /// 在 rootfs 内执行 codex 的 Runner
@@ -250,34 +270,52 @@ class CodexRunner {
     Duration? timeout,
     required CodexEventListener listener,
   }) async {
+    // [AI-DEBUG] 全链路诊断累积（临时取证用）
+    final debug = <String>[];
+    void dbg(String s) => debug.add('[AI-DEBUG] $s');
+
     try {
       final paths = await _provider.resolvePaths();
+      dbg('user input = ${_truncateForLog(prompt, 200)}');
+      dbg('hostWorkingDir = $hostWorkingDir');
+      dbg('rootfsDir = ${paths.rootfsDir}');
+      dbg('workspace 存在 = ${Directory(hostWorkingDir).existsSync()}');
 
       // ─── 1. 校验 codex 已安装 ────────────────────────────────
       final codexExecutable = await _provider.resolveExecutable('codex');
       if (codexExecutable == null) {
-        return const CodexRunResult(
+        dbg('codexBin = (未找到)');
+        return CodexRunResult(
           exitCode: -1,
           error: 'Codex CLI 未安装，请先在「部署中心」安装 Codex CLI',
+          debugLog: debug.join('\n'),
         );
       }
+      dbg('codex 宿主路径 = $codexExecutable');
 
       // ─── 2. 读取 DeepSeek API key（rootfs 内 codex 读取位置）──
       final apiKey = _readDeepSeekKey(paths);
       if (apiKey == null) {
-        return const CodexRunResult(
+        dbg('apiKey = (未配置)');
+        return CodexRunResult(
           exitCode: -1,
           error: '未配置 DeepSeek API Key，请先在「部署中心」保存 API Key',
+          debugLog: debug.join('\n'),
         );
       }
+      dbg('apiKey = ${_maskKey(apiKey)}');
+      dbg('workspace .codex 含宿主路径(需遮蔽) = '
+          '${CodexRunner.isWorkspaceCodexHostPathPolluted(hostWorkingDir)}');
 
       // ─── 3. 确保宿主工作目录存在 ─────────────────────────────
       try {
         await Directory(hostWorkingDir).create(recursive: true);
       } catch (e) {
+        dbg('创建/访问工作目录失败 = $e');
         return CodexRunResult(
           exitCode: -1,
           error: '无法创建/访问工作目录 $hostWorkingDir: $e',
+          debugLog: debug.join('\n'),
         );
       }
 
@@ -288,6 +326,23 @@ class CodexRunner {
 
       // ─── 5. 组装请求 + 执行（带失败自愈重试）────────────────
       final codexBin = _toRootfsPath(paths.rootfsDir, codexExecutable);
+      dbg('codexBin (guest) = $codexBin');
+      dbg('full command = exec $codexBin exec --json --skip-git-repo-check '
+          '--dangerously-bypass-approvals-and-sandbox "\$CODEX_PROMPT" </dev/null');
+      dbg('cwd (guest) = /workspace');
+      dbg('env = DEEPSEEK_API_KEY=<掩码> CODEX_PROMPT=<prompt>');
+
+      // 事件统计包装（转发给原 listener，同时累积类型与 agent_message）
+      final eventTypes = <String>[];
+      final agentMessages = <String>[];
+      final debugListener = _DebugEventListener(
+        inner: listener,
+        onEvent: (e) {
+          eventTypes.add(_eventTypeName(e));
+          if (e is CodexAgentMessage) agentMessages.add(e.text);
+        },
+      );
+
       var outcome = await _runProotOnce(
         rootfsDir: paths.rootfsDir,
         codexBin: codexBin,
@@ -295,7 +350,7 @@ class CodexRunner {
         fullPrompt: fullPrompt,
         apiKey: apiKey,
         timeout: timeout,
-        listener: listener,
+        listener: debugListener,
       );
 
       // ─── 6. 自愈重试：proot 可执行路径（nativeLibraryDir）───
@@ -305,6 +360,7 @@ class CodexRunner {
       // 刷新共享缓存、重新解析 nativeLibraryDir 后重试一次；
       // 仍失败则如实返回错误（已带完整诊断上下文）。
       if (outcome.failedToStart) {
+        dbg('第一次启动失败（failedToStart），刷新 nativeLibraryDir 缓存后重试');
         LogService.warning(
           'CodexRunner',
           'proot 启动失败，刷新路径缓存后重试: ${outcome.result.error}',
@@ -317,12 +373,43 @@ class CodexRunner {
           fullPrompt: fullPrompt,
           apiKey: apiKey,
           timeout: timeout,
-          listener: listener,
+          listener: debugListener,
         );
       }
-      return outcome.result;
+
+      // ─── 7. 组装 [AI-DEBUG] 执行结果诊断 ────────────────────
+      final result = outcome.result;
+      dbg('process started = ${!outcome.failedToStart}');
+      dbg('exitCode = ${result.exitCode}');
+      dbg('timedOut = ${result.timedOut}');
+      dbg('cancelled = ${result.cancelled}');
+      dbg('cleanupTimedOut = ${result.cleanupTimedOut}');
+      dbg('result.error = ${result.error ?? '(null)'}');
+      dbg('threadId = ${result.threadId ?? '(null)'}');
+      dbg('stdout length = ${result.stdout.length}');
+      dbg('stderr length = ${result.stderr.length}');
+      dbg('parsed events (${eventTypes.length}) = '
+          '${eventTypes.isEmpty ? '(无)' : eventTypes.join(', ')}');
+      if (agentMessages.isNotEmpty) {
+        dbg('agent message = ${agentMessages.join(' | ')}');
+      } else {
+        dbg('agent message = (无 agent_message 事件)');
+      }
+      dbg('--- stdout 全文 begin ---');
+      dbg(result.stdout.isEmpty ? '(空)' : result.stdout);
+      dbg('--- stdout 全文 end ---');
+      dbg('--- stderr 全文 begin ---');
+      dbg(result.stderr.isEmpty ? '(空)' : result.stderr);
+      dbg('--- stderr 全文 end ---');
+
+      return result.copyWith(debugLog: debug.join('\n'));
     } catch (e) {
-      return CodexRunResult(exitCode: -1, error: 'codex 执行异常: $e');
+      dbg('codex 执行异常 = $e');
+      return CodexRunResult(
+        exitCode: -1,
+        error: 'codex 执行异常: $e',
+        debugLog: debug.join('\n'),
+      );
     }
   }
 
@@ -582,4 +669,47 @@ class CodexRunner {
     }
     return executable;
   }
+
+  /// [AI-DEBUG] 掩码 API key（只显示首尾 4 位，不泄露）
+  static String _maskKey(String key) {
+    if (key.length <= 8) return '***';
+    return '${key.substring(0, 4)}...${key.substring(key.length - 4)} '
+        '(len=${key.length})';
+  }
+
+  /// [AI-DEBUG] 截断超长文本（防 UI 爆炸；完整内容仍留在 debugLog 尾部）
+  static String _truncateForLog(String s, int max) {
+    if (s.length <= max) return s;
+    return '${s.substring(0, max)}\n...[已截断，完整见 stdout 全文，len=${s.length}]';
+  }
+
+  /// [AI-DEBUG] 事件类型短名（CodexAgentMessage → agent_message）
+  static String _eventTypeName(CodexEvent e) {
+    final name = e.runtimeType.toString().replaceFirst('Codex', '');
+    final buf = StringBuffer();
+    for (final ch in name.split('')) {
+      if (ch == ch.toUpperCase() && buf.isNotEmpty) {
+        buf.write('_');
+      }
+      buf.write(ch.toLowerCase());
+    }
+    return buf.toString();
+  }
+}
+
+/// [AI-DEBUG] 事件统计包装监听器：转发事件，同时累积类型与 agent_message 文本
+class _DebugEventListener implements CodexEventListener {
+  final CodexEventListener inner;
+  final void Function(CodexEvent event) onEvent;
+
+  _DebugEventListener({required this.inner, required this.onEvent});
+
+  @override
+  void onCodexEvent(CodexEvent event) {
+    onEvent(event);
+    inner.onCodexEvent(event);
+  }
+
+  @override
+  void onCodexExit(int exitCode) => inner.onCodexExit(exitCode);
 }

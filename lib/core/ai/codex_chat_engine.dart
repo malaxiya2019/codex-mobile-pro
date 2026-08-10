@@ -393,9 +393,13 @@ class CodexChatEngine implements IChatEngine {
     if (fullContent.isEmpty) {
       _generationStatuses[sessionId] = GenerationStatus.error;
       final diag = _buildNoReplyDiagnostic(result);
-      final content = diag == null
-          ? '⚠️ 未收到有效回复'
-          : '⚠️ 未收到有效回复\n\n[诊断] 未解析到 agent_message\n$diag';
+      // [AI-DEBUG] 取证期：只要 runner 积累了 debugLog（真实命令/exitCode/
+      // stdout/stderr/事件），一律贴出；否则回退到原有轻量诊断
+      final content = result.debugLog.isNotEmpty
+          ? '⚠️ 未收到有效回复\n\n[AI-DEBUG]\n${result.debugLog}'
+          : diag == null
+              ? '⚠️ 未收到有效回复'
+              : '⚠️ 未收到有效回复\n\n[诊断] 未解析到 agent_message\n$diag';
       session.replaceLastMessage(ChatMessage(
         id: _generateId(),
         role: ChatRole.assistant,
@@ -419,6 +423,8 @@ class CodexChatEngine implements IChatEngine {
           'exitCode': result.exitCode.toString(),
           'workspaceDir': workspaceDir,
           'codex_tool_calls': toolCalls.map((t) => t.toJson()).toList(),
+          // [AI-DEBUG] 取证期：正常回复也把诊断挂到 metadata（UI 可查）
+          'debugLog': result.debugLog,
         },
       ));
     }
