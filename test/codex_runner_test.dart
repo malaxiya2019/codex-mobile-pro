@@ -650,5 +650,113 @@ void main() {
       expect(text, contains('当前工作目录是 `/workspace`'));
     });
   });
-}
 
+
+  group('CodexRunner.run 幂等自愈用户级 codex config（B 方案）', () {
+    late FakeRootfs fakeRootfs;
+    late Directory workspace;
+
+    File configFile() =>
+        File('${fakeRootfs.rootfs.path}/root/.codex/config.toml');
+
+    setUp(() async {
+      fakeRootfs = await FakeRootfs.create();
+      workspace = await Directory.systemTemp.createTemp('codex-ws-test');
+    });
+
+    tearDown(() async {
+      await fakeRootfs.dispose();
+      if (workspace.existsSync()) {
+        await workspace.delete(recursive: true);
+      }
+    });
+
+    Future<CodexRunResult> runOnce() {
+      final inner = FakeLocalExecution();
+      final runner = CodexRunner(
+        provider: fakeRootfs.provider(),
+        processExecution: inner,
+      );
+      return runner.run(
+        prompt: 'hi',
+        hostWorkingDir: workspace.path,
+        listener: RecordingListener(),
+      );
+    }
+
+    test('config 不存在 → 创建完整默认 DeepSeek 直连块', () async {
+      expect(configFile().existsSync(), isFalse);
+
+      final result = await runOnce();
+
+      expect(result.isSuccess, isTrue, reason: '自愈不阻断对话');
+      final file = configFile();
+      expect(file.existsSync(), isTrue);
+      final content = file.readAsStringSync();
+      expect(content, contains('model = "deepseek-chat"'));
+      expect(content, contains('model_provider = "deepseek"'));
+      expect(content, contains('[model_providers.deepseek]'));
+      expect(content, contains('base_url = "https://api.deepseek.com"'));
+      expect(content, contains('env_key = "DEEPSEEK_API_KEY"'));
+      // 幂等标记只出现一次
+      expect('[model_providers.deepseek]'.allMatches(content), hasLength(1));
+    });
+
+    test('已有 trust 条目但缺 provider 块 → 补写并保留 trust（真机现状）', () async {
+      // 真机取证：设备 config 只有 codex 自己写的信任条目，无 provider 块
+      final dir = configFile().parent;
+      await dir.create(recursive: true);
+      await configFile().writeAsString(
+          '[projects."/workspace"]\ntrust_level = "trusted"\n');
+
+      final result = await runOnce();
+
+      expect(result.isSuccess, isTrue);
+      final content = configFile().readAsStringSync();
+      // 补写了 DeepSeek provider 块
+      expect(content, contains('[model_providers.deepseek]'));
+      expect(content, contains('base_url = "https://api.deepseek.com"'));
+      // 原有 trust 条目被保留
+      expect(content, contains('[projects."/workspace"]'));
+      expect(content, contains('trust_level = "trusted"'));
+      // provider 块补在文件头部（在 trust 之前）
+      expect(content.indexOf('[model_providers.deepseek]'),
+          lessThan(content.indexOf('[projects."/workspace"]')));
+    });
+
+    test('已有 provider 块 → 跳过（不重复写、不改动原内容）', () async {
+      const original = 'model = "deepseek-chat"\n'
+          '[model_providers.deepseek]\n'
+          'base_url = "https://api.deepseek.com"\n';
+      final dir = configFile().parent;
+      await dir.create(recursive: true);
+      await configFile().writeAsString(original);
+
+      final result = await runOnce();
+
+      expect(result.isSuccess, isTrue);
+      expect(configFile().readAsStringSync(), original);
+    });
+
+    test('已有顶层 model 键但无 provider 定义 → 只补 provider table，不重复顶层键',
+        () async {
+      final dir = configFile().parent;
+      await dir.create(recursive: true);
+      await configFile().writeAsString(
+          'model = "my-custom-model"\n[projects."/workspace"]\n'
+          'trust_level = "trusted"\n');
+
+      final result = await runOnce();
+
+      expect(result.isSuccess, isTrue);
+      final content = configFile().readAsStringSync();
+      // 补上了缺失的 provider 定义
+      expect(content, contains('[model_providers.deepseek]'));
+      expect(content, contains('base_url = "https://api.deepseek.com"'));
+      // 顶层 model 键只出现一次（未因补写完整默认头而重复 → TOML 不会报错）
+      expect(RegExp(r'^\s*model\s*=', multiLine: true).allMatches(content), hasLength(1));
+      expect(content, contains('model = "my-custom-model"'));
+      expect(content, contains('trust_level = "trusted"'));
+    });
+  });
+}

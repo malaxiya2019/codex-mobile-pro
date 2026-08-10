@@ -192,6 +192,27 @@ class CodexRunner {
   /// guest（rootfs 内）工作目录挂载点
   static const String guestWorkspaceDir = '/workspace';
 
+  /// Codex 用户级 config.toml 默认内容（DeepSeek 直连）。
+  ///
+  /// 与 npm_toolchain_installers.dart 的 `CodexCliInstaller.codexConfigToml`
+  /// 同款（真机根因：设备 `/root/.codex/config.toml` 缺这段 → codex 0.147
+  /// 回落 OpenAI 默认端点 → 401）。此处复制而非 import，避免把依赖 Flutter
+  /// services 的 installers 拉进 CodexRunner 纯逻辑与测试（保持测试解耦）；
+  /// 改动时两处必须同步。
+  static const String codexConfigToml = '''
+model = "deepseek-chat"
+model_provider = "deepseek"
+
+[model_providers.deepseek]
+name = "DeepSeek"
+base_url = "https://api.deepseek.com"
+env_key = "DEEPSEEK_API_KEY"
+wire_api = "responses"
+''';
+
+  /// config.toml 已配置的幂等标记（与 npm_toolchain_installers.dart 一致）
+  static const String codexConfigMarker = '[model_providers.deepseek]';
+
   /// Android 宿主绝对路径特征（在 Ubuntu rootfs 内不存在 → codex 读取必 ENOENT）
   static final RegExp _hostPathPattern =
       RegExp(r'''["']\s*/(?:data|storage|sdcard)/''');
@@ -292,6 +313,13 @@ class CodexRunner {
         );
       }
       dbg('codex 宿主路径 = $codexExecutable');
+
+      // ─── 1.5. 幂等自愈 codex 用户级 config（真机根因修复）──
+      // codex 0.147 只认用户级 /root/.codex/config.toml；设备上该文件只有
+      // trust 条目、无 [model_providers.deepseek] → 回落 OpenAI 默认 → 401
+      // → 无 agent_message。缺失时补写，已配置则跳过（不阻断对话）。
+      final configAction = _ensureCodexConfig(paths.rootfsDir);
+      dbg('codex config 自愈 = $configAction');
 
       // ─── 2. 读取 DeepSeek API key（rootfs 内 codex 读取位置）──
       final apiKey = _readDeepSeekKey(paths);
@@ -641,6 +669,63 @@ class CodexRunner {
   }
 
   // ─── 辅助 ───────────────────────────────────────────────────
+
+  /// B 方案：幂等自愈 codex 用户级 config.toml（真机根因修复）。
+  ///
+  /// 真机取证（[AI-DEBUG]）：设备 rootfs `/root/.codex/config.toml` 只有
+  /// codex 自己写的 trust 条目，缺 DeepSeek provider 块 → codex 0.147
+  /// 读不到 `model_provider`/`model_providers`（0.147 只认用户级 config，
+  /// 项目级 `/workspace/.codex/config.toml` 会被忽略）→ 回落 OpenAI 默认
+  /// 端点 → 全部 401 `api.openai.com` → 无 agent_message → UI「未收到
+  /// 有效回复」。
+  ///
+  /// 自愈规则（幂等；只写用户级 config，不碰 API 配置/环境变量）：
+  ///   1. 已含 `[model_providers.deepseek]` → 跳过（不重复写）。
+  ///   2. 文件不存在 → 创建并写完整默认内容。
+  ///   3. 存在但缺 provider 块 → 保留原内容（trust 条目等），在头部补写
+  ///      DeepSeek 块；若原内容已含顶层 `model`/`model_provider` 键，只补
+  ///      provider table（避免 TOML 重复顶层键报错）。
+  ///
+  /// 任何失败 → LogService.warning 并返回描述，绝不阻断对话。
+  static String _ensureCodexConfig(String rootfsDir) {
+    final configFile = File('$rootfsDir/root/.codex/config.toml');
+    try {
+      if (configFile.existsSync()) {
+        final content = configFile.readAsStringSync();
+        if (content.contains(codexConfigMarker)) {
+          return '已含 [model_providers.deepseek]，跳过（幂等）';
+        }
+        final hasTopLevelModel =
+            RegExp(r'^\s*model\s*=', multiLine: true).hasMatch(content);
+        final hasTopLevelProvider =
+            RegExp(r'^\s*model_provider\s*=', multiLine: true).hasMatch(content);
+        // 原内容已有顶层 model/model_provider 键 → 只补 provider 定义，
+        // 不重复顶层键；否则补完整默认头（顶层 model + provider table）。
+        final head = (hasTopLevelModel || hasTopLevelProvider)
+            ? _deepSeekProviderBlock
+            : codexConfigToml.trimRight();
+        final tail = content.trimRight();
+        final newContent =
+            tail.isEmpty ? '$head\n' : '$head\n\n$tail\n';
+        configFile.writeAsStringSync(newContent);
+        return '缺 provider 块，已补写（保留原 ${tail.split('\n').length} 行内容）';
+      }
+      configFile.parent.createSync(recursive: true);
+      configFile.writeAsStringSync(codexConfigToml);
+      return 'config 不存在，已创建完整默认';
+    } catch (e) {
+      LogService.warning('CodexRunner', 'codex config 自愈失败（不阻断对话）: $e');
+      return '自愈失败: $e';
+    }
+  }
+
+  /// 从默认配置提取 `[model_providers.deepseek]` 起始的 provider 定义段
+  /// （用于「原 config 已含顶层 model 键」时只补 provider、不重复顶层键）。
+  static String get _deepSeekProviderBlock {
+    final idx = codexConfigToml.indexOf(codexConfigMarker);
+    assert(idx >= 0);
+    return codexConfigToml.substring(idx).trimLeft();
+  }
 
   /// 读取 rootfs 内 DeepSeek API key（DS_API_KEY=）
   static String? _readDeepSeekKey(LinuxRuntimePaths paths) {
