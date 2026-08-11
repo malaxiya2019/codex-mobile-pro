@@ -37,6 +37,7 @@ import '../../runtime/process/process_runner.dart';
 import '../../runtime/process/runner_models.dart';
 import '../../runtime/provider/linux_runtime_provider.dart';
 import '../../runtime/runtime_manager.dart';
+import 'workspace_dir_resolver.dart';
 
 // ══════════════════════════════════════════════
 // 强类型事件模型
@@ -334,6 +335,22 @@ wire_api = "responses"
       dbg('apiKey = ${_maskKey(apiKey)}');
       dbg('workspace .codex 含宿主路径(需遮蔽) = '
           '${CodexRunner.isWorkspaceCodexHostPathPolluted(hostWorkingDir)}');
+
+      // ─── 2.7. 统一工作目录解析（Codex 启动前最终关卡）──────────────
+      // 目标：requested（App 文档目录等）不是 Git 仓库时，解析到已知项目
+      // 根目录（requested/git/<repo>），保证 Codex 的 cwd 内容即项目根，
+      // 而非 /workspace 空壳。ChatEngine 已按会话缓存解析结果并传入；此处
+      // 为幂等兜底（直接调用本 runner 的场景同样安全）。
+      final requestedWorkingDir = hostWorkingDir;
+      final wd = resolveCodexWorkspaceDir(requestedWorkingDir);
+      hostWorkingDir = wd.path;
+      dbg('工作目录解析 = requested=$requestedWorkingDir → resolved=${wd.path} '
+          '(isGit=${wd.isGitRepository}, wasResolved=${wd.wasResolved})');
+      LogService.info(
+        'CodexRunner',
+        'codex cwd = $guestWorkspaceDir (bind: ${wd.path}, '
+        'isGit=${wd.isGitRepository})',
+      );
 
       // ─── 3. 确保宿主工作目录存在 ─────────────────────────────
       try {

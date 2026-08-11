@@ -19,11 +19,14 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import '../../core/logger/log_service.dart';
 import 'ai_message.dart';
 import 'chat_engine.dart';
 import 'chat_session.dart';
 import 'codex_runner.dart';
+import 'workspace_dir_resolver.dart';
 
 /// 工具调用状态（用于 UI 展示）
 class CodexToolCall {
@@ -88,6 +91,12 @@ class CodexChatEngine implements IChatEngine {
   final Map<String, GenerationStatus> _generationStatuses = {};
   final Map<String, String> _threadIds = {};
 
+  /// sessionId → (请求目录, 解析目录)。
+  /// 会话内缓存：同一请求解析一次后不再每轮重新猜测；用户显式切换工作
+  /// 目录或解析目录失效时重新解析（见 [_resolveWorkspaceDir]）。
+  final Map<String, ({String requested, String resolved})>
+      _resolvedWorkspaceDirs = {};
+
   /// 每会话正在运行的 run（供 stopGeneration）
   final Map<String, CodexRunner> _activeRunners = {};
 
@@ -123,6 +132,7 @@ class CodexChatEngine implements IChatEngine {
     _sessions.remove(sessionId);
     _generationStatuses.remove(sessionId);
     _threadIds.remove(sessionId);
+    _resolvedWorkspaceDirs.remove(sessionId);
     _activeRunners.remove(sessionId);
   }
 
@@ -533,23 +543,52 @@ class CodexChatEngine implements IChatEngine {
     Map<String, dynamic>? messageMetadata,
     ChatSession session,
   ) async {
+    // 确定「请求的工作目录」：用户/消息显式指定 > 会话 metadata >
+    // 构造注入的默认 > 运行时解析 App 文档目录 > 兜底 /workspace
+    String? requested;
     final fromMessage = messageMetadata?['workspaceDir'] as String?;
-    if (fromMessage != null && fromMessage.isNotEmpty) return fromMessage;
+    if (fromMessage != null && fromMessage.isNotEmpty) {
+      requested = fromMessage;
+    } else {
+      final fromSession = session.metadata?['workspaceDir'] as String?;
+      if (fromSession != null && fromSession.isNotEmpty) {
+        requested = fromSession;
+      } else if (defaultWorkspaceDir != null && defaultWorkspaceDir!.isNotEmpty) {
+        requested = defaultWorkspaceDir;
+      } else if (workspaceDirResolver != null) {
+        try {
+          final dir = await workspaceDirResolver!();
+          if (dir.isNotEmpty) requested = dir;
+        } catch (_) {}
+      }
+    }
+    requested = (requested == null || requested.isEmpty)
+        ? '/workspace'
+        : requested;
 
-    final fromSession = session.metadata?['workspaceDir'] as String?;
-    if (fromSession != null && fromSession.isNotEmpty) return fromSession;
-
-    if (defaultWorkspaceDir != null && defaultWorkspaceDir!.isNotEmpty) {
-      return defaultWorkspaceDir!;
+    // 会话内缓存：同一请求目录且解析目录仍有效 → 直接复用，避免每轮重新
+    // 扫描文件系统（除非用户主动切换工作目录，或目录已失效）。
+    final cached = _resolvedWorkspaceDirs[session.sessionId];
+    if (cached != null &&
+        cached.requested == requested &&
+        Directory(cached.resolved).existsSync()) {
+      return cached.resolved;
     }
 
-    if (workspaceDirResolver != null) {
-      try {
-        final dir = await workspaceDirResolver!();
-        if (dir.isNotEmpty) return dir;
-      } catch (_) {}
-    }
-    return '/workspace';
+    // Codex 启动前统一工作目录解析：
+    //   1) 判断目录是否存在；2) 判断是否为 Git 仓库；3) 不是 Git 仓库时
+    //   检查已知项目根目录（requested/git/ 下的 git clone 仓库）。
+    final resolved = resolveCodexWorkspaceDir(requested);
+    _resolvedWorkspaceDirs[session.sessionId] = (
+      requested: requested,
+      resolved: resolved.path,
+    );
+    LogService.info('CodexChatEngine', 'requestedWorkingDirectory = $requested');
+    LogService.info('CodexChatEngine',
+        'resolvedWorkingDirectory = ${resolved.path}');
+    LogService.info('CodexChatEngine',
+        'isGitRepository = ${resolved.isGitRepository}');
+    return resolved.path;
   }
 
   void _updatePlaceholder(

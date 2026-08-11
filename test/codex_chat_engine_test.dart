@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:codex_mobile_pro/core/ai/ai_message.dart';
 import 'package:codex_mobile_pro/core/ai/chat_engine.dart';
@@ -482,4 +483,116 @@ void main() {
       engine.dispose();
     });
   });
+  group('CodexChatEngine — 工作目录解析（真实目录 + 会话内缓存）', () {
+    late Directory temp;
+
+    setUp(() {
+      temp = Directory.systemTemp.createTempSync('codex-ws-cache');
+    });
+
+    tearDown(() {
+      if (temp.existsSync()) temp.deleteSync(recursive: true);
+    });
+
+    Directory createGitRepo(String path) {
+      final repo = Directory(path)..createSync(recursive: true);
+      Directory('$path/.git').createSync(recursive: true);
+      return repo;
+    }
+
+    test('默认目录（App 文档目录）非 Git 仓库 → 解析到 文档目录/git/<repo>', () async {
+      final runner = FakeCodexRunner();
+      final engine = CodexChatEngine(
+        runner: runner,
+        workspaceDirResolver: () async => temp.path,
+      );
+      final session = engine.createSession();
+      createGitRepo('${temp.path}/git/codex-mobile-pro');
+
+      await for (final _ in engine.streamMessage(
+        sessionId: session.sessionId,
+        content: 'hi',
+      )) {}
+
+      expect(runner.lastWorkingDir, '${temp.path}/git/codex-mobile-pro');
+      engine.dispose();
+    });
+
+    test('会话内缓存：解析一次后不再每轮重新扫描（新增仓库不影响结果）', () async {
+      final runner = FakeCodexRunner();
+      final engine = CodexChatEngine(
+        runner: runner,
+        workspaceDirResolver: () async => temp.path,
+      );
+      final session = engine.createSession();
+      createGitRepo('${temp.path}/git/codex-mobile-pro');
+
+      await for (final _ in engine.streamMessage(
+        sessionId: session.sessionId,
+        content: '第一轮',
+      )) {}
+      expect(runner.lastWorkingDir, '${temp.path}/git/codex-mobile-pro');
+
+      // 第二轮前新增另一个 Git 仓库；缓存命中 → 仍用第一轮解析结果
+      createGitRepo('${temp.path}/git/newer-repo');
+      await for (final _ in engine.streamMessage(
+        sessionId: session.sessionId,
+        content: '第二轮',
+      )) {}
+      expect(runner.lastWorkingDir, '${temp.path}/git/codex-mobile-pro');
+      engine.dispose();
+    });
+
+    test('缓存目录失效 → 重新解析（回退到文档目录）', () async {
+      final runner = FakeCodexRunner();
+      final engine = CodexChatEngine(
+        runner: runner,
+        workspaceDirResolver: () async => temp.path,
+      );
+      final session = engine.createSession();
+      final proj = createGitRepo('${temp.path}/git/codex-mobile-pro');
+
+      await for (final _ in engine.streamMessage(
+        sessionId: session.sessionId,
+        content: '第一轮',
+      )) {}
+      expect(runner.lastWorkingDir, proj.path);
+
+      // 删除缓存的项目目录（目录失效）→ 重新解析
+      proj.deleteSync(recursive: true);
+      await for (final _ in engine.streamMessage(
+        sessionId: session.sessionId,
+        content: '第二轮',
+      )) {}
+      expect(runner.lastWorkingDir, temp.path);
+      engine.dispose();
+    });
+
+    test('用户显式切换工作目录 → 重新解析（不被缓存锁定）', () async {
+      final runner = FakeCodexRunner();
+      final engine = CodexChatEngine(
+        runner: runner,
+        workspaceDirResolver: () async => temp.path,
+      );
+      final session = engine.createSession();
+      createGitRepo('${temp.path}/git/codex-mobile-pro');
+
+      await for (final _ in engine.streamMessage(
+        sessionId: session.sessionId,
+        content: '第一轮',
+      )) {}
+      expect(runner.lastWorkingDir, '${temp.path}/git/codex-mobile-pro');
+
+      // 用户显式选另一个 Git 仓库目录 → 直接使用该目录
+      final other = createGitRepo('${temp.path}/other-repo');
+      await for (final _ in engine.streamMessage(
+        sessionId: session.sessionId,
+        content: '第二轮',
+        metadata: {'workspaceDir': other.path},
+      )) {}
+      expect(runner.lastWorkingDir, other.path);
+      engine.dispose();
+    });
+  });
 }
+
