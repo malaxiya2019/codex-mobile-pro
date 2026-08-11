@@ -104,33 +104,7 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         centerTitle: false,
         backgroundColor: colorScheme.surfaceContainer,
         actions: [
-          // 界面模式切换（只换渲染层，不重新请求 AI）
-          IconButton(
-            icon: Icon(
-              state.viewMode == AiChatViewMode.bubble
-                  ? Icons.chat_bubble
-                  : Icons.chat_bubble_outline,
-            ),
-            tooltip: '气泡模式',
-            onPressed: () {
-              ref
-                  .read(chatProvider.notifier)
-                  .setViewMode(AiChatViewMode.bubble);
-            },
-          ),
-          IconButton(
-            icon: Icon(
-              state.viewMode == AiChatViewMode.stream
-                  ? Icons.subject
-                  : Icons.subject_outlined,
-            ),
-            tooltip: '流式模式',
-            onPressed: () {
-              ref
-                  .read(chatProvider.notifier)
-                  .setViewMode(AiChatViewMode.stream);
-            },
-          ),
+          // 界面模式切换已移到下方「工作目录条」右侧（带文字标签，直观可见）
           // 停止生成
           if (isStreaming)
             IconButton(
@@ -853,11 +827,93 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
+              _buildViewModeToggle(colorScheme, state),
               const SizedBox(width: 4),
               Icon(Icons.arrow_drop_down,
                   size: 18, color: colorScheme.onSurfaceVariant),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// 界面模式切换控件（气泡 / 流式）。
+  ///
+  /// 只切换渲染层，绝不重新请求 AI / 不重复执行命令 / 不创建第二个进程；
+  /// 选择写入 SharedPreferences，App 重启后恢复。放在工作目录条右侧，
+  /// 带文字标签，直观可见。
+  Widget _buildViewModeToggle(ColorScheme colorScheme, ChatState state) {
+    final selected = state.viewMode;
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _viewModeChip(
+            colorScheme,
+            selected,
+            AiChatViewMode.bubble,
+            Icons.chat_bubble_outline,
+            '气泡',
+          ),
+          _viewModeChip(
+            colorScheme,
+            selected,
+            AiChatViewMode.stream,
+            Icons.subject,
+            '流式',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _viewModeChip(
+    ColorScheme colorScheme,
+    AiChatViewMode selected,
+    AiChatViewMode mode,
+    IconData icon,
+    String label,
+  ) {
+    final active = selected == mode;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () {
+        ref.read(chatProvider.notifier).setViewMode(mode);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: active ? colorScheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: active ? colorScheme.onPrimary : colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                color: active
+                    ? colorScheme.onPrimary
+                    : colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -49,3 +49,4 @@ test_report*.json
 .flutter-plugins-dependencies
 android/gradlew.bat
 android/app/src/main/java/io/flutter/plugins/
+*.wsd
