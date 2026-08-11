@@ -48,6 +48,78 @@ class _GitHubLoginPageState extends ConsumerState<GitHubLoginPage> {
     final theme = Theme.of(context);
     final authState = ref.watch(gitHubAuthProvider);
 
+    // 已登录：不再要求输入 Token，显示当前登录状态 + 退出操作
+    if (authState.isLoggedIn) {
+      return _buildLoggedInView(theme, authState);
+    }
+    return _buildLoginForm(theme, authState);
+  }
+
+  /// 已登录视图：显示当前 GitHub 登录状态与退出操作，不要求重新输入 Token。
+  Widget _buildLoggedInView(ThemeData theme, GitHubAuthState authState) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('GitHub 登录'),
+        centerTitle: false,
+        backgroundColor: theme.colorScheme.surfaceContainer,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CircleAvatar(
+              radius: 40,
+              backgroundColor: theme.colorScheme.primaryContainer,
+              child: Text(
+                (authState.username?.isNotEmpty ?? false)
+                    ? authState.username![0].toUpperCase()
+                    : 'G',
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '已连接 GitHub',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              authState.username != null ? '@${authState.username}' : 'GitHub 账户',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            OutlinedButton.icon(
+              onPressed: () async {
+                await ref.read(gitHubAuthProvider.notifier).logout();
+                if (mounted) _showSnackBar('已退出 GitHub，Token 已清除');
+              },
+              icon: const Icon(Icons.logout),
+              label: const Text('退出 GitHub / 清除 Token'),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pop(true),
+              icon: const Icon(Icons.check),
+              label: const Text('完成'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 未登录：Token 输入登录表单。
+  Widget _buildLoginForm(ThemeData theme, GitHubAuthState authState) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('GitHub 登录'),

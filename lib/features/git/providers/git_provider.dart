@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/logger/log_service.dart';
 import '../../../runtime/runtime_manager.dart';
 
 import '../models/git_repository.dart';
@@ -30,12 +33,14 @@ class GitHubAuthState {
   final String? username;
   final String? avatarUrl;
   final bool isLoading;
+  final bool isRestoring;
 
   const GitHubAuthState({
     this.isLoggedIn = false,
     this.username,
     this.avatarUrl,
     this.isLoading = false,
+    this.isRestoring = false,
   });
 
   GitHubAuthState copyWith({
@@ -43,12 +48,14 @@ class GitHubAuthState {
     String? username,
     String? avatarUrl,
     bool? isLoading,
+    bool? isRestoring,
   }) {
     return GitHubAuthState(
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
       username: username ?? this.username,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       isLoading: isLoading ?? this.isLoading,
+      isRestoring: isRestoring ?? this.isRestoring,
     );
   }
 }
@@ -58,28 +65,64 @@ final gitHubAuthProvider =
   return GitHubAuthNotifier(ref.read(gitHubServiceProvider));
 });
 
+/// GitHub 认证 Notifier。
+///
+/// 构造时异步从 secure storage 恢复登录态（[isRestoring] 期间页面应显示加载中，
+/// 不要判定「未登录」而弹登录页——这是旧版「重启后要求重新输入」的根因之一）。
 class GitHubAuthNotifier extends StateNotifier<GitHubAuthState> {
   final GitHubService _service;
 
-  GitHubAuthNotifier(this._service) : super(const GitHubAuthState()) {
+  GitHubAuthNotifier(this._service)
+      : super(const GitHubAuthState(isRestoring: true)) {
     _init();
   }
 
+  /// 从 secure storage 恢复登录态。
+  ///
+  /// 策略：
+  /// 1. 有 token → 直接用已缓存用户信息恢复登录（`loadToken` 已加载 `github_user`），
+  ///    绝不在网络失败时清除有效 token。
+  /// 2. 无 token → 保持未登录。
+  /// 只有 GitHub 明确 401（`_apiGet` 内部已 `clearToken`）才清登录态，见
+  /// [_refreshUserInfo]。
   Future<void> _init() async {
-    final hasToken = await _service.hasToken();
-    if (hasToken) {
-      state = state.copyWith(isLoading: true);
-      final user = await _service.getUserInfo();
-      if (user != null) {
+    try {
+      final hasToken = await _service.hasToken();
+      if (hasToken) {
+        final cachedUser = _service.userInfo;
         state = GitHubAuthState(
           isLoggedIn: true,
-          username: user['login'],
-          avatarUrl: user['avatar_url'],
+          username: cachedUser?['login'],
+          avatarUrl: cachedUser?['avatar_url'],
         );
+        // 后台刷新用户信息；结果不影响已恢复的登录态。
+        unawaited(_refreshUserInfo());
       } else {
-        await _service.clearToken();
         state = const GitHubAuthState();
       }
+    } catch (_) {
+      LogService.warning('GitHubAuth', '登录状态恢复失败（不阻断）');
+      state = const GitHubAuthState();
+    }
+  }
+
+  /// 后台刷新 GitHub 用户信息。
+  ///
+  /// - 成功 → 更新用户名/头像。
+  /// - 失败且 token 已被 service 判定失效（401 时已 `clearToken`）→ 清登录态。
+  /// - 失败但 token 仍在（网络/5xx/限流）→ 保留已恢复的登录态，不误删 token。
+  Future<void> _refreshUserInfo() async {
+    final user = await _service.getUserInfo();
+    if (!mounted) return;
+    if (user != null) {
+      state = GitHubAuthState(
+        isLoggedIn: true,
+        username: user['login'],
+        avatarUrl: user['avatar_url'],
+      );
+    } else if (!_service.isLoggedIn) {
+      // 仅当 service 已确认 token 失效（401 清除）才清除登录态
+      state = const GitHubAuthState();
     }
   }
 
@@ -104,6 +147,7 @@ class GitHubAuthNotifier extends StateNotifier<GitHubAuthState> {
     state = const GitHubAuthState();
   }
 }
+
 
 // ── 仓库列表状态 ──
 

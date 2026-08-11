@@ -18,20 +18,30 @@ class _RepoListPageState extends ConsumerState<RepoListPage> {
   @override
   void initState() {
     super.initState();
+    // 登录态从 secure storage 恢复是异步的；恢复完成前不要判定「未登录」弹登录页
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAuthAndLoad();
+      final authState = ref.read(gitHubAuthProvider);
+      if (!authState.isRestoring) {
+        _afterAuthRestored();
+      }
+      // 恢复中 → 由 build 中的 ref.listen 在恢复完成后触发
     });
   }
 
-  Future<void> _checkAuthAndLoad() async {
+  /// 登录态恢复完成后：未登录则引导登录，已登录则加载仓库列表。
+  void _afterAuthRestored() {
+    if (!mounted) return;
     final authState = ref.read(gitHubAuthProvider);
     if (!authState.isLoggedIn) {
-      final result = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(builder: (_) => const GitHubLoginPage()),
-      );
-      if (result == true && mounted) {
-        ref.read(repoListProvider.notifier).loadRepos();
-      }
+      Navigator.of(context)
+          .push<bool>(
+            MaterialPageRoute(builder: (_) => const GitHubLoginPage()),
+          )
+          .then((result) {
+            if (result == true && mounted) {
+              ref.read(repoListProvider.notifier).loadRepos();
+            }
+          });
     } else {
       ref.read(repoListProvider.notifier).loadRepos();
     }
@@ -42,6 +52,13 @@ class _RepoListPageState extends ConsumerState<RepoListPage> {
     final theme = Theme.of(context);
     final authState = ref.watch(gitHubAuthProvider);
     final repoState = ref.watch(repoListProvider);
+
+    // 监听登录态恢复完成（isRestoring true → false），避免竞态导致误弹登录页
+    ref.listen<GitHubAuthState>(gitHubAuthProvider, (prev, next) {
+      if ((prev?.isRestoring ?? false) && !next.isRestoring) {
+        _afterAuthRestored();
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -77,6 +94,11 @@ class _RepoListPageState extends ConsumerState<RepoListPage> {
     GitHubAuthState authState,
     RepoListState repoState,
   ) {
+    // 登录态恢复中：显示加载，避免闪现「未登录 GitHub」
+    if (authState.isRestoring) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     if (!authState.isLoggedIn) {
       return Center(
         child: Column(
