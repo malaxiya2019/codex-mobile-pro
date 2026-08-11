@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/ai/ai_message.dart';
@@ -410,18 +413,22 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (lang.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    lang,
-                    style: const TextStyle(
-                      fontFamily: 'monospace',
-                      fontSize: 10,
-                      color: Colors.grey,
+              Row(
+                children: [
+                  if (lang.isNotEmpty)
+                    Text(
+                      lang,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 10,
+                        color: Colors.grey,
+                      ),
                     ),
-                  ),
-                ),
+                  const Spacer(),
+                  _CodeBlockCopyButton(code: code),
+                ],
+              ),
+              const SizedBox(height: 4),
               Text(
                 code,
                 style: const TextStyle(
@@ -448,11 +455,15 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     }
 
     if (segments.isEmpty) {
-      return Text(content, style: theme.textTheme.bodyMedium);
+      return SelectionArea(
+        child: Text(content, style: theme.textTheme.bodyMedium),
+      );
     }
 
-    return RichText(
-      text: TextSpan(children: segments),
+    return SelectionArea(
+      child: RichText(
+        text: TextSpan(children: segments),
+      ),
     );
   }
 
@@ -746,6 +757,64 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+
+/// AI 回复代码块的一键复制按钮。
+/// 点击将完整代码复制到剪贴板，短暂显示 check 图标。
+class _CodeBlockCopyButton extends StatefulWidget {
+  const _CodeBlockCopyButton({required this.code});
+
+  final String code;
+
+  @override
+  State<_CodeBlockCopyButton> createState() => _CodeBlockCopyButtonState();
+}
+
+class _CodeBlockCopyButtonState extends State<_CodeBlockCopyButton> {
+  bool _copied = false;
+  Timer? _timer;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.code));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    _timer?.cancel();
+    _timer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _copied = false);
+    });
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('代码已复制'),
+          duration: Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: _copy,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+      iconSize: 16,
+      tooltip: _copied ? '已复制' : '复制代码',
+      icon: Icon(
+        _copied ? Icons.check : Icons.copy,
+        size: 16,
+        color: _copied ? Colors.greenAccent : Colors.white70,
       ),
     );
   }
