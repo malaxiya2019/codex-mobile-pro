@@ -291,6 +291,8 @@ wire_api = "responses"
     String? systemPrompt,
     Duration? timeout,
     required CodexEventListener listener,
+    String? guestWorkingDir,
+    bool resolveWorkspace = true,
   }) async {
     // [AI-DEBUG] 全链路诊断累积（临时取证用）
     final debug = <String>[];
@@ -342,14 +344,29 @@ wire_api = "responses"
       // 而非 /workspace 空壳。ChatEngine 已按会话缓存解析结果并传入；此处
       // 为幂等兜底（直接调用本 runner 的场景同样安全）。
       final requestedWorkingDir = hostWorkingDir;
-      final wd = resolveCodexWorkspaceDir(requestedWorkingDir);
-      hostWorkingDir = wd.path;
-      dbg('工作目录解析 = requested=$requestedWorkingDir → resolved=${wd.path} '
-          '(isGit=${wd.isGitRepository}, wasResolved=${wd.wasResolved})');
+      // 统一工作目录解析（Codex 启动前完成一次）：
+      //   - 默认（resolveWorkspace=true）：本 runner 幂等兜底解析，把
+      //     requested 解析到已知项目根（requested/git/<repo>）。
+      //   - CodexChatEngine 已按会话解析并缓存时（resolveWorkspace=false）：
+      //     hostWorkingDir 保持 bind 根，guestWorkingDir 为解析出的项目
+      //     guest 路径（如 /workspace/git/codex-mobile-pro）。
+      final String resolvedHost;
+      final bool isGit;
+      if (resolveWorkspace) {
+        final wd = resolveCodexWorkspaceDir(requestedWorkingDir);
+        resolvedHost = wd.path;
+        isGit = wd.isGitRepository;
+        hostWorkingDir = wd.path;
+      } else {
+        resolvedHost = hostWorkingDir;
+        isGit = isGitRepository(resolvedHost);
+      }
+      final guestCwd = guestWorkingDir ?? guestWorkspaceDir;
+      dbg('工作目录解析 = requested=$requestedWorkingDir → resolved=$resolvedHost '
+          '(isGit=$isGit)');
       LogService.info(
         'CodexRunner',
-        'codex cwd = $guestWorkspaceDir (bind: ${wd.path}, '
-        'isGit=${wd.isGitRepository})',
+        'codex cwd = $guestCwd (bind: $resolvedHost, isGit=$isGit)',
       );
 
       // ─── 3. 确保宿主工作目录存在 ─────────────────────────────
@@ -396,6 +413,7 @@ wire_api = "responses"
         apiKey: apiKey,
         timeout: timeout,
         listener: debugListener,
+        guestWorkingDir: guestWorkingDir,
       );
 
       // ─── 6. 自愈重试：proot 可执行路径（nativeLibraryDir）───
@@ -419,6 +437,7 @@ wire_api = "responses"
           apiKey: apiKey,
           timeout: timeout,
           listener: debugListener,
+          guestWorkingDir: guestWorkingDir,
         );
       }
 
@@ -491,6 +510,7 @@ wire_api = "responses"
     required String apiKey,
     required Duration? timeout,
     required CodexEventListener listener,
+    String? guestWorkingDir,
   }) async {
     // 内层 bash 命令：
     //   - `exec` 让 bash 进程替换为 codex，信号直接送达 codex
@@ -514,7 +534,7 @@ wire_api = "responses"
       // 若 workspace 的 .codex 被宿主绝对路径污染，追加一条干净阴影
       // 目录 bind，遮蔽 /workspace/.codex，避免 codex 启动读宿主路径 ENOENT。
       extraBinds: _buildExtraBinds(hostWorkingDir: hostWorkingDir, rootfsDir: rootfsDir),
-      workingDirectory: guestWorkspaceDir,
+      workingDirectory: guestWorkingDir ?? guestWorkspaceDir,
       // codex 专属环境：key + prompt（Linux 基础环境由适配器合并）
       environment: {
         'DEEPSEEK_API_KEY': apiKey,

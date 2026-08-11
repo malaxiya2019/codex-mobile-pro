@@ -1,3 +1,5 @@
+import 'attachment.dart';
+
 /// 对话角色
 enum ChatRole {
   system,
@@ -53,6 +55,12 @@ class ChatMessage {
   /// 支持：文件引用、Selection、Workspace Context、Token 信息、Provider 信息等。
   final Map<String, dynamic>? metadata;
 
+  /// 本地附件（图片 / 文件 / 项目文件）。
+  ///
+  /// 本阶段只做本地管理与 UI 展示：不参与 API 序列化、不塞进 AI Context、
+  /// 不上传。见 [toApiMap]（不包含附件）。
+  final List<Attachment> attachments;
+
   const ChatMessage({
     required this.id,
     required this.role,
@@ -60,6 +68,7 @@ class ChatMessage {
     required this.timestamp,
     this.isStreaming = false,
     this.metadata,
+    this.attachments = const [],
   });
 
   ChatMessage copyWith({
@@ -69,6 +78,7 @@ class ChatMessage {
     DateTime? timestamp,
     bool? isStreaming,
     Map<String, dynamic>? metadata,
+    List<Attachment>? attachments,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -77,6 +87,7 @@ class ChatMessage {
       timestamp: timestamp ?? this.timestamp,
       isStreaming: isStreaming ?? this.isStreaming,
       metadata: metadata ?? this.metadata,
+      attachments: attachments ?? this.attachments,
     );
   }
 

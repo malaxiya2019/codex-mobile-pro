@@ -4,9 +4,11 @@ import 'package:codex_mobile_pro/core/ai/ai_message.dart';
 import 'package:codex_mobile_pro/core/ai/ai_provider_manager.dart';
 import 'package:codex_mobile_pro/core/ai/chat_engine.dart';
 import 'package:codex_mobile_pro/core/ai/chat_session.dart';
+import 'package:codex_mobile_pro/features/ai/models/ai_chat_view_mode.dart';
 import 'package:codex_mobile_pro/features/ai/providers/chat_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // ══════════════════════════════════════════════
 // Mock IChatEngine
@@ -375,6 +377,61 @@ void main() {
 
         expect(session, isNotNull);
         expect(session!.messages, isEmpty);
+      });
+    });
+
+    // ── 界面模式（气泡 / 流式）──
+
+    group('界面模式', () {
+      test('默认气泡模式', () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = createTestContainer(engine: mockEngine);
+        addTearDown(() => container.dispose());
+
+        final state = container.read(chatProvider);
+        expect(state.viewMode, AiChatViewMode.bubble);
+      });
+
+      test('setViewMode 切换并持久化', () async {
+        SharedPreferences.setMockInitialValues({});
+        final container = createTestContainer(engine: mockEngine);
+        addTearDown(() => container.dispose());
+
+        final notifier = container.read(chatProvider.notifier);
+        await notifier.setViewMode(AiChatViewMode.stream);
+        expect(container.read(chatProvider).viewMode, AiChatViewMode.stream);
+
+        // 持久化已写入
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getString('ai_chat_view_mode'), 'stream');
+      });
+
+      test('重新创建 Provider 从持久化恢复模式', () async {
+        SharedPreferences.setMockInitialValues(
+          {'ai_chat_view_mode': 'stream'},
+        );
+
+        // 模拟 App 重启：新容器 / 新 Notifier
+        final container = createTestContainer(engine: mockEngine);
+        addTearDown(() => container.dispose());
+
+        // 先触发 Provider 创建（构造 ChatNotifier 并启动异步 _loadViewMode），
+        // 再等 _loadViewMode 完成 —— 顺序不能反，否则没有时间窗口供其恢复。
+        container.read(chatProvider);
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        final state = container.read(chatProvider);
+        expect(state.viewMode, AiChatViewMode.stream);
+      });
+
+      test('非法持久化值兜底为气泡', () async {
+        SharedPreferences.setMockInitialValues(
+          {'ai_chat_view_mode': 'bogus'},
+        );
+        final container = createTestContainer(engine: mockEngine);
+        addTearDown(() => container.dispose());
+
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(container.read(chatProvider).viewMode, AiChatViewMode.bubble);
       });
     });
 

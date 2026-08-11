@@ -23,6 +23,7 @@ import 'dart:io';
 
 import '../../core/logger/log_service.dart';
 import 'ai_message.dart';
+import 'attachment.dart';
 import 'chat_engine.dart';
 import 'chat_session.dart';
 import 'codex_runner.dart';
@@ -91,10 +92,24 @@ class CodexChatEngine implements IChatEngine {
   final Map<String, GenerationStatus> _generationStatuses = {};
   final Map<String, String> _threadIds = {};
 
-  /// sessionId → (请求目录, 解析目录)。
+  /// sessionId → 工作目录解析结果缓存。
   /// 会话内缓存：同一请求解析一次后不再每轮重新猜测；用户显式切换工作
   /// 目录或解析目录失效时重新解析（见 [_resolveWorkspaceDir]）。
-  final Map<String, ({String requested, String resolved})>
+  ///   - requested:    用户/会话请求的目录（host 或 /workspace 兜底）
+  ///   - host:         CodexRunner 的 bind 根（= requested）
+  ///   - guest:        解析出的项目 guest 路径（Codex cwd，如 `/workspace/git/<repo>`）
+  ///   - resolvedHost: 解析出的 host 项目路径
+  ///   - isGit:        resolvedHost 是否为 Git 仓库
+  final Map<
+    String,
+    ({
+      String requested,
+      String host,
+      String guest,
+      String resolvedHost,
+      bool isGit,
+    })
+  >
       _resolvedWorkspaceDirs = {};
 
   /// 每会话正在运行的 run（供 stopGeneration）
@@ -193,13 +208,14 @@ class CodexChatEngine implements IChatEngine {
       );
     }
 
-    // 创建用户消息
+    // 创建用户消息（attachments 来自 metadata，仅本地绑定，不参与 AI 请求）
     final userMessage = ChatMessage(
       id: _generateId(),
       role: ChatRole.user,
       content: content.trim(),
       timestamp: DateTime.now(),
       metadata: metadata,
+      attachments: _attachmentsFromMetadata(metadata),
     );
     session.addMessage(userMessage);
 
@@ -210,7 +226,7 @@ class CodexChatEngine implements IChatEngine {
     }
 
     // 确定目标目录
-    final workspaceDir = await _resolveWorkspaceDir(metadata, session);
+    final workspace = await _resolveWorkspaceDir(metadata, session);
 
     // 占位消息（实时承载文本 + 工具调用状态）
     final placeholderId = 'streaming-${_generateId()}';
@@ -221,7 +237,8 @@ class CodexChatEngine implements IChatEngine {
       timestamp: DateTime.now(),
       isStreaming: true,
       metadata: {
-        'workspaceDir': workspaceDir,
+        'workspaceDir': workspace.host,
+        'workspaceDirGuest': workspace.guest,
         'codex_tool_calls': <Map<String, dynamic>>[],
       },
     ));
@@ -247,7 +264,11 @@ class CodexChatEngine implements IChatEngine {
     unawaited(_runner
         .run(
           prompt: content.trim(),
-          hostWorkingDir: workspaceDir,
+          // bind 根保持 requested；Codex cwd 用解析出的项目 guest 路径，
+          // 避免 /workspace 空壳被当作 Git 项目目录。
+          hostWorkingDir: workspace.host,
+          guestWorkingDir: workspace.guest,
+          resolveWorkspace: false,
           systemPrompt: systemPrompt,
           listener: _CodexEventListener(
             onEvent: (event) {
@@ -294,7 +315,10 @@ class CodexChatEngine implements IChatEngine {
                 session,
                 placeholderId,
                 content: textBuffer.toString(),
-                workspaceDir: workspaceDir,
+
+                workspaceHost: workspace.host,
+
+                workspaceGuest: workspace.guest,
                 toolCalls: toolCalls,
               );
               yield text;
@@ -308,7 +332,10 @@ class CodexChatEngine implements IChatEngine {
               session,
               placeholderId,
               content: textBuffer.toString(),
-              workspaceDir: workspaceDir,
+
+              workspaceHost: workspace.host,
+
+              workspaceGuest: workspace.guest,
               toolCalls: toolCalls,
             );
           case CodexCommandCompleted(
@@ -331,7 +358,10 @@ class CodexChatEngine implements IChatEngine {
               session,
               placeholderId,
               content: textBuffer.toString(),
-              workspaceDir: workspaceDir,
+
+              workspaceHost: workspace.host,
+
+              workspaceGuest: workspace.guest,
               toolCalls: toolCalls,
             );
           case CodexTurnCompleted():
@@ -367,7 +397,8 @@ class CodexChatEngine implements IChatEngine {
         timestamp: DateTime.now(),
         metadata: {
           'stopped': true,
-          'workspaceDir': workspaceDir,
+          'workspaceDir': workspace.host,
+          'workspaceDirGuest': workspace.guest,
           'codex_tool_calls': toolCalls.map((t) => t.toJson()).toList(),
         },
       ));
@@ -386,7 +417,8 @@ class CodexChatEngine implements IChatEngine {
         timestamp: DateTime.now(),
         metadata: {
           'error': errorMsg,
-          'workspaceDir': workspaceDir,
+          'workspaceDir': workspace.host,
+          'workspaceDirGuest': workspace.guest,
           'codex_tool_calls': toolCalls.map((t) => t.toJson()).toList(),
         },
       ));
@@ -417,7 +449,8 @@ class CodexChatEngine implements IChatEngine {
         timestamp: DateTime.now(),
         metadata: {
           'exitCode': result.exitCode.toString(),
-          'workspaceDir': workspaceDir,
+          'workspaceDir': workspace.host,
+          'workspaceDirGuest': workspace.guest,
           'codex_tool_calls': toolCalls.map((t) => t.toJson()).toList(),
         },
       ));
@@ -431,7 +464,8 @@ class CodexChatEngine implements IChatEngine {
         metadata: {
           'threadId': _threadIds[sessionId],
           'exitCode': result.exitCode.toString(),
-          'workspaceDir': workspaceDir,
+          'workspaceDir': workspace.host,
+          'workspaceDirGuest': workspace.guest,
           'codex_tool_calls': toolCalls.map((t) => t.toJson()).toList(),
           // [AI-DEBUG] 取证期：正常回复也把诊断挂到 metadata（UI 可查）
           'debugLog': result.debugLog,
@@ -539,7 +573,8 @@ class CodexChatEngine implements IChatEngine {
     return session;
   }
 
-  Future<String> _resolveWorkspaceDir(
+  Future<({String host, String guest, String resolvedHost, bool isGit})>
+      _resolveWorkspaceDir(
     Map<String, dynamic>? messageMetadata,
     ChatSession session,
   ) async {
@@ -563,38 +598,91 @@ class CodexChatEngine implements IChatEngine {
       }
     }
     requested = (requested == null || requested.isEmpty)
-        ? '/workspace'
+        ? CodexRunner.guestWorkspaceDir
         : requested;
 
     // 会话内缓存：同一请求目录且解析目录仍有效 → 直接复用，避免每轮重新
     // 扫描文件系统（除非用户主动切换工作目录，或目录已失效）。
     final cached = _resolvedWorkspaceDirs[session.sessionId];
-    if (cached != null &&
-        cached.requested == requested &&
-        Directory(cached.resolved).existsSync()) {
-      return cached.resolved;
+    if (cached != null && cached.requested == requested) {
+      final bindRootValid = cached.host == CodexRunner.guestWorkspaceDir ||
+          Directory(cached.host).existsSync();
+      final resolvedValid = cached.resolvedHost.isEmpty ||
+          Directory(cached.resolvedHost).existsSync();
+      if (bindRootValid && resolvedValid) {
+        return (
+          host: cached.host,
+          guest: cached.guest,
+          resolvedHost: cached.resolvedHost,
+          isGit: cached.isGit,
+        );
+      }
     }
 
     // Codex 启动前统一工作目录解析：
     //   1) 判断目录是否存在；2) 判断是否为 Git 仓库；3) 不是 Git 仓库时
     //   检查已知项目根目录（requested/git/ 下的 git clone 仓库）。
     final resolved = resolveCodexWorkspaceDir(requested);
+    // bind 根 = requested（CodexRunner 把 host 根 bind 到 guest /workspace）
+    final host = requested;
+    // Codex cwd = 项目 guest 路径（如 /workspace/git/codex-mobile-pro）
+    final guest = _hostPathToGuestCwd(requested, resolved.path);
     _resolvedWorkspaceDirs[session.sessionId] = (
       requested: requested,
-      resolved: resolved.path,
+      host: host,
+      guest: guest,
+      resolvedHost: resolved.path,
+      isGit: resolved.isGitRepository,
     );
     LogService.info('CodexChatEngine', 'requestedWorkingDirectory = $requested');
     LogService.info('CodexChatEngine',
         'resolvedWorkingDirectory = ${resolved.path}');
     LogService.info('CodexChatEngine',
         'isGitRepository = ${resolved.isGitRepository}');
-    return resolved.path;
+    LogService.info('CodexChatEngine', 'codex cwd = $guest');
+    return (
+      host: host,
+      guest: guest,
+      resolvedHost: resolved.path,
+      isGit: resolved.isGitRepository,
+    );
+  }
+
+  /// 把解析出的 host 项目路径映射为 PRoot guest cwd。
+  ///
+  /// host 根（requested）被 bind 到 guest /workspace，因此：
+  ///   requested=/data/.../app_flutter，resolved=/data/.../app_flutter/git/repo
+  ///   → guest=/workspace/git/repo
+  /// 若 requested 本身就是 /workspace（兜底）→ guest 保持 resolved。
+  /// 若 resolved 不在 requested 下（异常）→ 退回 /workspace（bind 根）。
+  String _hostPathToGuestCwd(String requested, String resolvedHost) {
+    if (requested == CodexRunner.guestWorkspaceDir) return resolvedHost;
+    if (resolvedHost == requested) return CodexRunner.guestWorkspaceDir;
+    if (resolvedHost.startsWith(requested)) {
+      return '${CodexRunner.guestWorkspaceDir}${resolvedHost.substring(requested.length)}';
+    }
+    return CodexRunner.guestWorkspaceDir;
+  }
+
+
+  /// 从 metadata['attachments'] 解析附件列表（本地绑定，不参与 AI 请求）。
+  List<Attachment> _attachmentsFromMetadata(Map<String, dynamic>? metadata) {
+    final raw = metadata?['attachments'];
+    if (raw is! List || raw.isEmpty) return const [];
+    return raw
+        .map((e) =>
+            Attachment.fromJson((e as Map).cast<String, dynamic>()))
+        .whereType<Attachment>()
+        .toList();
   }
 
   void _updatePlaceholder(
     ChatSession session,
     String placeholderId,
-    {required String content, required String workspaceDir, required List<CodexToolCall> toolCalls}) {
+    {required String content,
+     required String workspaceHost,
+     required String workspaceGuest,
+     required List<CodexToolCall> toolCalls}) {
     final idx = session.messages.indexWhere((m) => m.id == placeholderId);
     if (idx < 0) return;
     session.messages[idx] = ChatMessage(
@@ -604,7 +692,8 @@ class CodexChatEngine implements IChatEngine {
       timestamp: DateTime.now(),
       isStreaming: true,
       metadata: {
-        'workspaceDir': workspaceDir,
+        'workspaceDir': workspaceHost,
+        'workspaceDirGuest': workspaceGuest,
         'codex_tool_calls': toolCalls.map((t) => t.toJson()).toList(),
       },
     );

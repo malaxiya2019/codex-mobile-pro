@@ -1,14 +1,20 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../../../core/ai/ai_message.dart';
+import '../../../core/ai/attachment.dart';
 import '../../../core/ai/chat_engine.dart';
 import '../../../core/ai/codex_chat_engine.dart';
 import '../../project/providers/project_provider.dart';
+import '../models/ai_chat_view_mode.dart';
 import '../providers/chat_provider.dart';
+import '../services/attachment_manager.dart';
 
 class AiChatPage extends ConsumerStatefulWidget {
   const AiChatPage({super.key});
@@ -22,8 +28,23 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
   final _scrollController = ScrollController();
   final _focusNode = FocusNode();
 
+  /// 待发送附件管理（图片 / 文件 / 项目文件，本地暂存）
+  final AttachmentManager _attachmentManager = AttachmentManager();
+
+  @override
+  void initState() {
+    super.initState();
+    _attachmentManager.addListener(_onAttachmentsChanged);
+  }
+
+  void _onAttachmentsChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _attachmentManager.removeListener(_onAttachmentsChanged);
+    _attachmentManager.dispose();
     _textController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -44,10 +65,14 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
 
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
-    if (text.isEmpty) return;
+    final attachments = _attachmentManager.attachments;
+    if (text.isEmpty && attachments.isEmpty) return;
     _textController.clear();
+    _attachmentManager.clear();
 
-    await ref.read(chatProvider.notifier).sendMessage(text);
+    await ref
+        .read(chatProvider.notifier)
+        .sendMessage(text, attachments: attachments);
     _scrollToBottom();
   }
 
@@ -79,6 +104,33 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
         centerTitle: false,
         backgroundColor: colorScheme.surfaceContainer,
         actions: [
+          // 界面模式切换（只换渲染层，不重新请求 AI）
+          IconButton(
+            icon: Icon(
+              state.viewMode == AiChatViewMode.bubble
+                  ? Icons.chat_bubble
+                  : Icons.chat_bubble_outline,
+            ),
+            tooltip: '气泡模式',
+            onPressed: () {
+              ref
+                  .read(chatProvider.notifier)
+                  .setViewMode(AiChatViewMode.bubble);
+            },
+          ),
+          IconButton(
+            icon: Icon(
+              state.viewMode == AiChatViewMode.stream
+                  ? Icons.subject
+                  : Icons.subject_outlined,
+            ),
+            tooltip: '流式模式',
+            onPressed: () {
+              ref
+                  .read(chatProvider.notifier)
+                  .setViewMode(AiChatViewMode.stream);
+            },
+          ),
           // 停止生成
           if (isStreaming)
             IconButton(
@@ -111,7 +163,9 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                     itemCount: state.messages.length,
                     itemBuilder: (context, index) {
                       final msg = state.messages[index];
-                      return _buildMessageBubble(msg, theme, colorScheme);
+                      return state.viewMode == AiChatViewMode.stream
+                          ? _buildStreamMessage(msg, theme, colorScheme)
+                          : _buildMessageBubble(msg, theme, colorScheme);
                     },
                   ),
           ),
@@ -303,6 +357,10 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
                     children: [
                       _buildMessageContent(msg, theme),
 
+                      // 附件展示（图片缩略图 / 文件卡片）
+                      if (msg.attachments.isNotEmpty)
+                        _buildMessageAttachments(msg, theme, colorScheme),
+
                       // 流式动画指示
                       if (isStreaming)
                         const Padding(
@@ -471,65 +529,294 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
 
   Widget _buildInputArea(ThemeData theme, ColorScheme colorScheme, ChatState state) {
     final isLoading = state.loadingState == ChatLoadingState.streaming;
+    final pending = _attachmentManager.attachments;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      padding: const EdgeInsets.fromLTRB(8, 6, 12, 12),
       decoration: BoxDecoration(
         color: colorScheme.surface,
         border: Border(top: BorderSide(color: colorScheme.outlineVariant)),
       ),
       child: SafeArea(
         top: false,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: TextField(
-                controller: _textController,
-                focusNode: _focusNode,
-                enabled: !isLoading,
-                maxLines: 5,
-                minLines: 1,
-                textInputAction: TextInputAction.send,
-                decoration: InputDecoration(
-                  hintText: '输入问题...',
-                  filled: true,
-                  fillColor: colorScheme.surfaceContainerHighest,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  constraints: const BoxConstraints(maxHeight: 120),
+            // 待发送附件（输入框上方）
+            if (pending.isNotEmpty)
+              SizedBox(
+                height: 64,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  children: [
+                    for (final a in pending) _buildPendingAttachmentCard(a, theme, colorScheme),
+                  ],
                 ),
-                onSubmitted: (_) => _sendMessage(),
               ),
-            ),
-            const SizedBox(width: 8),
-            // 停止 / 发送 按钮
-            SizedBox(
-              height: 44,
-              child: isLoading
-                  ? FilledButton(
-                      onPressed: _stopGeneration,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.all(12),
-                        shape: const CircleBorder(),
-                        backgroundColor: Colors.red,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // ＋ 附件菜单
+                IconButton(
+                  onPressed: isLoading ? null : _openAttachmentMenu,
+                  icon: const Icon(Icons.add_circle_outline),
+                  tooltip: '添加附件',
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: TextField(
+                    controller: _textController,
+                    focusNode: _focusNode,
+                    enabled: !isLoading,
+                    maxLines: 5,
+                    minLines: 1,
+                    textInputAction: TextInputAction.send,
+                    decoration: InputDecoration(
+                      hintText: '输入消息…',
+                      filled: true,
+                      fillColor: colorScheme.surfaceContainerHighest,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
                       ),
-                      child: const Icon(Icons.stop, color: Colors.white),
-                    )
-                  : FilledButton(
-                      onPressed: _sendMessage,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.all(12),
-                        shape: const CircleBorder(),
-                      ),
-                      child: const Icon(Icons.send),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      constraints: const BoxConstraints(maxHeight: 120),
                     ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // 停止 / 发送 按钮
+                SizedBox(
+                  height: 44,
+                  child: isLoading
+                      ? FilledButton(
+                          onPressed: _stopGeneration,
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.all(12),
+                            shape: const CircleBorder(),
+                            backgroundColor: Colors.red,
+                          ),
+                          child: const Icon(Icons.stop, color: Colors.white),
+                        )
+                      : FilledButton(
+                          onPressed: _sendMessage,
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.all(12),
+                            shape: const CircleBorder(),
+                          ),
+                          child: const Icon(Icons.send),
+                        ),
+                ),
+              ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// 待发送附件卡片（输入框上方横滑）
+  Widget _buildPendingAttachmentCard(
+    Attachment a,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    return Container(
+      width: 150,
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          _attachmentThumb(a, 34, theme, colorScheme),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  a.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  a.status == AttachmentStatus.error
+                      ? (a.error ?? '附件无效')
+                      : AttachmentManager.formatSize(a.size),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: a.status == AttachmentStatus.error
+                        ? colorScheme.error
+                        : colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          InkWell(
+            onTap: () => _attachmentManager.remove(a.id),
+            child: const Icon(Icons.close, size: 16),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 附件缩略图（图片→缩略图，文件→类型图标）
+  Widget _attachmentThumb(
+    Attachment a,
+    double size,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    if (a.type == AttachmentType.image && a.thumbnail != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: GestureDetector(
+          onTap: () => _previewImage(a.thumbnail!),
+          child: Image.file(
+            File(a.thumbnail!),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Icon(
+              Icons.broken_image_outlined,
+              size: size,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      );
+    }
+    final icon = switch (a.type) {
+      AttachmentType.image => Icons.image_outlined,
+      AttachmentType.projectFile => Icons.folder_open,
+      AttachmentType.file => Icons.insert_drive_file_outlined,
+    };
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Icon(icon, size: size * 0.6, color: colorScheme.onSecondaryContainer),
+    );
+  }
+
+  /// ＋ 附件菜单（拍照 / 相册 / 文件 / 项目文件）
+  Future<void> _openAttachmentMenu() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('拍照'),
+              onTap: () => Navigator.pop(ctx, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('相册'),
+              subtitle: const Text('可选择多张图片'),
+              onTap: () => Navigator.pop(ctx, 'gallery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.attach_file),
+              title: const Text('文件'),
+              subtitle: const Text('从系统文件中选择'),
+              onTap: () => Navigator.pop(ctx, 'file'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.folder_open),
+              title: const Text('项目文件'),
+              subtitle: const Text('从当前工作目录选择'),
+              onTap: () => Navigator.pop(ctx, 'project'),
+            ),
+          ],
+        ),
+      ),
+    );
+    switch (choice) {
+      case 'camera':
+        await _attachmentManager.pickImageFromCamera();
+      case 'gallery':
+        await _attachmentManager.pickImagesFromGallery();
+      case 'file':
+        await _attachmentManager.pickFile();
+      case 'project':
+        await _pickProjectFiles();
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// 从当前工作目录选择项目文件（防 ../ 路径穿越）
+  Future<void> _pickProjectFiles() async {
+    final root = await _currentWorkspaceRoot();
+    if (!mounted) return;
+    if (root == null) {
+      _showSnack('无法定位工作目录');
+      return;
+    }
+    final picked = await showDialog<List<String>>(
+      context: context,
+      builder: (ctx) => _ProjectFilePickerDialog(root: root),
+    );
+    if (picked == null || picked.isEmpty) return; // 用户取消
+    await _attachmentManager.addProjectFiles(picked, root: root);
+    if (mounted) setState(() {});
+  }
+
+  /// 当前工作目录 host 根：优先用户选中的项目，否则 App 文档目录。
+  Future<String?> _currentWorkspaceRoot() async {
+    final dir = ref.read(chatProvider).workspaceDir;
+    if (dir != null && dir.isNotEmpty) return dir;
+    try {
+      final docs = await getApplicationDocumentsDirectory();
+      return docs.path;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// 全屏预览图片
+  Future<void> _previewImage(String path) async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(12),
+        child: InteractiveViewer(
+          maxScale: 5,
+          child: Image.file(
+            File(path),
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Padding(
+              padding: EdgeInsets.all(32),
+              child: Text('无法加载图片', style: TextStyle(color: Colors.white)),
+            ),
+          ),
         ),
       ),
     );
@@ -654,17 +941,104 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
 
   // ── 工具调用状态（Codex 命令执行）──────────────────────────
 
+  /// 气泡内附件展示：图片缩略图 / 文件卡片，点击图片可全屏预览。
+  Widget _buildMessageAttachments(
+    ChatMessage msg,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final a in msg.attachments) _buildSentAttachmentCard(a, theme, colorScheme),
+        ],
+      ),
+    );
+  }
+
+  /// 已发送附件卡片
+  Widget _buildSentAttachmentCard(
+    Attachment a,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    final isImage = a.type == AttachmentType.image && a.thumbnail != null;
+    final Widget child;
+    if (isImage) {
+      child = GestureDetector(
+        onTap: () => _previewImage(a.thumbnail!),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.file(
+            File(a.thumbnail!),
+            width: 120,
+            height: 90,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              width: 120,
+              height: 90,
+              color: colorScheme.surfaceContainerHighest,
+              child: Icon(Icons.broken_image_outlined,
+                  color: colorScheme.onSurfaceVariant),
+            ),
+          ),
+        ),
+      );
+    } else {
+      child = Container(
+        constraints: const BoxConstraints(maxWidth: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              a.type == AttachmentType.projectFile
+                  ? Icons.folder_open
+                  : Icons.insert_drive_file_outlined,
+              size: 16,
+              color: colorScheme.primary,
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    a.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  Text(
+                    AttachmentManager.formatSize(a.size),
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: colorScheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return child;
+  }
+
   Widget _buildToolCalls(
     ChatMessage msg,
     ThemeData theme,
     ColorScheme colorScheme,
   ) {
-    final raw = msg.metadata?['codex_tool_calls'];
-    if (raw is! List || raw.isEmpty) return const SizedBox.shrink();
-
-    final calls = raw
-        .map((e) => CodexToolCall.fromJson((e as Map).cast<String, dynamic>()))
-        .toList();
+    final calls = _toolCallsOf(msg);
+    if (calls.isEmpty) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(top: 6),
@@ -760,10 +1134,228 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
       ),
     );
   }
+  // ── 流式模式（终端/日志风格，Codex CLI 转写） ─────────────────
+
+  /// 流式模式下单条消息渲染：用户消息 = 终端输入；AI 消息 = 工具调用
+  /// （Ran / Read / Working）+ 增量输出。不用聊天气泡作主容器。
+  Widget _buildStreamMessage(
+    ChatMessage msg,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
+    final isUser = msg.role == ChatRole.user;
+
+    // 用户消息：终端输入风格
+    if (isUser) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '❯ ',
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.primary,
+                  ),
+                ),
+                Expanded(
+                  child: SelectionArea(
+                    child: Text(
+                      msg.content,
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(fontFamily: 'monospace'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            // 附件：Attached ├── name └── name
+            if (msg.attachments.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Attached',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        fontFamily: 'monospace',
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    for (var i = 0; i < msg.attachments.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 12),
+                        child: Text(
+                          '${i == msg.attachments.length - 1 ? '└──' : '├──'} ${msg.attachments[i].name}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontFamily: 'monospace',
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    // AI 消息：工具调用（Ran / Read / Working）+ 增量输出
+    final calls = _toolCallsOf(msg);
+    final error = msg.metadata?['error'] as String?;
+    final working =
+        calls.any((c) => c.status == 'in_progress') || msg.isStreaming;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black87,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 结构化工具调用
+          for (final call in calls) _buildStreamToolCall(call),
+          // Working 行（含流式动画）
+          if (working)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(
+                    width: 10,
+                    height: 10,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.6,
+                      color: Colors.greenAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Working',
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      color: Colors.greenAccent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          // 错误
+          if (error != null && error.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                '✗ $error',
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  color: Colors.redAccent,
+                ),
+              ),
+            ),
+          // AI 增量输出
+          if (msg.content.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: SelectionArea(
+                child: SelectableText(
+                  msg.content,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    height: 1.5,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          // 流式且尚无内容 → 占位指示
+          if (msg.isStreaming && msg.content.isEmpty && !working)
+            const LinearProgressIndicator(minHeight: 2),
+        ],
+      ),
+    );
+  }
+
+  /// 从消息 metadata 解析工具调用列表（气泡/流式共用）。
+  List<CodexToolCall> _toolCallsOf(ChatMessage msg) {
+    final raw = msg.metadata?['codex_tool_calls'];
+    if (raw is! List || raw.isEmpty) return const [];
+    return raw
+        .map((e) => CodexToolCall.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// 单条工具调用的终端风格行：`Ran $ git status` / `Read file.dart`。
+  Widget _buildStreamToolCall(CodexToolCall call) {
+    final cls = _classifyTool(call.command);
+    final isRunning = call.status == 'in_progress';
+    final isError = call.status == 'error';
+    final Color labelColor =
+        isError ? Colors.redAccent : (isRunning ? Colors.orangeAccent : Colors.amber);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '$cls ',
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: labelColor,
+              ),
+            ),
+            TextSpan(
+              text: '\$${call.command}',
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 11,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 启发式命令分类：Ran（执行）/ Read（读文件）/ Explored（浏览目录）。
+  String _classifyTool(String command) {
+    final c = command.trim();
+    if (RegExp(
+      r'^(cat|sed|head|tail|grep|rg|awk|wc|less|more|python|python3|read|jq)\b',
+    ).hasMatch(c)) {
+      return 'Read';
+    }
+    if (RegExp(r'^(ls|find|tree|dir|glob|explore|pwd)\b').hasMatch(c)) {
+      return 'Explored';
+    }
+    return 'Ran';
+  }
 }
 
 
-/// AI 回复代码块的一键复制按钮。
 /// 点击将完整代码复制到剪贴板，短暂显示 check 图标。
 class _CodeBlockCopyButton extends StatefulWidget {
   const _CodeBlockCopyButton({required this.code});
@@ -815,6 +1407,258 @@ class _CodeBlockCopyButtonState extends State<_CodeBlockCopyButton> {
         _copied ? Icons.check : Icons.copy,
         size: 16,
         color: _copied ? Colors.greenAccent : Colors.white70,
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// 项目文件选择器：只浏览 root 允许范围内的目录，防 ../ 路径穿越。
+// ══════════════════════════════════════════════════════════════
+class _ProjectFilePickerDialog extends StatefulWidget {
+  const _ProjectFilePickerDialog({required this.root});
+
+  final String root;
+
+  @override
+  State<_ProjectFilePickerDialog> createState() =>
+      _ProjectFilePickerDialogState();
+}
+
+class _ProjectFilePickerDialogState extends State<_ProjectFilePickerDialog> {
+  late String _currentDir;
+  final Set<String> _selected = {};
+
+  bool _loading = true;
+  String? _error;
+  List<Directory> _dirs = [];
+  List<FileSystemEntity> _files = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _currentDir = p.normalize(widget.root);
+    _loadDir(_currentDir);
+  }
+
+  /// 是否仍在根目录内（不能越过 root，防穿越）
+  bool _canGoUp() {
+    final parent = p.dirname(_currentDir);
+    return p.isWithin(p.normalize(widget.root), parent);
+  }
+
+  Future<void> _loadDir(String dir) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final d = Directory(dir);
+      if (!await d.exists()) {
+        setState(() {
+          _loading = false;
+          _error = '目录不存在或已删除';
+        });
+        return;
+      }
+      final entities = await d.list(followLinks: false).toList();
+      final dirs = <Directory>[];
+      final files = <FileSystemEntity>[];
+      for (final e in entities) {
+        try {
+          if (e is Directory) {
+            dirs.add(e);
+          } else if (e is File) {
+            files.add(e);
+          }
+        } catch (_) {
+          // 权限拒绝：跳过该项，不崩溃
+        }
+      }
+      dirs.sort((a, b) => a.path.compareTo(b.path));
+      files.sort((a, b) => a.path.compareTo(b.path));
+      if (!mounted) return;
+      setState(() {
+        _currentDir = dir;
+        _dirs = dirs;
+        _files = files;
+        _loading = false;
+      });
+    } catch (_) {
+      // 权限拒绝 / IO 错误：不崩溃
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '无法读取该目录（权限不足或已删除）';
+      });
+    }
+  }
+
+  void _enterDir(String path) {
+    if (!p.isWithin(p.normalize(widget.root), p.normalize(path))) return;
+    _loadDir(path);
+  }
+
+  void _goUp() {
+    if (!_canGoUp()) return;
+    _loadDir(p.dirname(_currentDir));
+  }
+
+  void _toggleFile(String path) {
+    setState(() {
+      if (_selected.contains(path)) {
+        _selected.remove(path);
+      } else {
+        _selected.add(path);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final rootLabel = p.basename(p.normalize(widget.root));
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 480),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 8, 4),
+              child: Row(
+                children: [
+                  Icon(Icons.folder_outlined,
+                      size: 18, color: colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '选择项目文件 · $rootLabel',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                    tooltip: '取消',
+                  ),
+                ],
+              ),
+            ),
+            // 路径栏
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _currentDir,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall
+                          ?.copyWith(color: colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _canGoUp() ? _goUp : null,
+                    icon: const Icon(Icons.arrow_upward, size: 18),
+                    tooltip: '上一级',
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // 目录 / 文件列表
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_error!,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: colorScheme.error)),
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: () => _loadDir(widget.root),
+                              child: const Text('回到根目录'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : ListView(
+                      children: [
+                        if (_dirs.isEmpty && _files.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Center(
+                              child: Text(
+                                '此目录没有可选择的文件',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colorScheme.onSurfaceVariant),
+                              ),
+                            ),
+                          ),
+                        for (final d in _dirs)
+                          ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.folder, color: Colors.amber),
+                            title: Text(p.basename(d.path),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                            onTap: () => _enterDir(d.path),
+                          ),
+                        for (final f in _files)
+                          ListTile(
+                            dense: true,
+                            leading: Icon(
+                              Icons.insert_drive_file_outlined,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            title: Text(p.basename(f.path),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                            trailing: _selected.contains(f.path)
+                                ? const Icon(Icons.check_circle, color: Colors.green)
+                                : null,
+                            onTap: () => _toggleFile(f.path),
+                          ),
+                      ],
+                    ),
+            ),
+            const Divider(height: 1),
+            // 底部：已选数量 + 确认
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _selected.isEmpty ? '未选择文件' : '已选 ${_selected.length} 个',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  FilledButton(
+                    onPressed: _selected.isEmpty
+                        ? null
+                        : () => Navigator.pop(context, _selected.toList()),
+                    child: const Text('添加'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

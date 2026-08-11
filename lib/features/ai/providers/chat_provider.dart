@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/ai/ai_message.dart';
 import '../../../core/ai/ai_provider_manager.dart';
+import '../../../core/ai/attachment.dart';
 import '../../../core/ai/chat_engine.dart';
 import '../../../core/ai/chat_session.dart';
 import '../../../core/ai/codex_chat_engine.dart';
 import '../../../core/ai/providers/deepseek_provider.dart';
+import '../models/ai_chat_view_mode.dart';
 
 // ══════════════════════════════════════════════
 // Provider 注入（Sprint 9 可移至独立文件）
@@ -81,6 +84,9 @@ class ChatState {
   /// 当前选中的工作目录（Codex 引擎的 hostWorkingDir）
   final String? workspaceDir;
 
+  /// AI 对话界面模式（气泡 / 流式）
+  final AiChatViewMode viewMode;
+
   const ChatState({
     this.currentSessionId,
     this.sessions = const [],
@@ -89,6 +95,7 @@ class ChatState {
     this.errorMessage,
     this.generationStatus = GenerationStatus.idle,
     this.workspaceDir,
+    this.viewMode = AiChatViewMode.bubble,
   });
 
   ChatState copyWith({
@@ -99,6 +106,7 @@ class ChatState {
     String? errorMessage,
     GenerationStatus? generationStatus,
     String? workspaceDir,
+    AiChatViewMode? viewMode,
   }) {
     return ChatState(
       currentSessionId: currentSessionId ?? this.currentSessionId,
@@ -108,6 +116,7 @@ class ChatState {
       errorMessage: errorMessage ?? this.errorMessage,
       generationStatus: generationStatus ?? this.generationStatus,
       workspaceDir: workspaceDir ?? this.workspaceDir,
+      viewMode: viewMode ?? this.viewMode,
     );
   }
 }
@@ -128,10 +137,43 @@ class ChatNotifier extends StateNotifier<ChatState> {
   /// 当前选中的工作目录（null = 使用引擎默认）
   String? _workspaceDir;
 
+  /// 当前界面模式（气泡 / 流式）
+  AiChatViewMode _viewMode = AiChatViewMode.bubble;
+
+  /// 界面模式持久化 key（SharedPreferences）
+  static const String _viewModePrefKey = 'ai_chat_view_mode';
+
   ChatNotifier({required IChatEngine engine})
       : _engine = engine,
         super(const ChatState()) {
     _initDefaultSession();
+    _loadViewMode();
+  }
+
+  /// 从 SharedPreferences 恢复界面模式（异步，不阻塞 UI）
+  Future<void> _loadViewMode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(_viewModePrefKey);
+      final mode = AiChatViewMode.fromName(saved);
+      if (!mounted) return; // Provider 已销毁（如页面退出），不再更新 state
+      _viewMode = mode;
+      state = state.copyWith(viewMode: mode);
+    } catch (_) {
+      // 读取失败保持默认气泡模式
+    }
+  }
+
+  /// 切换界面模式（只换渲染层，不重新请求 AI / 不重复执行命令）。
+  /// 持久化选择；AI 正在生成时也允许切换。
+  Future<void> setViewMode(AiChatViewMode mode) async {
+    if (_viewMode == mode) return;
+    _viewMode = mode;
+    state = state.copyWith(viewMode: mode);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_viewModePrefKey, mode.name);
+    } catch (_) {}
   }
 
   /// 设置当前工作目录（Codex 引擎的 hostWorkingDir）
@@ -156,6 +198,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
       messages: session?.messages ?? [],
       loadingState: _deriveLoadingState(sessionId),
       generationStatus: _engine.getGenerationStatus(sessionId),
+      workspaceDir: _workspaceDir,
+      viewMode: _viewMode,
     );
   }
 
@@ -204,8 +248,14 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   // ── 消息操作 ──
 
-  /// 发送消息（流式）
-  Future<void> sendMessage(String content) async {
+  /// 发送消息（流式）。
+  ///
+  /// [attachments] 为本地附件：随用户消息绑定（仅本地展示，不参与 AI 请求、
+  /// 不上传、不塞进 AI Context）。
+  Future<void> sendMessage(
+    String content, {
+    List<Attachment> attachments = const [],
+  }) async {
     if (content.trim().isEmpty) return;
 
     final sessionId = state.currentSessionId;
@@ -216,12 +266,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
     );
 
     try {
+      final meta = <String, dynamic>{
+        if (_workspaceDir != null) 'workspaceDir': _workspaceDir,
+        if (attachments.isNotEmpty)
+          'attachments': attachments.map((a) => a.toJson()).toList(),
+      };
       await for (final _ in _engine.streamMessage(
         sessionId: sessionId,
         content: content.trim(),
-        metadata: _workspaceDir != null
-            ? {'workspaceDir': _workspaceDir}
-            : null,
+        metadata: meta.isEmpty ? null : meta,
       )) {
         // 每收到一个 chunk 就同步状态（引擎会实时更新占位消息内容）
         _syncFromEngine(sessionId);

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:codex_mobile_pro/core/ai/ai_message.dart';
+import 'package:codex_mobile_pro/core/ai/attachment.dart';
 import 'package:codex_mobile_pro/core/ai/chat_engine.dart';
 import 'package:codex_mobile_pro/core/ai/codex_chat_engine.dart';
 import 'package:codex_mobile_pro/core/ai/codex_runner.dart';
@@ -19,6 +20,8 @@ class FakeCodexRunner extends CodexRunner {
   int stopCount = 0;
   String? lastPrompt;
   String? lastWorkingDir;
+  String? lastGuestWorkingDir;
+  bool? lastResolveWorkspace;
   String? lastSystemPrompt;
 
   FakeCodexRunner({
@@ -35,10 +38,14 @@ class FakeCodexRunner extends CodexRunner {
     String? systemPrompt,
     Duration? timeout,
     required CodexEventListener listener,
+    String? guestWorkingDir,
+    bool resolveWorkspace = true,
   }) async {
     runCount++;
     lastPrompt = prompt;
     lastWorkingDir = hostWorkingDir;
+    lastGuestWorkingDir = guestWorkingDir;
+    lastResolveWorkspace = resolveWorkspace;
     lastSystemPrompt = systemPrompt;
     for (final e in eventsToEmit) {
       listener.onCodexEvent(e);
@@ -74,10 +81,14 @@ class GateCodexRunner extends FakeCodexRunner {
     String? systemPrompt,
     Duration? timeout,
     required CodexEventListener listener,
+    String? guestWorkingDir,
+    bool resolveWorkspace = true,
   }) async {
     runCount++;
     lastPrompt = prompt;
     lastWorkingDir = hostWorkingDir;
+    lastGuestWorkingDir = guestWorkingDir;
+    lastResolveWorkspace = resolveWorkspace;
     lastSystemPrompt = systemPrompt;
     started.complete();
     await release.future;
@@ -134,6 +145,64 @@ void main() {
       )) {}
 
       expect(session.title, contains('帮我优化这段'));
+      engine.dispose();
+    });
+
+    test('metadata 携带 attachments → 用户消息绑定附件（不参与 AI 请求）', () async {
+      final engine = CodexChatEngine(runner: FakeCodexRunner());
+      final session = engine.createSession();
+
+      final attJson = <Map<String, dynamic>>[
+        {
+          'id': 'att-1',
+          'type': 'image',
+          'name': 'shot.png',
+          'mimeType': 'image/png',
+          'size': 1024,
+          'path': '/tmp/shot.png',
+          'thumbnail': '/tmp/shot.png',
+          'status': 'ready',
+        },
+        {
+          'id': 'att-2',
+          'type': 'projectFile',
+          'name': 'pubspec.yaml',
+          'mimeType': 'application/yaml',
+          'size': 4096,
+          'path': '/ws/pubspec.yaml',
+          'status': 'ready',
+        },
+      ];
+
+      await for (final _ in engine.streamMessage(
+        sessionId: session.sessionId,
+        content: '看看附件',
+        metadata: {'attachments': attJson},
+      )) {}
+
+      final user = session.messages.first;
+      expect(user.role, ChatRole.user);
+      expect(user.content, '看看附件');
+      expect(user.attachments, hasLength(2));
+      expect(user.attachments[0].type, AttachmentType.image);
+      expect(user.attachments[0].name, 'shot.png');
+      expect(user.attachments[1].type, AttachmentType.projectFile);
+      expect(user.attachments[1].name, 'pubspec.yaml');
+
+      // 附件不参与 API 序列化
+      final api = user.toApiMap();
+      expect(api.containsKey('attachments'), isFalse);
+
+      // 无附件 metadata → 空列表
+      final engine2 = CodexChatEngine(runner: FakeCodexRunner());
+      final session2 = engine2.createSession();
+      await for (final _ in engine2.streamMessage(
+        sessionId: session2.sessionId,
+        content: '没有附件',
+      )) {}
+      expect(session2.messages.first.attachments, isEmpty);
+      engine2.dispose();
+
       engine.dispose();
     });
   });
@@ -514,7 +583,10 @@ void main() {
         content: 'hi',
       )) {}
 
-      expect(runner.lastWorkingDir, '${temp.path}/git/codex-mobile-pro');
+      // hostWorkingDir = bind 根（requested）；Codex cwd = 项目 guest 路径
+      expect(runner.lastWorkingDir, temp.path);
+      expect(runner.lastGuestWorkingDir, '/workspace/git/codex-mobile-pro');
+      expect(runner.lastResolveWorkspace, isFalse);
       engine.dispose();
     });
 
@@ -531,7 +603,8 @@ void main() {
         sessionId: session.sessionId,
         content: '第一轮',
       )) {}
-      expect(runner.lastWorkingDir, '${temp.path}/git/codex-mobile-pro');
+      expect(runner.lastWorkingDir, temp.path);
+      expect(runner.lastGuestWorkingDir, '/workspace/git/codex-mobile-pro');
 
       // 第二轮前新增另一个 Git 仓库；缓存命中 → 仍用第一轮解析结果
       createGitRepo('${temp.path}/git/newer-repo');
@@ -539,7 +612,8 @@ void main() {
         sessionId: session.sessionId,
         content: '第二轮',
       )) {}
-      expect(runner.lastWorkingDir, '${temp.path}/git/codex-mobile-pro');
+      expect(runner.lastWorkingDir, temp.path);
+      expect(runner.lastGuestWorkingDir, '/workspace/git/codex-mobile-pro');
       engine.dispose();
     });
 
@@ -556,15 +630,17 @@ void main() {
         sessionId: session.sessionId,
         content: '第一轮',
       )) {}
-      expect(runner.lastWorkingDir, proj.path);
+      expect(runner.lastWorkingDir, temp.path);
+      expect(runner.lastGuestWorkingDir, '/workspace/git/codex-mobile-pro');
 
-      // 删除缓存的项目目录（目录失效）→ 重新解析
+      // 删除缓存的项目目录（目录失效）→ 重新解析：无候选 → guest 回退 /workspace
       proj.deleteSync(recursive: true);
       await for (final _ in engine.streamMessage(
         sessionId: session.sessionId,
         content: '第二轮',
       )) {}
       expect(runner.lastWorkingDir, temp.path);
+      expect(runner.lastGuestWorkingDir, '/workspace');
       engine.dispose();
     });
 
@@ -581,9 +657,11 @@ void main() {
         sessionId: session.sessionId,
         content: '第一轮',
       )) {}
-      expect(runner.lastWorkingDir, '${temp.path}/git/codex-mobile-pro');
+      expect(runner.lastWorkingDir, temp.path);
+      expect(runner.lastGuestWorkingDir, '/workspace/git/codex-mobile-pro');
 
-      // 用户显式选另一个 Git 仓库目录 → 直接使用该目录
+      // 用户显式选另一个 Git 仓库目录 → 直接使用该目录（本身是 git 仓库，
+      // resolved == requested → guest 回退 /workspace）
       final other = createGitRepo('${temp.path}/other-repo');
       await for (final _ in engine.streamMessage(
         sessionId: session.sessionId,
@@ -591,6 +669,7 @@ void main() {
         metadata: {'workspaceDir': other.path},
       )) {}
       expect(runner.lastWorkingDir, other.path);
+      expect(runner.lastGuestWorkingDir, '/workspace');
       engine.dispose();
     });
   });
