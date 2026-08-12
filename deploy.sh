@@ -331,12 +331,16 @@ deploy_skills() {
 
     if [ -d "${SCRIPT_DIR}/skills" ] && [ "$(ls -A "${SCRIPT_DIR}/skills" 2>/dev/null)" ]; then
         cp -r "${SCRIPT_DIR}/skills/"* "$SKILLS_TARGET/" 2>/dev/null || true
+        # glob * 不匹配隐藏目录，需显式复制 .system 系统级 skills
+        if [ -d "${SCRIPT_DIR}/skills/.system" ] && [ "$(ls -A "${SCRIPT_DIR}/skills/.system" 2>/dev/null)" ]; then
+            mkdir -p "${SKILLS_TARGET}/.system"
+            cp -r "${SCRIPT_DIR}/skills/.system/." "${SKILLS_TARGET}/.system/" 2>/dev/null || true
+            ok "系统级 Skills (.system) 已部署"
+        fi
         ok "Skills 已部署"
     else
         warn "skills 目录为空，跳过"
     fi
-
-    mkdir -p "${SKILLS_TARGET}/.system"
 }
 
 # ============================================================

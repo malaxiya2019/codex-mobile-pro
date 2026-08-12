@@ -1,0 +1,4 @@
+interface:
+  display_name: "PhoneHarness"
+  short_description: "Android 手机代理混合 CLI+GUI+MCP 编排与副作用评测"
+  default_prompt: "Use $phoneharness to design or benchmark an Android phone agent with CLI+GUI+MCP mixed actions and side-effect verification."

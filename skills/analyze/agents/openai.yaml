@@ -1,0 +1,4 @@
+interface:
+  display_name: "项目分析"
+  short_description: "只读分析项目结构分层与近期变更，输出带证据的项目地图"
+  default_prompt: "用 $analyze 只读分析这个项目，输出分层结构与关键符号，每个结论附文件证据。"

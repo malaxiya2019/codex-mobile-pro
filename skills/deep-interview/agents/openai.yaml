@@ -1,0 +1,4 @@
+interface:
+  display_name: "需求访谈"
+  short_description: "问透需求不脑补：范围、是否改代码、输出格式、验收标准"
+  default_prompt: "用 $deep-interview 把需求问透：范围、是否改代码、输出格式、验收标准。"

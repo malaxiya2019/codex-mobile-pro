@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/openai/openai-plugin-schema/main/openapi.yaml
+display_name: "Firecrawl 架构模式"
+short_description: "Firecrawl 爬虫架构模式参考：DNS缓存、引擎fallback、错误处理"
+default_prompt: "参考 Firecrawl 的架构模式来优化 codex-mobile-pro 的网络检测、安装引擎和错误处理"

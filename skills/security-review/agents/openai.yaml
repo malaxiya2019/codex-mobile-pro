@@ -1,0 +1,4 @@
+interface:
+  display_name: "安全审查"
+  short_description: "专项排查硬编码凭证、签名密钥与存储位置风险并分级报告"
+  default_prompt: "用 $security-review 扫描仓库敏感信息：硬编码凭证、签名密钥、存储位置、公开暴露面。"

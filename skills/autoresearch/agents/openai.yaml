@@ -1,0 +1,4 @@
+interface:
+  display_name: "查证研究"
+  short_description: "结论附官方文档或实测来源与复现命令，未验证明确标注"
+  default_prompt: "用 $autoresearch 查证这些结论，每条给复现命令。"

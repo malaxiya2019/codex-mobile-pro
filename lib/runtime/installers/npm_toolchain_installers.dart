@@ -22,8 +22,11 @@
 library;
 
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as path;
 
 import '../../core/logger/log_service.dart';
 import '../deploy_error.dart';
@@ -42,6 +45,20 @@ class CodexCliInstaller extends ToolchainInstaller {
 
   /// Shell 快捷命令 asset（打包自 config/bashrc-additions.sh，两处保持同步）
   static const String shellAdditionsAsset = 'assets/bashrc-additions.sh';
+
+  /// 内置 Codex Skills 打包文件（由 skills/ 目录生成，含 .system 系统级）
+  ///
+  /// 为什么打包成单个 tar.gz 而非直接声明 skills/ 目录：skills/ 内含
+  /// .system 隐藏目录，Flutter asset 打包会忽略隐藏目录；tar 归档不
+  /// 区分隐藏文件，可完整保留。部署时用 archive 包（依赖已有）在 Dart
+  /// 侧解压写入 rootfs，不依赖 rootfs 内任何解压工具。
+  static const String skillsBundleAsset = 'assets/skills.tar.gz';
+
+  /// Skills 已部署幂等标记（写在 rootfs ~/.codex/skills/ 下）
+  static const String skillsMarker = '.codex-mobile-skills.marker';
+
+  /// Skills 打包内容加载器（测试注入用；null = 从 asset 读取）
+  final Future<Uint8List> Function()? loadSkillsBundle;
 
   /// 幂等标记（与 deploy.sh setup_shell 的 grep 标记一致）
   static const String shellMarker = '# Codex Mobile Pro';
@@ -69,7 +86,7 @@ wire_api = "responses"
   /// config.toml 已配置的幂等标记
   static const String codexConfigMarker = '[model_providers.deepseek]';
 
-  CodexCliInstaller({this.loadShellAdditions});
+  CodexCliInstaller({this.loadShellAdditions, this.loadSkillsBundle});
 
   @override
   RuntimeTool get tool => RuntimeTool.codexCli;
@@ -98,6 +115,7 @@ wire_api = "responses"
       // 会弹 ChatGPT 登录引导。
       await _injectShellAdditions(ctx);
       await _writeCodexConfig(ctx);
+      await _deploySkills(ctx);
       return success(ver, skipped: true);
     }
 
@@ -136,6 +154,7 @@ wire_api = "responses"
     report(ctx, InstallPhase.completed, 1.0, 'Codex CLI 安装完成');
     await _injectShellAdditions(ctx);
     await _writeCodexConfig(ctx);
+    await _deploySkills(ctx);
     // 启动指引（部署中心进度区展示，覆盖一键部署与单工具两条路径）
     report(
       ctx,
@@ -182,6 +201,81 @@ wire_api = "responses"
   Future<String> _resolveShellAdditions() async {
     if (loadShellAdditions != null) return loadShellAdditions!();
     return rootBundle.loadString(shellAdditionsAsset);
+  }
+
+
+  /// 部署内置 Codex Skills 到 rootfs `~/.codex/skills/`（含 .system 系统级）
+  ///
+  /// 场景：App 一键部署只 npm install codex，从不带 skills；手动部署由
+  /// deploy.sh deploy_skills() 负责。这里让一键部署也补上全部内置 skills，
+  /// codex 在 rootfs 内可直接使用完整技能集（imagegen/openai-docs/分析/逆向等）。
+  ///
+  /// 实现：读 asset 内 tar.gz → archive 包解压（纯 Dart，不依赖 rootfs
+  /// 工具）→ 写 rootfs 文件，保留可执行位（rev-dex-dumper 二进制）。
+  /// 幂等：[skillsMarker] 存在 → 跳过。失败不阻断安装。
+  Future<void> _deploySkills(ToolchainContext ctx) async {
+    try {
+      final paths = await ctx.resolvePaths();
+      final target = Directory('${paths.rootfsDir}/root/.codex/skills');
+      final marker = File('${target.path}/$skillsMarker');
+
+      if (marker.existsSync()) {
+        report(ctx, InstallPhase.completed, 1.0, 'Codex Skills 已部署');
+        return;
+      }
+
+      final bytes = await _resolveSkillsBundle();
+      final tarBytes = GZipDecoder().decodeBytes(bytes);
+      final archive = TarDecoder().decodeBytes(tarBytes);
+
+      target.createSync(recursive: true);
+      var count = 0;
+      for (final entry in archive) {
+        if (!entry.isFile) continue;
+        final rel = _safeSkillRelPath(entry.name);
+        if (rel == null) continue;
+        final dest = File('${target.path}/$rel');
+        dest.parent.createSync(recursive: true);
+        dest.writeAsBytesSync(entry.content as List<int>);
+        // 保留可执行位（如 rev-dex-dumper/panda-dex-dumper）
+        if ((entry.mode & 0x40) != 0) {
+          try {
+            Process.runSync('chmod', ['+x', dest.path]);
+          } catch (_) {}
+        }
+        count++;
+      }
+
+      marker.writeAsStringSync('deployed=${DateTime.now().toIso8601String()}\n');
+      report(
+        ctx,
+        InstallPhase.completed,
+        1.0,
+        'Codex Skills 已部署 $count 个文件（含 .system 系统级）',
+      );
+    } catch (e) {
+      LogService.warning('Toolchain', 'Codex Skills 部署失败（不阻断安装）: $e');
+    }
+  }
+
+  /// 读取 Skills 打包内容（测试注入 → 默认从 asset 加载）
+  Future<Uint8List> _resolveSkillsBundle() async {
+    if (loadSkillsBundle != null) return loadSkillsBundle!();
+    final data = await rootBundle.load(skillsBundleAsset);
+    return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+  }
+
+  /// 将 tar 条目名转为安全相对路径（去 ./ 前缀，拒绝 .. 穿越）
+  static String? _safeSkillRelPath(String tarPath) {
+    final cleaned = path.posix.normalize(tarPath);
+    if (cleaned == '..' ||
+        cleaned.startsWith('../') ||
+        path.posix.isAbsolute(cleaned)) {
+      return null;
+    }
+    final rel = cleaned.startsWith('./') ? cleaned.substring(2) : cleaned;
+    if (rel.isEmpty || rel == '.') return null;
+    return rel;
   }
 
   /// 写入 rootfs `~/.codex/config.toml`（DeepSeek 直连，幂等）

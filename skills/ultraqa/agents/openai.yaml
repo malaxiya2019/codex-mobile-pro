@@ -1,0 +1,4 @@
+interface:
+  display_name: "循环自测"
+  short_description: "循环跑测试至通过，失败逐一定性为 flaky/环境/真 bug"
+  default_prompt: "用 $ultraqa 跑全量测试，逐一定性失败（flaky/环境/真 bug），回归至全绿。"

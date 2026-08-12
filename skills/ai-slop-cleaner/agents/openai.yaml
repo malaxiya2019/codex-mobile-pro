@@ -1,0 +1,4 @@
+interface:
+  display_name: "去AI味"
+  short_description: "清除 AI 套话与冗余过渡词，文字精简自然不丢信息"
+  default_prompt: "用 $ai-slop-cleaner 清理这段文字，保持技术准确性。"

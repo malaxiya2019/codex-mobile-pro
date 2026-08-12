@@ -22,6 +22,9 @@
 library;
 
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:archive/archive.dart';
 
 import 'package:codex_mobile_pro/runtime/deploy_error.dart';
 import 'package:codex_mobile_pro/runtime/install_models.dart';
@@ -817,6 +820,85 @@ void main() {
       expect(config.readAsStringSync(), contains('custom-model'),
           reason: '已配置时应保持用户自定义内容不覆盖');
     });
+
+    test('Codex CLI 安装成功 → 部署全部 Skills 到 rootfs ~/.codex/skills/（含 .system）',
+        () async {
+      // App 一键部署此前只 npm install codex，从不带 skills；此处验证
+      // 内置 skills 包（tar.gz，含 .system 系统级与可执行二进制）被解压
+      // 到 rootfs ~/.codex/skills/，codex 直接可用完整技能集。
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+      f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
+
+      final installer = CodexCliInstaller(
+        loadShellAdditions: () async => '# Codex Mobile Pro\n',
+        loadSkillsBundle: () async => _buildSkillsTarGz(),
+      );
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      final skillsDir = '${f.temp.path}/rootfs/root/.codex/skills';
+      // 普通 skill
+      final analyze = File('$skillsDir/analyze/SKILL.md');
+      expect(analyze.existsSync(), isTrue, reason: '普通 skill 应被部署');
+      expect(analyze.readAsStringSync(), 'analyze md');
+      // .system 隐藏目录 skill（tar 归档不区分隐藏文件）
+      final imagegen = File('$skillsDir/.system/imagegen/SKILL.md');
+      expect(imagegen.existsSync(), isTrue, reason: '.system 系统级 skill 应被部署');
+      expect(imagegen.readAsStringSync(), 'imagegen md');
+      // 可执行二进制
+      final bin = File('$skillsDir/rev-dex-dumper/panda-dex-dumper');
+      expect(bin.existsSync(), isTrue, reason: '可执行二进制应被部署');
+      // 幂等 marker
+      expect(File('$skillsDir/${CodexCliInstaller.skillsMarker}').existsSync(),
+          isTrue);
+    });
+
+    test('Skills 已部署（marker 存在）→ 不重复解压（幂等）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/codex'] = '0.9.0';
+      final skillsDir = Directory('${f.temp.path}/rootfs/root/.codex/skills');
+      skillsDir.createSync(recursive: true);
+      File('${skillsDir.path}/.codex-mobile-skills.marker')
+          .writeAsStringSync('deployed=old\n');
+
+      var loadCalls = 0;
+      final installer = CodexCliInstaller(
+        loadShellAdditions: () async => '# Codex Mobile Pro\n',
+        loadSkillsBundle: () async {
+          loadCalls++;
+          return _buildSkillsTarGz();
+        },
+      );
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(loadCalls, 0, reason: '已部署时不得重复读取/解压 skills 包');
+      expect(
+          File('${skillsDir.path}/analyze/SKILL.md').existsSync(), isFalse,
+          reason: 'marker 存在时应跳过部署');
+    });
+
+    test('Skills 部署失败 → 不阻断 Codex 安装', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+      f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
+
+      final installer = CodexCliInstaller(
+        loadShellAdditions: () async => '# Codex Mobile Pro\n',
+        loadSkillsBundle: () async {
+          throw StateError('skills 包损坏');
+        },
+      );
+      final result = await installer.install(f.ctx);
+
+      // skills 部署为增强步骤：失败仅 warning，Codex 本体安装仍成功
+      expect(result.success, isTrue);
+      expect(result.version, contains('0.9.0'));
+    });
   });
 
   group('ToolchainOrchestrator', () {
@@ -1010,4 +1092,23 @@ void main() {
       expect(progressValues.last, lessThan(0.9));
     });
   });
+}
+
+
+/// 构造内置 skills 打包内容（tar.gz，含 .system 隐藏目录与可执行二进制）
+///
+/// 与生产 assets/skills.tar.gz 同构：普通 skill + .system 系统级 +
+/// 可执行二进制（rev-dex-dumper/panda-dex-dumper 场景）。
+Uint8List _buildSkillsTarGz() {
+  final a = Archive();
+  a.addFile(ArchiveFile(
+      './analyze/SKILL.md', 'analyze md'.length, 'analyze md'.codeUnits));
+  a.addFile(ArchiveFile('./.system/imagegen/SKILL.md',
+      'imagegen md'.length, 'imagegen md'.codeUnits));
+  final bin = ArchiveFile(
+      './rev-dex-dumper/panda-dex-dumper', 8, 'BIN\x00\x01\x02'.codeUnits);
+  bin.mode = 0x1ed; // 0755（可执行位）
+  a.addFile(bin);
+  final tarBytes = TarEncoder().encode(a);
+  return Uint8List.fromList(GZipEncoder().encode(tarBytes)!);
 }
