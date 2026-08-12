@@ -50,3 +50,6 @@ test_report*.json
 android/gradlew.bat
 android/app/src/main/java/io/flutter/plugins/
 *.wsd
+
+# Kotlin 构建产物
+android/.kotlin/
