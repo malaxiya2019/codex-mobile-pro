@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:codex_mobile_pro/core/ai/ai_message.dart';
 import 'package:codex_mobile_pro/core/ai/attachment.dart';
 import 'package:codex_mobile_pro/core/ai/chat_engine.dart';
-import 'package:codex_mobile_pro/core/ai/chat_session.dart';
 import 'package:codex_mobile_pro/core/ai/gemini_chat_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
