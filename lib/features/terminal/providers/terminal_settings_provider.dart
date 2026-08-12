@@ -18,8 +18,8 @@ class TerminalSettings {
     this.themeMode = ThemeMode.dark,
     this.cursorBlink = true,
     this.cursorColor = Colors.greenAccent,
-    this.foregroundColor = Colors.greenAccent,
-    this.backgroundColor = Colors.black87,
+    this.foregroundColor = const Color(0xFFE6E6E6),
+    this.backgroundColor = const Color(0xFF000000),
   });
 
   TerminalSettings copyWith({
@@ -59,8 +59,8 @@ class TerminalSettings {
       themeMode: ThemeMode.values[json['themeMode'] as int? ?? 1],
       cursorBlink: json['cursorBlink'] as bool? ?? true,
       cursorColor: Color(json['cursorColor'] as int? ?? 0xFF00FF00),
-      foregroundColor: Color(json['foregroundColor'] as int? ?? 0xFF00FF00),
-      backgroundColor: Color(json['backgroundColor'] as int? ?? 0xDD000000),
+      foregroundColor: Color(json['foregroundColor'] as int? ?? 0xFFE6E6E6),
+      backgroundColor: Color(json['backgroundColor'] as int? ?? 0xFF000000),
     );
   }
 }
@@ -77,8 +77,8 @@ class TerminalSettingsNotifier extends StateNotifier<TerminalSettings> {
       'themeMode': prefs.getInt('terminal_themeMode') ?? 1,
       'cursorBlink': prefs.getBool('terminal_cursorBlink') ?? true,
       'cursorColor': prefs.getInt('terminal_cursorColor') ?? 0xFF00FF00,
-      'foregroundColor': prefs.getInt('terminal_foregroundColor') ?? 0xFF00FF00,
-      'backgroundColor': prefs.getInt('terminal_backgroundColor') ?? 0xDD000000,
+      'foregroundColor': prefs.getInt('terminal_foregroundColor') ?? 0xFFE6E6E6,
+      'backgroundColor': prefs.getInt('terminal_backgroundColor') ?? 0xFF000000,
     };
     state = TerminalSettings.fromJson(json);
   }

@@ -183,6 +183,17 @@ class TerminalNotifier extends StateNotifier<TerminalState> {
     state = state.copyWith(historyIndex: histIdx);
   }
 
+  /// 清空当前会话的输出（保留会话与命令历史）。
+  ///
+  /// 直接复用 TerminalSession 公开的环形缓冲区 clear()，
+  /// 不修改输出流 / PTY / 执行后端。
+  void clearActiveOutput() {
+    final session = state.activeSession;
+    if (session == null) return;
+    session.outputBuffer.clear();
+    state = state.copyWith();
+  }
+
   void sendSigint() {
     state.activeSession?.sendSigint();
     state = state.copyWith();

@@ -1,19 +1,30 @@
 import 'package:flutter/material.dart';
 
-/// ====================================================================
+/// ────────────────────────────────────────────────────────────────────────────
+/// Termux 风格终端配色（固定深色，不随应用主题变化）
+///
+/// 终端页面整体为「黑色终端 + 深灰控制栏」，与系统亮/暗主题解耦。
+/// ────────────────────────────────────────────────────────────────────────────
+const Color kTerminalBlack = Color(0xFF000000); // 终端输出纯黑背景
+const Color kTerminalDark = Color(0xFF171717); // AppBar / 命令输入行
+const Color kTerminalPanel = Color(0xFF1E1E1E); // 底部控制区 / 设置面板
+const Color kTerminalKey = Color(0xFF2D2D2D); // Extra Key 按钮底色
+const Color kTerminalBorder = Color(0xFF3A3A3A); // 分隔线 / 按钮描边
+const Color kTerminalText = Color(0xFFE6E6E6); // 默认前景（浅灰，Termux 风格）
+
+/// ══════════════════════════════════════════════════════════════════════════
 /// 终端扩展按键栏（Extra Keys）
 ///
-/// 两行布局，参考 Termux Extra Keys，保持 Material 3 风格。
-///
-/// 按键配置采用数据驱动，便于后续扩展 F1~F12、Insert、Delete 等。
-///
-/// 布局：
+/// 两行布局，参考 Termux Extra Keys：
 ///   第一行：ESC   /    -    HOME   ↑   END   PGUP
-///   第二行：TAB   CTRL   ALT   ←    ↓   →    PGDN
+///   第二行：TAB   CTRL   ALT   ←    ↓   →   PGDN
 ///
-/// Ctrl 模式：一次性，下一按键自动组合为 Ctrl+Key，发送后退出。
-/// Alt 模式：一次性，下一按键发送 ESC + Key（Meta），发送后退出。
-/// ====================================================================
+/// - 深色背景，紧凑矩形圆角按钮，横向平均分配（Row + Expanded）
+/// - 横向空间不足时标签自动缩放（FittedBox），小屏不溢出
+/// - CTRL / ALT 为一次性修饰键：按下后下一按键自动组合，发送后退出
+/// - 所有按键向当前终端写入原始控制字符 / ANSI 键序列，
+///   不当作普通文本输入（不进入命令输入框）
+/// ══════════════════════════════════════════════════════════════════════════
 
 /// 按键类型
 enum ExtraKeyType {
@@ -26,7 +37,7 @@ enum ExtraKeyType {
   /// Alt 模式切换
   alt,
 
-  /// Ctrl 组合键（仅在 Ctrl 模式下可见）
+  /// Ctrl 组合键（仅在 Ctrl/Alt 模式下展示）
   ctrlCombo,
 }
 
@@ -56,9 +67,11 @@ class ExtraKeyConfig {
   });
 }
 
-/// 两行布局的按键定义
+/// 两行布局的按键定义（数据驱动，便于后续扩展 F1~F12 等）
 ///
-/// 使用数据驱动方式，便于后续扩展。
+/// 方向键 / HOME / END / PGUP / PGDN 使用标准 ANSI escape sequence：
+///   ↑ \x1b[A   ↓ \x1b[B   ← \x1b[D   → \x1b[C
+///   HOME \x1b[H   END \x1b[F   PGUP \x1b[5~   PGDN \x1b[6~
 const List<List<ExtraKeyConfig>> kExtraKeyRows = [
   // ── 第一行 ──
   [
@@ -180,172 +193,136 @@ class _TerminalExtraKeysState extends State<TerminalExtraKeys> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        border: Border(
-          top: BorderSide(
-            color: colorScheme.outlineVariant,
-            width: 0.5,
-          ),
-        ),
-      ),
+      color: kTerminalPanel,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Ctrl/Alt 组合键面板（展开时显示）
-          if (_ctrlMode) _buildCtrlPanel(colorScheme),
-          if (_altMode) _buildAltPanel(colorScheme),
+          // Ctrl/Alt 组合键面板（修饰模式激活时显示）
+          if (_ctrlMode) _buildComboPanel(kCtrlCombos, 'CTRL', Colors.amberAccent),
+          if (_altMode) _buildComboPanel(kAltCombos, 'ALT', Colors.lightGreenAccent),
 
-          // 两行主按键
-          _buildKeyRow(kExtraKeyRows[0], colorScheme),
-          const SizedBox(height: 2),
-          _buildKeyRow(kExtraKeyRows[1], colorScheme),
-          const SizedBox(height: 2),
+          // 两行主按键（横向平均分配）
+          _buildKeyRow(kExtraKeyRows[0]),
+          const SizedBox(height: 4),
+          _buildKeyRow(kExtraKeyRows[1]),
+          const SizedBox(height: 6),
         ],
       ),
     );
   }
 
-  /// 构建 Ctrl 组合键面板
-  Widget _buildCtrlPanel(ColorScheme colorScheme) {
+  /// 构建 Ctrl / Alt 组合键面板（横向滚动）
+  Widget _buildComboPanel(
+    List<ExtraKeyConfig> configs,
+    String prefix,
+    Color accent,
+  ) {
     return Container(
-      height: 36,
-      margin: const EdgeInsets.only(top: 2),
+      height: 34,
+      margin: const EdgeInsets.only(top: 4),
+      color: kTerminalDark,
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
         children: [
-          ...kCtrlCombos.map((config) => _buildCtrlAltChip(config, colorScheme)),
-          const SizedBox(width: 12),
-        ],
-      ),
-    );
-  }
-
-  /// 构建 Alt 组合键面板
-  Widget _buildAltPanel(ColorScheme colorScheme) {
-    return Container(
-      height: 36,
-      margin: const EdgeInsets.only(top: 2),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        children: [
-          ...kAltCombos.map((config) => _buildCtrlAltChip(config, colorScheme)),
-          const SizedBox(width: 12),
-        ],
-      ),
-    );
-  }
-
-  /// 构建 Ctrl/Alt 组合键 Chip
-  Widget _buildCtrlAltChip(ExtraKeyConfig config, ColorScheme colorScheme) {
-    final isCtrl = _ctrlMode;
-    final accent = isCtrl ? colorScheme.primary : colorScheme.secondary;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Material(
-        color: accent.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => _handleKeyTap(config),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: accent.withValues(alpha: 0.4),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  isCtrl ? '^' : 'M-',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: accent,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 2),
-                Text(
-                  config.label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: accent,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+          ...configs.map(
+            (config) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+              child: _buildComboChip(config, prefix, accent),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  /// 构建一行按键
-  Widget _buildKeyRow(List<ExtraKeyConfig> configs, ColorScheme colorScheme) {
-    return SizedBox(
-      height: 40,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        physics: const ClampingScrollPhysics(),
-        children: [
-          ...configs.map((config) => _buildKeyButton(config, colorScheme)),
           const SizedBox(width: 8),
         ],
       ),
     );
   }
 
-  /// 构建单个按键
-  Widget _buildKeyButton(ExtraKeyConfig config, ColorScheme colorScheme) {
+  /// 构建 Ctrl / Alt 组合键 Chip
+  Widget _buildComboChip(
+    ExtraKeyConfig config,
+    String prefix,
+    Color accent,
+  ) {
+    return Material(
+      color: kTerminalKey,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: () => _handleKeyTap(config),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
+          child: Text(
+            '$prefix ${config.label}',
+            style: TextStyle(
+              fontSize: 12,
+              color: accent,
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 构建一行按键 — Row + Expanded 横向平均分配
+  Widget _buildKeyRow(List<ExtraKeyConfig> configs) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: [
+          for (final config in configs)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                child: _buildKeyButton(config),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 构建单个按键 — 紧凑矩形圆角按钮
+  Widget _buildKeyButton(ExtraKeyConfig config) {
     final isCtrlActive = config.type == ExtraKeyType.ctrl && _ctrlMode;
     final isAltActive = config.type == ExtraKeyType.alt && _altMode;
     final isActive = isCtrlActive || isAltActive;
-    final accentColor = isCtrlActive
-        ? colorScheme.primary
-        : (isAltActive ? colorScheme.secondary : null);
+    final accent = isCtrlActive
+        ? Colors.amberAccent
+        : (isAltActive ? Colors.lightGreenAccent : null);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Material(
-        color: isActive
-            ? (accentColor ?? colorScheme.primary).withValues(alpha: 0.2)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: () => _handleKeyTap(config),
-          child: Container(
-            constraints: const BoxConstraints(minWidth: 44),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isActive
-                    ? (accentColor ?? colorScheme.primary)
-                    : colorScheme.outlineVariant,
-                width: isActive ? 1.5 : 0.5,
-              ),
+    return Material(
+      color: isActive
+          ? (accent ?? Colors.amberAccent).withValues(alpha: 0.22)
+          : kTerminalKey,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: () => _handleKeyTap(config),
+        child: Container(
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isActive ? (accent ?? Colors.amberAccent) : kTerminalBorder,
+              width: isActive ? 1.2 : 1,
             ),
-            alignment: Alignment.center,
+          ),
+          // FittedBox：横向空间不足时标签自动缩小，避免小屏溢出
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
             child: Text(
               config.label,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
                 color: isActive
-                    ? (accentColor ?? colorScheme.primary)
-                    : colorScheme.onSurface,
+                    ? (accent ?? Colors.amberAccent)
+                    : kTerminalText,
                 fontFamily: 'monospace',
               ),
             ),
