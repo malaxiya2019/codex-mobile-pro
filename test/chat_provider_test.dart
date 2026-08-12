@@ -26,6 +26,9 @@ class MockChatEngine implements IChatEngine {
   bool shouldFailOnRetry = false;
   bool shouldFailOnSend = false;
 
+  /// 若设置，streamMessage 抛该异常（用于测试 ChatEngineException 传播）
+  Exception? streamException;
+
   @override
   ChatSession createSession({String? title, Map<String, dynamic>? metadata}) {
     sessionCounter++;
@@ -103,6 +106,7 @@ class MockChatEngine implements IChatEngine {
     required String content,
     Map<String, dynamic>? metadata,
   }) async* {
+    if (streamException != null) throw streamException!;
     if (shouldFailOnStream) throw Exception('Stream failed');
 
     final session = _sessions[sessionId];
@@ -586,6 +590,23 @@ void main() {
         final state = container.read(chatProvider);
         expect(state.loadingState, ChatLoadingState.error);
         expect(state.errorMessage, isNotNull);
+      });
+      test('引擎抛 ChatEngineException → errorMessage 为干净 message（无 [type] 前缀）', () async {
+        mockEngine.streamException = const ChatEngineException(
+          type: ChatEngineErrorType.unsupported,
+          message: '当前模型不支持图片理解，请移除图片后重试',
+        );
+        final container = createTestContainer(engine: mockEngine);
+        addTearDown(() => container.dispose());
+
+        final notifier = container.read(chatProvider.notifier);
+
+        await notifier.sendMessage('带图片的消息');
+
+        final state = container.read(chatProvider);
+        expect(state.loadingState, ChatLoadingState.error);
+        expect(state.errorMessage, '当前模型不支持图片理解，请移除图片后重试');
+        expect(state.errorMessage, isNot(contains('[unsupported]')));
       });
 
       test('多轮消息累积历史', () async {

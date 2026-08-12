@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:codex_mobile_pro/core/ai/ai_message.dart';
 import 'package:codex_mobile_pro/core/ai/attachment.dart';
 import 'package:codex_mobile_pro/features/ai/services/attachment_manager.dart';
@@ -125,6 +128,121 @@ void main() {
       expect(AttachmentManager.maxImageSizeBytes, 10 * 1024 * 1024);
       expect(AttachmentManager.maxFileSizeBytes, 25 * 1024 * 1024);
       expect(AttachmentManager.maxAttachments, 9);
+    });
+  });
+  group('Attachment 图片能力', () {
+    test('isImage 按 MIME 判断', () {
+      const img = Attachment(
+        id: 'a',
+        type: AttachmentType.image,
+        name: 'x.png',
+        mimeType: 'image/png',
+      );
+      expect(img.isImage, isTrue);
+      const jpeg = Attachment(
+        id: 'b',
+        type: AttachmentType.image,
+        name: 'x.jpg',
+        mimeType: 'image/jpeg',
+      );
+      expect(jpeg.isImage, isTrue);
+      const webp = Attachment(
+        id: 'c',
+        type: AttachmentType.image,
+        name: 'x.webp',
+        mimeType: 'image/webp',
+      );
+      expect(webp.isImage, isTrue);
+      // 大小写不敏感
+      const upper = Attachment(
+        id: 'd',
+        type: AttachmentType.image,
+        name: 'x.png',
+        mimeType: 'IMAGE/PNG',
+      );
+      expect(upper.isImage, isTrue);
+      // 非图片
+      const text = Attachment(
+        id: 'e',
+        type: AttachmentType.file,
+        name: 'x.txt',
+        mimeType: 'text/plain',
+      );
+      expect(text.isImage, isFalse);
+      const bin = Attachment(
+        id: 'f',
+        type: AttachmentType.file,
+        name: 'x.bin',
+      );
+      expect(bin.isImage, isFalse);
+    });
+
+    test('toDataUrl 生成正确 base64 data URL', () async {
+      final dir = await Directory.systemTemp.createTemp('attachment_test');
+      addTearDown(() => dir.delete(recursive: true));
+      final file = File('${dir.path}/pixel.png');
+      final bytes = <int>[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+      await file.writeAsBytes(bytes);
+
+      final att = Attachment(
+        id: 'att-img',
+        type: AttachmentType.image,
+        name: 'pixel.png',
+        mimeType: 'image/png',
+        size: bytes.length,
+        path: file.path,
+      );
+      final url = await att.toDataUrl();
+      // 图片 bytes 以 data URL 形式发送，而不是路径字符串
+      expect(url, startsWith('data:image/png;base64,'));
+      expect(url, 'data:image/png;base64,${base64Encode(bytes)}');
+    });
+
+    test('toDataUrl 非图片 / 无 path / 文件缺失 / 超限返回 null', () async {
+      final dir = await Directory.systemTemp.createTemp('attachment_test');
+      addTearDown(() => dir.delete(recursive: true));
+      final file = File('${dir.path}/pixel.png');
+      await file.writeAsBytes([1, 2, 3]);
+
+      // 非图片
+      const text = Attachment(
+        id: 'a',
+        type: AttachmentType.file,
+        name: 'x.txt',
+        mimeType: 'text/plain',
+        path: '/x.txt',
+      );
+      expect(await text.toDataUrl(), isNull);
+
+      // 无 path
+      const noPath = Attachment(
+        id: 'b',
+        type: AttachmentType.image,
+        name: 'x.png',
+        mimeType: 'image/png',
+      );
+      expect(await noPath.toDataUrl(), isNull);
+
+      // 文件缺失
+      final missing = Attachment(
+        id: 'c',
+        type: AttachmentType.image,
+        name: 'x.png',
+        mimeType: 'image/png',
+        path: '${dir.path}/not-exist.png',
+      );
+      expect(await missing.toDataUrl(), isNull);
+
+      // 超限（size > maxBytes）
+      final big = Attachment(
+        id: 'd',
+        type: AttachmentType.image,
+        name: 'x.png',
+        mimeType: 'image/png',
+        path: file.path,
+        size: 999999,
+      );
+      expect(await big.toDataUrl(maxBytes: 10), isNull);
     });
   });
 }

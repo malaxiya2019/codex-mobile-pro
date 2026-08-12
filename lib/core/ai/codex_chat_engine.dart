@@ -201,7 +201,11 @@ class CodexChatEngine implements IChatEngine {
         message: '该会话正在生成中，请等待完成或停止当前生成',
       );
     }
-    if (content.trim().isEmpty) {
+    // 附件（本地绑定，不参与 AI 请求）
+    final attachments = _attachmentsFromMetadata(metadata);
+    final hasImageAttachment = attachments.any((a) => a.isImage);
+
+    if (content.trim().isEmpty && !hasImageAttachment) {
       throw const ChatEngineException(
         type: ChatEngineErrorType.internal,
         message: '消息内容不能为空',
@@ -215,14 +219,25 @@ class CodexChatEngine implements IChatEngine {
       content: content.trim(),
       timestamp: DateTime.now(),
       metadata: metadata,
-      attachments: _attachmentsFromMetadata(metadata),
+      attachments: attachments,
     );
     session.addMessage(userMessage);
+
+    // 图片理解能力：当前引擎（DeepSeek 文本模型）不支持图片输入。
+    // 保留用户消息（含附件）供 UI 展示，明确提示，不调用后端、不伪造回复。
+    if (hasImageAttachment) {
+      throw const ChatEngineException(
+        type: ChatEngineErrorType.unsupported,
+        message: '当前模型不支持图片理解，请移除图片后重试',
+      );
+    }
 
     // 自动更新标题（首条用户消息）
     if (session.title.startsWith('对话 ') &&
         session.messagesByRole(ChatRole.user).length == 1) {
-      session.title = _generateTitle(content.trim());
+      session.title = content.trim().isEmpty
+          ? '图片消息'
+          : _generateTitle(content.trim());
     }
 
     // 确定目标目录

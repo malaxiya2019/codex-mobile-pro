@@ -28,6 +28,9 @@ enum ChatEngineErrorType {
 
   /// 内部错误
   internal,
+
+  /// 能力不支持（如图片理解）
+  unsupported,
 }
 
 /// 引擎异常

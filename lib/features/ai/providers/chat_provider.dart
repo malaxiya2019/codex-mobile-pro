@@ -285,8 +285,10 @@ class ChatNotifier extends StateNotifier<ChatState> {
     } catch (e) {
       // 发生错误时同步状态（引擎已将占位消息替换为错误消息）
       _syncFromEngine(sessionId);
+      // ChatEngineException 展示其 message（不含 [type] 前缀），其余异常按原样
+      final message = e is ChatEngineException ? e.message : e.toString();
       state = state.copyWith(
-        errorMessage: e.toString(),
+        errorMessage: message,
         loadingState: ChatLoadingState.error,
       );
     }

@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 /// 附件类型
 enum AttachmentType {
   /// 相册 / 拍照图片
@@ -114,5 +117,34 @@ class Attachment {
       status: AttachmentStatus.fromName(json['status'] as String?),
       error: json['error'] as String?,
     );
+  }
+  /// 是否为图片附件（MIME 以 `image/` 开头）。
+  ///
+  /// 覆盖 image/jpeg、image/png、image/webp 等常见图片格式。
+  bool get isImage {
+    final m = mimeType.toLowerCase();
+    return m.startsWith('image/');
+  }
+
+  /// 生成 data URL（`data:<mime>;base64,<base64>`）。
+  ///
+  /// 仅图片可用。文件不存在 / 读取失败 / 超过 [maxBytes] 时返回 null。
+  /// 这是「把图片 bytes 真正传给多模态模型」的通道；**严禁把 [path]
+  /// 字符串当作图片内容发送**。当前 DeepSeek 栈不支持图片，调用方
+  /// 应先用 [isImage] 拦截并提示，而不是伪造发送。
+  Future<String?> toDataUrl({int maxBytes = 10 * 1024 * 1024}) async {
+    if (!isImage) return null;
+    final p = path;
+    if (p == null || p.isEmpty) return null;
+    try {
+      final file = File(p);
+      if (!await file.exists()) return null;
+      if (size > 0 && size > maxBytes) return null;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty || bytes.length > maxBytes) return null;
+      return 'data:$mimeType;base64,${base64Encode(bytes)}';
+    } catch (_) {
+      return null;
+    }
   }
 }

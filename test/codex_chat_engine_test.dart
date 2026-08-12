@@ -152,15 +152,16 @@ void main() {
       final engine = CodexChatEngine(runner: FakeCodexRunner());
       final session = engine.createSession();
 
+      // 图片附件现在走「当前模型不支持图片理解」拦截（见新增测试），
+      // 这里只验证非图片附件仍能正常绑定发送。
       final attJson = <Map<String, dynamic>>[
         {
           'id': 'att-1',
-          'type': 'image',
-          'name': 'shot.png',
-          'mimeType': 'image/png',
+          'type': 'file',
+          'name': 'report.txt',
+          'mimeType': 'text/plain',
           'size': 1024,
-          'path': '/tmp/shot.png',
-          'thumbnail': '/tmp/shot.png',
+          'path': '/tmp/report.txt',
           'status': 'ready',
         },
         {
@@ -184,8 +185,8 @@ void main() {
       expect(user.role, ChatRole.user);
       expect(user.content, '看看附件');
       expect(user.attachments, hasLength(2));
-      expect(user.attachments[0].type, AttachmentType.image);
-      expect(user.attachments[0].name, 'shot.png');
+      expect(user.attachments[0].type, AttachmentType.file);
+      expect(user.attachments[0].name, 'report.txt');
       expect(user.attachments[1].type, AttachmentType.projectFile);
       expect(user.attachments[1].name, 'pubspec.yaml');
 
@@ -388,6 +389,83 @@ void main() {
         engine.streamMessage(sessionId: 'nope', content: 'hi'),
         emitsError(isA<ChatEngineException>()),
       );
+      engine.dispose();
+    });
+
+    test('发送图片附件 → 明确提示不支持图片理解，不调用后端', () async {
+      final runner = FakeCodexRunner();
+      final engine = CodexChatEngine(runner: runner, defaultWorkspaceDir: '/ws');
+      final session = engine.createSession();
+
+      const att = Attachment(
+        id: 'att-img',
+        type: AttachmentType.image,
+        name: 'x.png',
+        mimeType: 'image/png',
+        size: 100,
+        path: '/data/local/tmp/x.png',
+        thumbnail: '/data/local/tmp/x.png',
+      );
+
+      await expectLater(
+        engine.streamMessage(
+          sessionId: session.sessionId,
+          content: '请描述这张图片',
+          metadata: {'attachments': [att.toJson()]},
+        ),
+        emitsError(
+          isA<ChatEngineException>()
+              .having((e) => e.type, 'type', ChatEngineErrorType.unsupported)
+              .having(
+                (e) => e.message,
+                'message',
+                contains('不支持图片理解'),
+              ),
+        ),
+      );
+
+      // 用户消息保留（含附件），供 UI 展示
+      final s = engine.getSession(session.sessionId)!;
+      expect(s.messages.length, 1);
+      expect(s.messages.first.role, ChatRole.user);
+      expect(s.messages.first.content, '请描述这张图片');
+      expect(s.messages.first.attachments, hasLength(1));
+      expect(s.messages.first.attachments.single.isImage, isTrue);
+
+      // 后端未被调用，不伪造发送
+      expect(runner.runCount, 0);
+      engine.dispose();
+    });
+
+    test('仅图片无文字 → 同样拦截为「不支持图片理解」', () async {
+      final runner = FakeCodexRunner();
+      final engine = CodexChatEngine(runner: runner, defaultWorkspaceDir: '/ws');
+      final session = engine.createSession();
+
+      const att = Attachment(
+        id: 'att-img2',
+        type: AttachmentType.image,
+        name: 'y.webp',
+        mimeType: 'image/webp',
+        path: '/data/local/tmp/y.webp',
+      );
+
+      await expectLater(
+        engine.streamMessage(
+          sessionId: session.sessionId,
+          content: '',
+          metadata: {'attachments': [att.toJson()]},
+        ),
+        emitsError(
+          isA<ChatEngineException>()
+              .having(
+                (e) => e.message,
+                'message',
+                contains('不支持图片理解'),
+              ),
+        ),
+      );
+      expect(runner.runCount, 0);
       engine.dispose();
     });
 
