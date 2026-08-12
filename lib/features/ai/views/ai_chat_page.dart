@@ -11,6 +11,7 @@ import '../../../core/ai/ai_message.dart';
 import '../../../core/ai/attachment.dart';
 import '../../../core/ai/chat_engine.dart';
 import '../../../core/ai/codex_chat_engine.dart';
+import '../../../core/ai/gemini_config.dart';
 import '../../project/providers/project_provider.dart';
 import '../models/ai_chat_view_mode.dart';
 import '../providers/chat_provider.dart';
@@ -85,6 +86,14 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
     _scrollToBottom();
   }
 
+  /// 打开 Gemini 视觉设置（API Key + 模型）
+  Future<void> _openGeminiSettings() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => const _GeminiSettingsDialog(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(chatProvider);
@@ -112,6 +121,12 @@ class _AiChatPageState extends ConsumerState<AiChatPage> {
               tooltip: '停止生成',
               onPressed: _stopGeneration,
             ),
+          // Gemini 视觉设置（API Key + 模型）
+          IconButton(
+            icon: const Icon(Icons.auto_awesome_outlined),
+            tooltip: 'Gemini 视觉设置',
+            onPressed: _openGeminiSettings,
+          ),
           // 新建会话
           IconButton(
             icon: const Icon(Icons.add_circle_outline),
@@ -1716,6 +1731,151 @@ class _ProjectFilePickerDialogState extends State<_ProjectFilePickerDialog> {
           ],
         ),
       ),
+    );
+  }
+}
+
+
+/// Gemini 视觉设置对话框（API Key + 模型选择）
+///
+/// Key 存 SharedPreferences（[GeminiConfig.saveApiKey]），模型同理。
+/// 图片理解走 Gemini；纯文本消息仍走 Codex / DeepSeek，不受影响。
+class _GeminiSettingsDialog extends ConsumerStatefulWidget {
+  const _GeminiSettingsDialog();
+
+  @override
+  ConsumerState<_GeminiSettingsDialog> createState() =>
+      _GeminiSettingsDialogState();
+}
+
+class _GeminiSettingsDialogState extends ConsumerState<_GeminiSettingsDialog> {
+  final TextEditingController _keyController = TextEditingController();
+  bool _obscure = true;
+  String _model = GeminiConfig.defaultModel;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrent();
+  }
+
+  Future<void> _loadCurrent() async {
+    final key = await GeminiConfig.loadApiKey();
+    final model = await GeminiConfig.loadModel();
+    if (!mounted) return;
+    setState(() {
+      _keyController.text = key;
+      _model = GeminiConfig.supportedModels.contains(model)
+          ? model
+          : GeminiConfig.defaultModel;
+      _loaded = true;
+    });
+  }
+
+  @override
+  void dispose() {
+    _keyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final key = _keyController.text.trim();
+    if (key.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('API Key 不能为空')),
+      );
+      return;
+    }
+    await GeminiConfig.saveApiKey(key);
+    await GeminiConfig.saveModel(_model);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Gemini 已配置（$_model）')),
+    );
+  }
+
+  Future<void> _clear() async {
+    await GeminiConfig.clearApiKey();
+    if (!mounted) return;
+    setState(() {
+      _keyController.clear();
+      _loaded = true;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Gemini API Key 已清除')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Gemini 视觉设置'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '带图片发送时由 Gemini 看图回答；纯文本仍走 DeepSeek/Codex。',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _keyController,
+              obscureText: _obscure,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(
+                labelText: 'Gemini API Key',
+                hintText: 'AIza...（Google AI Studio 获取）',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: _model,
+              decoration: const InputDecoration(
+                labelText: '模型',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final m in GeminiConfig.supportedModels)
+                  DropdownMenuItem(value: m, child: Text(m)),
+              ],
+              onChanged: (v) {
+                if (v != null) setState(() => _model = v);
+              },
+            ),
+            if (!_loaded)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _clear,
+          child: const Text('清除'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _save,
+          child: const Text('保存'),
+        ),
+      ],
     );
   }
 }

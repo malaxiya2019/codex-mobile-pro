@@ -9,6 +9,7 @@ import '../../../core/ai/attachment.dart';
 import '../../../core/ai/chat_engine.dart';
 import '../../../core/ai/chat_session.dart';
 import '../../../core/ai/codex_chat_engine.dart';
+import '../../../core/ai/gemini_chat_engine.dart';
 import '../../../core/ai/providers/deepseek_provider.dart';
 import '../models/ai_chat_view_mode.dart';
 
@@ -125,14 +126,31 @@ class ChatState {
 // ChatNotifier
 // ══════════════════════════════════════════════
 
-/// 对话 Provider
+/// Gemini 视觉引擎 Provider（带图片附件时由 ChatNotifier 接管）
+///
+/// 直连 Google Gemini API（不经 Codex CLI / Linux Runtime），仅承载
+/// 「图片理解」场景；纯文本消息仍由 [chatEngineProvider]（Codex）处理。
+final geminiChatEngineProvider = Provider<GeminiChatEngine>((ref) {
+  final engine = GeminiChatEngine();
+  ref.onDispose(engine.dispose);
+  return engine;
+});
+
+/// 对话 Provider（主聊天入口）
+///
+/// 纯文本走 [chatEngineProvider]（Codex / DeepSeek）；带图片附件自动
+/// 切换到 [geminiChatEngineProvider]（Gemini 视觉）。
 final chatProvider = StateNotifierProvider<ChatNotifier, ChatState>((ref) {
   final engine = ref.watch(chatEngineProvider);
-  return ChatNotifier(engine: engine);
+  final visionEngine = ref.watch(geminiChatEngineProvider);
+  return ChatNotifier(engine: engine, visionEngine: visionEngine);
 });
 
 class ChatNotifier extends StateNotifier<ChatState> {
   final IChatEngine _engine;
+
+  /// Gemini 视觉引擎（带图片附件时接管；null = 禁用图片理解）
+  final GeminiChatEngine? _visionEngine;
 
   /// 当前选中的工作目录（null = 使用引擎默认）
   String? _workspaceDir;
@@ -143,8 +161,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
   /// 界面模式持久化 key（SharedPreferences）
   static const String _viewModePrefKey = 'ai_chat_view_mode';
 
-  ChatNotifier({required IChatEngine engine})
-      : _engine = engine,
+  ChatNotifier({
+    required IChatEngine engine,
+    GeminiChatEngine? visionEngine,
+  })  : _engine = engine,
+        _visionEngine = visionEngine,
         super(const ChatState()) {
     _initDefaultSession();
     _loadViewMode();
@@ -271,7 +292,12 @@ class ChatNotifier extends StateNotifier<ChatState> {
         if (attachments.isNotEmpty)
           'attachments': attachments.map((a) => a.toJson()).toList(),
       };
-      await for (final _ in _engine.streamMessage(
+      // 图片附件 → Gemini 视觉引擎；否则 Codex 引擎（纯文本默认链路不变）
+      final hasImage = attachments.any((a) => a.isImage);
+      final engine = hasImage && _visionEngine != null
+          ? _visionEngine
+          : _engine;
+      await for (final _ in engine.streamMessage(
         sessionId: sessionId,
         content: content.trim(),
         metadata: meta.isEmpty ? null : meta,
