@@ -31,6 +31,8 @@ import 'package:codex_mobile_pro/runtime/install_models.dart';
 import 'package:codex_mobile_pro/runtime/installers/apt_source_manager.dart';
 import 'package:codex_mobile_pro/runtime/installers/apt_toolchain_installers.dart';
 import 'package:codex_mobile_pro/runtime/installers/npm_toolchain_installers.dart';
+import 'package:codex_mobile_pro/runtime/installers/qwen_mm_plugins_installer.dart';
+import 'package:codex_mobile_pro/runtime/installers/uv_toolchain_installer.dart';
 import 'package:codex_mobile_pro/runtime/installers/toolchain_context.dart';
 import 'package:codex_mobile_pro/runtime/installers/toolchain_orchestrator.dart';
 import 'package:codex_mobile_pro/runtime/process/process_runner.dart';
@@ -185,6 +187,9 @@ class FakeToolchainAdapter implements IExecutionAdapter {
             case 'python3-pip':
               installedVersions['/usr/bin/pip3'] =
                   'pip 24.0 from /usr/lib/python3/dist-packages (python 3.12)';
+            case 'ffmpeg':
+              installedVersions['/usr/bin/ffmpeg'] = '6.1.1-3ubuntu5';
+              installedVersions['/usr/bin/ffprobe'] = '6.1.1-3ubuntu5';
           }
         }
         return _ok(request);
@@ -214,6 +219,19 @@ class FakeToolchainAdapter implements IExecutionAdapter {
       }
       // npm --version
       final v = installedVersions['/usr/bin/npm'];
+      return v != null
+          ? _ok(request, v)
+          : RuntimeProcessResult(exitCode: 127, request: request);
+    }
+
+    // pip3/pip install uv（Qwen-MM-Plugins MCP 运行时）
+    if (exe == '/usr/bin/pip3' || exe == '/usr/bin/pip') {
+      if (args.contains('install') && args.contains('uv')) {
+        installedVersions['/usr/local/bin/uv'] = '0.5.18';
+        installedVersions['/usr/local/bin/uvx'] = '0.5.18';
+        return _ok(request);
+      }
+      final v = installedVersions[exe];
       return v != null
           ? _ok(request, v)
           : RuntimeProcessResult(exitCode: 127, request: request);
@@ -901,6 +919,148 @@ void main() {
     });
   });
 
+  group('uv / uvx 安装器', () {
+    test('缺失 → pip3 install uv → 验证 uvx（Qwen-MM-Plugins 依赖）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      // python3/pip 已装（PythonInstaller 前置），uv 缺失
+      f.adapter.installedVersions['/usr/bin/python3'] = '3.12.3';
+      f.adapter.installedVersions['/usr/bin/pip3'] =
+          'pip 24.0 from /usr/lib/python3/dist-packages (python 3.12)';
+
+      final installer = UvInstaller();
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(
+          f.adapter.log,
+          contains('/usr/bin/pip3 install --quiet uv'));
+      expect(f.adapter.installedVersions['/usr/local/bin/uvx'], '0.5.18');
+      expect(result.version, '0.5.18');
+    });
+
+    test('已安装 → SKIP（幂等）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/local/bin/uvx'] = '0.5.18';
+
+      final result = await UvInstaller().install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(result.version, contains('已安装'));
+      expect(f.adapter.log, isNot(contains('/usr/bin/pip3 install')),
+          reason: '已安装时不得重复 pip install');
+    });
+
+    test('Python/pip 缺失 → dependencyMissing（不伪装成功）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      // python3 未装（也不存在 pip3/pip）
+
+      final result = await UvInstaller().install(f.ctx);
+
+      expect(result.success, isFalse);
+      expect(result.phase, InstallPhase.failed);
+      expect(result.errorMessage, contains('Python/pip 缺失'));
+      expect(f.adapter.log, isNot(contains('pip3 install')),
+          reason: 'python 缺失时不得执行 pip install');
+    });
+  });
+
+  group('Qwen-MM-Plugins 部署器', () {
+    test('安装 → 写 7 个 MCP server 段到 ~/.codex/config.toml + 凭证模板 + ffmpeg',
+        () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+
+      final installer = QwenMmPluginsInstaller();
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(result.version, contains('8 skills + MCP'));
+
+      // 1. config.toml MCP server 段（7 个能力，edu-agent 无 MCP）
+      final config = File('${f.temp.path}/rootfs/root/.codex/config.toml');
+      expect(config.existsSync(), isTrue);
+      final content = config.readAsStringSync();
+      for (final cap in [
+        'core', 'api', 'search', 'video-memory', 'video-edit', 'blender', 'freecad'
+      ]) {
+        expect(content, contains('[mcp_servers.qwen-mm-plugins-$cap]'),
+            reason: '能力 $cap 应写入 MCP server 段');
+      }
+      expect(content, contains('command = "uvx"'));
+      expect(content, contains('qwen-mm-plugins[core] @ git+https://github.com/QwenLM/Qwen-MM-Plugins.git@qwen-mm-plugins-core-v1.0.1'));
+      // blender/freecad 带 QWEN_MM_AUTOLAUNCH=1
+      expect(content, contains('env = { QWEN_MM_AUTOLAUNCH = "1" }'));
+      // edu-agent 纯 skill，无 MCP 段
+      expect(content, isNot(contains('qwen-mm-plugins-edu-agent]')));
+
+      // 2. 共享配置凭证模板
+      final qmp = File('${f.temp.path}/rootfs/root/.qwen-mm-plugins/config');
+      expect(qmp.existsSync(), isTrue);
+      final cfg = qmp.readAsStringSync();
+      expect(cfg, contains('DASHSCOPE_API_KEY='));
+      expect(cfg, contains('SERPER_API_KEY='));
+      expect(cfg, contains('EXA_API_KEY='));
+      expect(cfg, contains('TAVILY_API_KEY='));
+
+      // 3. ffmpeg 尽力安装
+      expect(f.adapter.installedVersions['/usr/bin/ffmpeg'], '6.1.1-3ubuntu5');
+    });
+
+    test('config.toml 已含 MCP 段 → 幂等跳过（不重复追加）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      final config = File('${f.temp.path}/rootfs/root/.codex/config.toml');
+      config.createSync(recursive: true);
+      config.writeAsStringSync(
+          'model = "custom-model"\n[mcp_servers.qwen-mm-plugins-core]\n');
+
+      final installer = QwenMmPluginsInstaller();
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(result.version, contains('已安装'), reason: '已配置应走幂等跳过');
+      final content = config.readAsStringSync();
+      expect(content, contains('custom-model'),
+          reason: '已配置时保持用户内容不覆盖');
+      // 只含一个 core 段，未重复追加其余能力
+      expect(content, isNot(contains('[mcp_servers.qwen-mm-plugins-api]')));
+    });
+
+    test('ffmpeg apt 安装失败 → 不阻断部署（best-effort）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.failAptInstall = true; // apt install ffmpeg 失败
+
+      final installer = QwenMmPluginsInstaller();
+      final result = await installer.install(f.ctx);
+
+      // 部署仍成功（ffmpeg 为尽力而为）
+      expect(result.success, isTrue);
+      expect(result.version, contains('8 skills + MCP'));
+      final config = File('${f.temp.path}/rootfs/root/.codex/config.toml');
+      expect(config.existsSync(), isTrue,
+          reason: 'ffmpeg 失败不影响 MCP 配置写入');
+    });
+
+    test('凭证模板已存在 → 不覆盖（幂等）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      final qmp = File('${f.temp.path}/rootfs/root/.qwen-mm-plugins/config');
+      qmp.createSync(recursive: true);
+      qmp.writeAsStringSync('DASHSCOPE_API_KEY=sk-real-user-key\n');
+
+      final installer = QwenMmPluginsInstaller();
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(qmp.readAsStringSync(), contains('sk-real-user-key'),
+          reason: '已有用户配置不得被模板覆盖');
+    });
+  });
+
   group('ToolchainOrchestrator', () {
     test('installOne：Linux Runtime 未就绪 → blocked', () async {
       final f = ToolchainFixture();
@@ -958,6 +1118,49 @@ void main() {
       expect(result.errorMessage, contains('Node.js'));
     });
 
+    test('installOne：python 缺失 → uv blocked（依赖 Python）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+
+      final result = await f.orchestrator.installOne(RuntimeTool.uv, f.ctx);
+
+      expect(result.success, isFalse);
+      expect(result.phase, InstallPhase.blocked);
+      expect(result.errorMessage, contains('Python'));
+    });
+
+    test('installOne：uv 缺失 → qwenMmPlugins blocked（依赖 uv + codex）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+
+      final result =
+          await f.orchestrator.installOne(RuntimeTool.qwenMmPlugins, f.ctx);
+
+      expect(result.success, isFalse);
+      expect(result.phase, InstallPhase.blocked);
+      expect(result.errorMessage, contains('uv'));
+    });
+
+    test('installAll：uv 与 qwenMmPlugins 依次安装（依赖链完整）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      // node 已装 → codex/mimo 走 npm SKIP；python 未装 → 走 apt 装 python
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+      f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
+
+      final results = await f.orchestrator.installAll(f.ctx);
+
+      final uv = results.firstWhere((r) => r.tool == RuntimeTool.uv);
+      expect(uv.success, isTrue);
+      expect(f.adapter.installedVersions['/usr/local/bin/uvx'], '0.5.18');
+
+      final qmp = results.firstWhere((r) => r.tool == RuntimeTool.qwenMmPlugins);
+      expect(qmp.success, isTrue, reason: 'uv 已装则 qwen-mm-plugins 应可部署');
+      final config = File('${f.temp.path}/rootfs/root/.codex/config.toml');
+      expect(config.existsSync(), isTrue);
+      expect(config.readAsStringSync(), contains('[mcp_servers.qwen-mm-plugins-core]'));
+    });
+
     test('无安装器 → 真正的 UNSUPPORTED', () async {
       final f = ToolchainFixture();
       addTearDown(f.dispose);
@@ -975,13 +1178,15 @@ void main() {
       addTearDown(f.dispose);
 
       final first = await f.orchestrator.installAll(f.ctx);
-      expect(first.length, 5, reason: 'node/git/python/codex/mimo 共 5 个');
+      expect(first.length, 7,
+          reason: 'node/git/python/uv/codex/qwen-mm-plugins/mimo 共 7 个');
       for (final r in first) {
         expect(r.success, isTrue, reason: '${r.tool} 应安装成功');
       }
-      // 第一次：全部 apt/npm 执行
+      // 第一次：全部 apt/npm/pip 执行（node/git/python/ffmpeg 4 次 apt，
+      // codex/mimo 2 次 npm，uv 1 次 pip）
       expect(
-          f.adapter.log.where((l) => l.contains('apt-get install')).length, 3);
+          f.adapter.log.where((l) => l.contains('apt-get install')).length, 4);
       expect(f.adapter.log.where((l) => l.contains('npm install')).length, 2);
 
       // 第二次：全部 SKIP，无任何 apt/npm install（仅 --version 查询）

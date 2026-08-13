@@ -1,0 +1,78 @@
+{
+  "asset_id": "prompt-to-product-ui",
+  "title": "Prompt To Product UI Showcase",
+  "version": "1.0.0",
+  "source_reference": "reference-video study (prompt-to-UI product demo)",
+  "design_contract": {
+    "core_idea": "用户输入一个 prompt，画面生成一个完整、有审美、有场景的产品 UI。",
+    "tone": ["清爽", "产品感", "高完成度 UI", "多风格生成"],
+    "motifs": ["prompt input", "send button", "cursor", "floating cards", "dashboard", "style slider", "mobile mockup"]
+  },
+  "atoms": [
+    {
+      "id": "prompt-composer",
+      "name": "Prompt Composer",
+      "status": "core_motif",
+      "best_for": ["片头", "场景切换", "功能触发"],
+      "visual_recipe": "白色圆角输入框、黑色发送按钮、鼠标箭头和 prompt 文案。",
+      "avoid": ["输入太长", "光标没有命中按钮"]
+    },
+    {
+      "id": "ui-materialization",
+      "name": "UI Materialization",
+      "status": "core_motif",
+      "best_for": ["AI 生成 UI", "产品能力展示"],
+      "visual_recipe": "点击发送后，UI 从空白、模糊或小卡片状态逐层生成。",
+      "avoid": ["单张截图硬淡入", "没有生成过程"]
+    },
+    {
+      "id": "floating-product-collage",
+      "name": "Floating Product Collage",
+      "status": "reworked_recommended",
+      "best_for": ["多功能产品", "SaaS 总览", "产品能力陈列"],
+      "visual_recipe": "多个 UI 模块以立体陈列方式出现，包含主卡、数据侧卡、洞察卡和地面阴影，强调主次层级。",
+      "avoid": ["普通重叠", "平均分栏", "像 PPT 截图墙"]
+    },
+    {
+      "id": "data-dashboard-bloom",
+      "name": "Data Dashboard Bloom",
+      "status": "reworked_progress_first",
+      "best_for": ["财务分析", "运营数据", "BI 平台", "目标完成度"],
+      "visual_recipe": "深色数据面板以进度条和完成度为主视觉，主指标 chip 与多条进度线逐层亮起。",
+      "avoid": ["普通指标卡堆叠", "数据太密", "没有主指标"]
+    },
+    {
+      "id": "style-morph-slider",
+      "name": "Style Morph Slider",
+      "status": "high_value",
+      "best_for": ["一键换风格", "主题生成", "设计编辑器"],
+      "visual_recipe": "鼠标拖动彩色滑块后，界面颜色、字体、插画和布局发生明显变化。",
+      "avoid": ["滑块动了但 UI 没变化"]
+    },
+    {
+      "id": "retro-pixel-ui-mode",
+      "name": "Retro Pixel UI Mode",
+      "status": "optional_accent_only",
+      "best_for": ["短暂风格点缀", "趣味创意"],
+      "visual_recipe": "蓝底像素 UI、8-bit 图标、低分辨率卡片和大号像素数字，只作为短暂记忆点。",
+      "avoid": ["当作主模板", "全片像素化"]
+    },
+    {
+      "id": "mobile-app-focus-reveal",
+      "name": "Mobile App Focus Reveal",
+      "status": "reworked_needs_real_app_detail",
+      "best_for": ["App 产品", "情绪收束", "片尾 hold"],
+      "visual_recipe": "移动端 App mockup 居中出现，周围配套浮动信息卡与加载环，形成更完整的产品展示。",
+      "avoid": ["手机太小", "只有一个普通手机壳", "没有稳定 hold 帧"]
+    }
+  ],
+  "shot_structure": [
+    { "time": "0-4s", "atom": "brand-wordmark", "description": "极简主词或品牌名出现。" },
+    { "time": "4-10s", "atom": "prompt-composer", "description": "用户输入具体产品生成任务。" },
+    { "time": "10-18s", "atom": "ui-materialization", "description": "生成第一个产品界面。" },
+    { "time": "18-28s", "atom": "floating-product-collage", "description": "展示不同 UI 模块。" },
+    { "time": "28-36s", "atom": "data-dashboard-bloom", "description": "展示数据分析能力。" },
+    { "time": "36-43s", "atom": "retro-pixel-ui-mode", "description": "强风格跳变。" },
+    { "time": "43-47s", "atom": "mobile-app-focus-reveal", "description": "移动端或关键词收束。" }
+  ]
+}

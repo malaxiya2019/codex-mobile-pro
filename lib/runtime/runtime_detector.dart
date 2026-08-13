@@ -76,10 +76,24 @@ const _kCapabilityMappings = <_CapabilityToResult>[
     icon: '🐍',
   ),
   _CapabilityToResult(
+    type: CapabilityType.uv,
+    id: 'uv',
+    name: 'uv / uvx',
+    icon: '🚀',
+    missingHint: 'Qwen-MM-Plugins MCP server 按需启动所需',
+  ),
+  _CapabilityToResult(
     type: CapabilityType.codexCli,
     id: 'codex',
     name: 'Codex CLI',
     icon: '🤖',
+  ),
+  _CapabilityToResult(
+    type: CapabilityType.qwenMmPlugins,
+    id: 'qwen_mm_plugins',
+    name: 'Qwen-MM-Plugins',
+    icon: '🖼️',
+    missingHint: 'Qwen 多模态能力（8 个 Skill + MCP server），随 Codex 部署',
   ),
   _CapabilityToResult(
     type: CapabilityType.mimo2codex,
@@ -299,12 +313,19 @@ class RuntimeDetector {
     // 与 Provider 无关，统一在入口生成一次。
     results.add(await _detectDeepSeekKey(environment));
 
+    // Qwen-MM-Plugins：配置部署型能力（rootfs ~/.codex/config.toml 的
+    // [mcp_servers.qwen-mm-plugins-*]），非二进制，与 Provider 无关。
+    results.add(await _detectQwenMmPlugins(environment));
+
     // 获取所有可用 Provider
     final providers = _runtimeManager.registeredProviders;
     if (providers.isEmpty) {
       // 无可用 Provider，标记所有工具为 missing
       for (final mapping in _kCapabilityMappings) {
-        if (mapping.type == CapabilityType.deepseekKey) continue;
+        if (mapping.type == CapabilityType.deepseekKey ||
+            mapping.type == CapabilityType.qwenMmPlugins) {
+          continue;
+        }
         results.add(DetectionResult(
           id: mapping.id,
           name: mapping.name,
@@ -339,7 +360,10 @@ class RuntimeDetector {
     // 对每个 Provider 检测能力
     for (final provider in effectiveProviders) {
       for (final mapping in _kCapabilityMappings) {
-        if (mapping.type == CapabilityType.deepseekKey) continue;
+        if (mapping.type == CapabilityType.deepseekKey ||
+            mapping.type == CapabilityType.qwenMmPlugins) {
+          continue;
+        }
         if (linuxNotReady) {
           results.add(_rootfsDependencyMissing(mapping));
           continue;
@@ -423,6 +447,10 @@ class RuntimeDetector {
     if (id == 'deepseek_key') {
       return _detectDeepSeekKey(environment ?? _runtimeManager.environment);
     }
+    // Qwen-MM-Plugins：非二进制能力，检查 rootfs Codex config 的 MCP 段
+    if (id == 'qwen_mm_plugins') {
+      return _detectQwenMmPlugins(environment ?? _runtimeManager.environment);
+    }
 
     // 1. 先尝试 CapabilityResolver（工具能力）
     for (final mapping in _kCapabilityMappings) {
@@ -482,6 +510,27 @@ class RuntimeDetector {
     final mapping = _findCapabilityMapping('deepseek_key');
     final ready = environment != null &&
         await environment.isToolInstalled(RuntimeTool.deepseekKey);
+    return DetectionResult(
+      id: mapping.id,
+      name: mapping.name,
+      icon: mapping.icon,
+      status: ready ? DetectionStatus.installed : DetectionStatus.missing,
+      category: mapping.category,
+      subCategory: mapping.subCategory,
+      missingHint: mapping.missingHint,
+    );
+  }
+
+  /// Qwen-MM-Plugins 检测：rootfs ~/.codex/config.toml 是否已含 MCP 段。
+  ///
+  /// 该能力为配置部署型（无独立二进制），部署状态由 Codex 配置决定：
+  /// 含 [mcp_servers.qwen-mm-plugins-*] → 已部署。
+  Future<DetectionResult> _detectQwenMmPlugins(
+    RuntimeEnvironment? environment,
+  ) async {
+    final mapping = _findCapabilityMapping('qwen_mm_plugins');
+    final ready = environment != null &&
+        await environment.isToolInstalled(RuntimeTool.qwenMmPlugins);
     return DetectionResult(
       id: mapping.id,
       name: mapping.name,

@@ -40,8 +40,10 @@ void main() {
           case RuntimeTool.node:
           case RuntimeTool.git:
           case RuntimeTool.python:
+          case RuntimeTool.uv:
           case RuntimeTool.ubuntu:
           case RuntimeTool.codexCli:
+          case RuntimeTool.qwenMmPlugins:
           case RuntimeTool.mimo2codex:
             expect(dep.category, RuntimeCategory.coding,
                 reason: '${dep.displayName} 应属于 coding');

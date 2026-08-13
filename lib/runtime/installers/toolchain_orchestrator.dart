@@ -4,7 +4,8 @@
 /// 负责 Coding Runtime 工具链的安装顺序、依赖检查与失败恢复。
 ///
 /// 依赖顺序（严格串行，禁止并行）：
-///   Node.js → npm（随 nodejs 安装）→ Git → Python → Codex → mimo2codex
+///   Node.js → npm（随 nodejs 安装）→ Git → Python → uv/uvx →
+///   Codex → Qwen-MM-Plugins（MCP server 配置）→ mimo2codex
 ///
 /// 全部在 Ubuntu 24.04 rootfs 内执行（runtimeId='linux' → PRoot），
 /// 禁止依赖 Termux pkg。
@@ -23,8 +24,10 @@ import '../install_models.dart';
 import '../runtime_dependency.dart';
 import 'apt_toolchain_installers.dart';
 import 'npm_toolchain_installers.dart';
+import 'qwen_mm_plugins_installer.dart';
 import 'toolchain_context.dart';
 import 'toolchain_installer.dart';
+import 'uv_toolchain_installer.dart';
 
 /// 工具链安装编排器
 class ToolchainOrchestrator {
@@ -45,7 +48,9 @@ class ToolchainOrchestrator {
         NodeJsInstaller(),
         GitInstaller(),
         PythonInstaller(),
+        UvInstaller(),
         CodexCliInstaller(),
+        QwenMmPluginsInstaller(),
         Mimo2codexInstaller(),
       ];
 

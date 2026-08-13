@@ -29,7 +29,9 @@ enum CapabilityType {
   npm,
   git,
   python,
+  uv,
   codexCli,
+  qwenMmPlugins,
   mimo2codex,
   deepseekKey,
   flutter,
@@ -103,7 +105,9 @@ class RuntimeCapability {
       case CapabilityType.npm: return 'npm';
       case CapabilityType.git: return 'Git';
       case CapabilityType.python: return 'Python 3';
+      case CapabilityType.uv: return 'uv / uvx';
       case CapabilityType.codexCli: return 'Codex CLI';
+      case CapabilityType.qwenMmPlugins: return 'Qwen-MM-Plugins';
       case CapabilityType.mimo2codex: return 'mimo2codex';
       case CapabilityType.deepseekKey: return 'DeepSeek API Key';
       case CapabilityType.flutter: return 'Flutter SDK';
@@ -125,7 +129,9 @@ class RuntimeCapability {
       case CapabilityType.npm: return '\u{1F4E6}';
       case CapabilityType.git: return '\u{1F500}';
       case CapabilityType.python: return '\u{1F40D}';
+      case CapabilityType.uv: return '\u{1F680}';
       case CapabilityType.codexCli: return '\u{1F916}';
+      case CapabilityType.qwenMmPlugins: return '\u{1F5BC}';
       case CapabilityType.mimo2codex: return '\u{1F50C}';
       case CapabilityType.deepseekKey: return '\u{1F511}';
       case CapabilityType.flutter: return '\u{1F98B}';

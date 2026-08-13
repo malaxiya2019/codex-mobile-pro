@@ -1,0 +1,98 @@
+{
+  "asset_id": "tech-promo-neon-ui",
+  "title": "Tech Promo Neon UI Atoms",
+  "version": "1.0.0",
+  "language": "zh-CN",
+  "style_contract": {
+    "description": "极简黑场 + 霓虹渐变 + UI 光标交互的科技宣传片原子动效资产。",
+    "tone": ["高级", "克制", "未来感", "产品感", "低信息密度"],
+    "palette": {
+      "background": "near-black",
+      "primary_glow": ["cyan", "blue", "violet", "pink"],
+      "accent_glow": ["lime", "gold"]
+    },
+    "motion_language": ["光线描边", "形变展开", "光标引导", "扫描锁定", "Zoom in / Zoom out", "品牌收束"],
+    "copywriting": "使用 1-3 个词的短概念文案，避免大段说明。"
+  },
+  "atoms": [
+    {
+      "id": "neon-line",
+      "name": "光线描边圆角",
+      "status": "recommended",
+      "best_for": ["黑场开场", "产品轮廓", "数据路径", "Logo 外框", "章节分隔"],
+      "duration_sec": [0.5, 1.5],
+      "visual_recipe": "一条霓虹渐变线从黑场中被绘制出来，经过圆角转弯后形成界面边缘或路径轮廓。",
+      "implementation_hints": ["SVG path draw", "stroke-dasharray", "stroke-dashoffset", "linearGradient stroke", "soft bloom glow"],
+      "usage_note": "把 path 替换成产品卡片轮廓、数据路径或 Logo 外框，即可作为片头钩子。",
+      "avoid": ["转弯过硬", "线条过粗", "背景元素太多"]
+    },
+    {
+      "id": "cursor-pill",
+      "name": "光标激活胶囊",
+      "status": "usable_with_hit_fix",
+      "best_for": ["价值词激活", "功能点出现", "一键生成", "自动化演示"],
+      "duration_sec": [0.8, 1.6],
+      "visual_recipe": "圆角胶囊从短线扩展成按钮，光标移动到右侧圆形触点后触发 spark 和轻微按压。",
+      "implementation_hints": ["scaleX expansion", "cursor travel", "spark pulse", "button press micro-interaction"],
+      "usage_note": "适合配合 Focused、Automated、Generated、Instant 等短词使用。",
+      "avoid": ["光标没有真实命中按钮", "按钮过大", "spark 太炸"]
+    },
+    {
+      "id": "focus-scan",
+      "name": "聚焦扫描镜头",
+      "status": "reworked_recommended_over_eye",
+      "best_for": ["AI 检索", "智能聚焦", "扫描识别", "锁定重点"],
+      "duration_sec": [1.0, 2.0],
+      "visual_recipe": "旋转扫描环包围目标区域，中心目标由圆形变为圆角方块，扫描线穿过后出现 Smart Focus 标签。",
+      "implementation_hints": ["conic-gradient ring", "scale + border-radius morph", "scanline translateY", "chip pop-in"],
+      "usage_note": "替代眼睛图形，作为更干净、更产品化的 AI 聚焦隐喻。",
+      "avoid": ["眼睛造型", "像 Logo", "过度拟物"]
+    },
+    {
+      "id": "orbit-dots",
+      "name": "环形点阵聚合",
+      "status": "needs_enrichment",
+      "best_for": ["生态网络", "数据中枢", "协同系统", "多节点连接"],
+      "duration_sec": [1.0, 2.5],
+      "visual_recipe": "倾斜环形节点围绕中心核心运动，节点到中心有虚线连接，一枚信号光点绕环运行。",
+      "implementation_hints": ["perspective tilt", "node ring", "SVG connector lines", "signal rider", "core pulse"],
+      "usage_note": "不要只放一圈点，至少叠加节点连线、信号流或三维纵深。",
+      "avoid": ["单纯转圈", "节点没有关系", "画面像加载动画"]
+    },
+    {
+      "id": "selection-space",
+      "name": "选择框扩展留白",
+      "status": "strongly_recommended",
+      "best_for": ["产品编辑器", "设计工具", "空间释放", "可视化操作", "核心 UI 展示"],
+      "duration_sec": [1.0, 2.0],
+      "visual_recipe": "选择框从细线扩展成可操作区域，四角控制点出现，光标推动后形成 Zoom in / Zoom out 的空间手感。",
+      "implementation_hints": ["selection chrome", "corner handles", "scale expansion", "cursor nudge", "camera-like zoom"],
+      "usage_note": "可作为产品 UI 类默认模板；后续优先强化镜头推近/拉远节奏。",
+      "avoid": ["边框太亮", "控制点遮挡主体", "只有缩放没有空间感"]
+    },
+    {
+      "id": "brand-lockup",
+      "name": "品牌收束",
+      "status": "recommended",
+      "best_for": ["片尾 Logo", "品牌主张", "官网露出", "产品名露出"],
+      "duration_sec": [1.5, 3.0],
+      "visual_recipe": "微光线先出现，然后聚成 Logo / symbol，再出现产品名和短品牌主张。",
+      "implementation_hints": ["line reveal", "symbol pop", "brand text rise", "final hold"],
+      "usage_note": "真实项目中替换占位 Logo，并按品牌调性设计轻、中、重三种收尾强度。",
+      "avoid": ["Logo 占位不替换", "收尾过炸", "没有最终 hold 帧"]
+    }
+  ],
+  "assembly_pattern": [
+    { "time": "0-3s", "atom": "neon-line", "purpose": "黑场开场，勾勒产品轮廓或数据路径" },
+    { "time": "3-8s", "atom": "cursor-pill", "purpose": "激活第一个价值词" },
+    { "time": "8-14s", "atom": "focus-scan", "purpose": "展示 AI / 智能识别 / 自动聚焦" },
+    { "time": "14-20s", "atom": "orbit-dots", "purpose": "展示数据网络或协同生态" },
+    { "time": "20-30s", "atom": "selection-space", "purpose": "核心产品 UI 镜头，强化 Zoom in / Zoom out" },
+    { "time": "30-36s", "atom": "brand-lockup", "purpose": "收束到 Logo、官网和品牌主张" }
+  ],
+  "review_protocol": {
+    "principle": "逐个原子能力评审，而不是只评价整条视频。",
+    "feedback_key": "atoms[].id",
+    "iteration_priority": ["selection-space", "brand-lockup", "neon-line", "cursor-pill", "focus-scan", "orbit-dots"]
+  }
+}

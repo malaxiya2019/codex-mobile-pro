@@ -1,0 +1,735 @@
+{
+  "fonts": {
+    "kind": "font",
+    "items": [
+      {
+        "name": "Bitter-300",
+        "file": "fonts/Bitter-300.woff2",
+        "ext": "woff2",
+        "size_kb": 18.0,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "editorial serif",
+        "personality": "Warm editorial serif, literary body text",
+        "mood": [
+          "editorial",
+          "literary",
+          "warm"
+        ]
+      },
+      {
+        "name": "Quicksand-700",
+        "file": "fonts/Quicksand-700.woff2",
+        "ext": "woff2",
+        "size_kb": 14.8,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "rounded friendly",
+        "personality": "Soft geometric, gentle calm brands",
+        "mood": [
+          "cozy",
+          "calm",
+          "cute"
+        ]
+      },
+      {
+        "name": "barlow-800",
+        "file": "fonts/barlow-800.woff2",
+        "ext": "woff2",
+        "size_kb": 15.3,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "condensed impact",
+        "personality": "Extra-bold condensed, high-impact titles",
+        "mood": [
+          "punchy",
+          "bold",
+          "energetic"
+        ]
+      },
+      {
+        "name": "anton-400-normal",
+        "file": "fonts/latin/anton-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 18.2,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "heavy impact",
+        "personality": "Heavy impact, shorts/captions/sports hooks",
+        "mood": [
+          "punchy",
+          "bold",
+          "energetic"
+        ]
+      },
+      {
+        "name": "baloo-2-400-normal",
+        "file": "fonts/latin/baloo-2-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 18.5,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "puffy playful",
+        "personality": "Puffy, energetic, childlike display",
+        "mood": [
+          "cute",
+          "playful",
+          "kids"
+        ]
+      },
+      {
+        "name": "baloo-2-700-normal",
+        "file": "fonts/latin/baloo-2-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 19.0,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "puffy playful",
+        "personality": "Puffy, energetic, childlike display",
+        "mood": [
+          "cute",
+          "playful",
+          "kids"
+        ]
+      },
+      {
+        "name": "bangers-400-normal",
+        "file": "fonts/latin/bangers-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 23.0,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "comic pop",
+        "personality": "Comic pop-culture energy, fun titles",
+        "mood": [
+          "playful",
+          "energetic",
+          "fun"
+        ]
+      },
+      {
+        "name": "bodoni-moda-400-normal",
+        "file": "fonts/latin/bodoni-moda-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 14.2,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "high-fashion serif",
+        "personality": "High-fashion editorial luxury serif",
+        "mood": [
+          "elegant",
+          "luxury",
+          "editorial"
+        ]
+      },
+      {
+        "name": "bodoni-moda-700-normal",
+        "file": "fonts/latin/bodoni-moda-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 14.6,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "high-fashion serif",
+        "personality": "High-fashion editorial luxury serif",
+        "mood": [
+          "elegant",
+          "luxury",
+          "editorial"
+        ]
+      },
+      {
+        "name": "caveat-400-normal",
+        "file": "fonts/latin/caveat-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 47.7,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "handwritten",
+        "personality": "Casual margin notes, vlog annotations",
+        "mood": [
+          "cozy",
+          "warm",
+          "handwritten"
+        ]
+      },
+      {
+        "name": "caveat-700-normal",
+        "file": "fonts/latin/caveat-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 49.8,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "handwritten",
+        "personality": "Casual margin notes, vlog annotations",
+        "mood": [
+          "cozy",
+          "warm",
+          "handwritten"
+        ]
+      },
+      {
+        "name": "chakra-petch-500-normal",
+        "file": "fonts/latin/chakra-petch-latin-500-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 9.7,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "sci-fi tech",
+        "personality": "Futuristic sci-fi tech, gaming HUD",
+        "mood": [
+          "futuristic",
+          "techy",
+          "sci-fi"
+        ]
+      },
+      {
+        "name": "chakra-petch-700-normal",
+        "file": "fonts/latin/chakra-petch-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 9.7,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "sci-fi tech",
+        "personality": "Futuristic sci-fi tech, gaming HUD",
+        "mood": [
+          "futuristic",
+          "techy",
+          "sci-fi"
+        ]
+      },
+      {
+        "name": "cinzel-400-normal",
+        "file": "fonts/latin/cinzel-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 13.8,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "classical monumental",
+        "personality": "Classical Roman capitals, epic/cultural",
+        "mood": [
+          "cultural",
+          "epic",
+          "classical"
+        ]
+      },
+      {
+        "name": "cinzel-700-normal",
+        "file": "fonts/latin/cinzel-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 14.8,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "classical monumental",
+        "personality": "Classical Roman capitals, epic/cultural",
+        "mood": [
+          "cultural",
+          "epic",
+          "classical"
+        ]
+      },
+      {
+        "name": "cormorant-garamond-400-normal",
+        "file": "fonts/latin/cormorant-garamond-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 22.3,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "literary serif",
+        "personality": "Literary elegant serif, book-quality",
+        "mood": [
+          "elegant",
+          "literary",
+          "editorial"
+        ]
+      },
+      {
+        "name": "cormorant-garamond-700-normal",
+        "file": "fonts/latin/cormorant-garamond-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 21.8,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "literary serif",
+        "personality": "Literary elegant serif, book-quality",
+        "mood": [
+          "elegant",
+          "literary",
+          "editorial"
+        ]
+      },
+      {
+        "name": "eb-garamond-400-normal",
+        "file": "fonts/latin/eb-garamond-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 21.2,
+        "note": "Copyright 2017 The EB Garamond Project Authors (https://github.com/octaviopardo/EBGaramond12) EBGaramond-Italic[wght].ttf: Copyright 2017 The EB Garamond Project Authors (https://github.com/octaviopardo/EBGaramond12)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttp://scripts.sil.org/OFL\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------\n\nPREAMBLE\nThe goals of the Open Font License (OFL) are to stimulate worldwide\ndevelopment of collaborative font projects, to support the font creation\nefforts of academic and linguistic communities, and to provide a free and\nopen framework in which fonts may be shared and improved in partnership\nwith others.\n\nThe OFL allows the licensed fonts to be used, studied, modified and\nredistributed freely as long as they are not sold by themselves. The\nfonts, including any derivative works, can be bundled, embedded,\nredistributed and/or sold with any software provided that any reserved\nnames are not used by derivative works. The fonts and derivatives,\nhowever, cannot be released under any other type of license. The\nrequirement for fonts to remain under this license does not apply\nto any document created using the fonts or their derivatives.\n\nDEFINITIONS\n\"Font Software\" refers to the set of files released by the Copyright\nHolder(s) under this license and clearly marked as such. This may\ninclude source files, build scripts and documentation.\n\n\"Reserved Font Name\" refers to any names specified as such after the\ncopyright statement(s).\n\n\"Original Version\" refers to the collection of Font Software components as\ndistributed by the Copyright Holder(s).\n\n\"Modified Version\" refers to any derivative made by adding to, deleting,\nor substituting -- in part or in whole -- any of the components of the\nOriginal Version, by changing formats or by porting the Font Software to a\nnew environment.\n\n\"Author\" refers to any designer, engineer, programmer, technical\nwriter or other person who contributed to the Font Software.\n\nPERMISSION & CONDITIONS\nPermission is hereby granted, free of charge, to any person obtaining\na copy of the Font Software, to use, study, copy, merge, embed, modify,\nredistribute, and sell modified and unmodified copies of the Font\nSoftware, subject to the following conditions:\n\n1) Neither the Font Software nor any of its individual components,\nin Original or Modified Versions, may be sold by itself.\n\n2) Original or Modified Versions of the Font Software may be bundled,\nredistributed and/or sold with any software, provided that each copy\ncontains the above copyright notice and this license. These can be\nincluded either as stand-alone text files, human-readable headers or\nin the appropriate machine-readable metadata fields within text or\nbinary files as long as those fields can be easily viewed by the user.\n\n3) No Modified Version of the Font Software may use the Reserved Font\nName(s) unless explicit written permission is granted by the corresponding\nCopyright Holder. This restriction only applies to the primary font name as\npresented to the users.\n\n4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font\nSoftware shall not be used to promote, endorse or advertise any\nModified Version, except to acknowledge the contribution(s) of the\nCopyright Holder(s) and the Author(s) or with their explicit written\npermission.\n\n5) The Font Software, modified or unmodified, in part or in whole,\nmust be distributed entirely under this license, and must not be\ndistributed under any other license. The requirement for fonts to\nremain under this license does not apply to any document created\nusing the Font Software.\n\nTERMINATION\nThis license becomes null and void if any of the above conditions are\nnot met.\n\nDISCLAIMER\nTHE FONT SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT\nOF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE\nCOPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,\nINCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL\nDAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING\nFROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM\nOTHER DEALINGS IN THE FONT SOFTWARE.",
+        "register": "editorial serif",
+        "personality": "Traditional editorial, documentary/press",
+        "mood": [
+          "editorial",
+          "literary",
+          "cultural"
+        ]
+      },
+      {
+        "name": "eb-garamond-700-normal",
+        "file": "fonts/latin/eb-garamond-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 22.5,
+        "note": "Copyright 2017 The EB Garamond Project Authors (https://github.com/octaviopardo/EBGaramond12) EBGaramond-Italic[wght].ttf: Copyright 2017 The EB Garamond Project Authors (https://github.com/octaviopardo/EBGaramond12)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttp://scripts.sil.org/OFL\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------\n\nPREAMBLE\nThe goals of the Open Font License (OFL) are to stimulate worldwide\ndevelopment of collaborative font projects, to support the font creation\nefforts of academic and linguistic communities, and to provide a free and\nopen framework in which fonts may be shared and improved in partnership\nwith others.\n\nThe OFL allows the licensed fonts to be used, studied, modified and\nredistributed freely as long as they are not sold by themselves. The\nfonts, including any derivative works, can be bundled, embedded,\nredistributed and/or sold with any software provided that any reserved\nnames are not used by derivative works. The fonts and derivatives,\nhowever, cannot be released under any other type of license. The\nrequirement for fonts to remain under this license does not apply\nto any document created using the fonts or their derivatives.\n\nDEFINITIONS\n\"Font Software\" refers to the set of files released by the Copyright\nHolder(s) under this license and clearly marked as such. This may\ninclude source files, build scripts and documentation.\n\n\"Reserved Font Name\" refers to any names specified as such after the\ncopyright statement(s).\n\n\"Original Version\" refers to the collection of Font Software components as\ndistributed by the Copyright Holder(s).\n\n\"Modified Version\" refers to any derivative made by adding to, deleting,\nor substituting -- in part or in whole -- any of the components of the\nOriginal Version, by changing formats or by porting the Font Software to a\nnew environment.\n\n\"Author\" refers to any designer, engineer, programmer, technical\nwriter or other person who contributed to the Font Software.\n\nPERMISSION & CONDITIONS\nPermission is hereby granted, free of charge, to any person obtaining\na copy of the Font Software, to use, study, copy, merge, embed, modify,\nredistribute, and sell modified and unmodified copies of the Font\nSoftware, subject to the following conditions:\n\n1) Neither the Font Software nor any of its individual components,\nin Original or Modified Versions, may be sold by itself.\n\n2) Original or Modified Versions of the Font Software may be bundled,\nredistributed and/or sold with any software, provided that each copy\ncontains the above copyright notice and this license. These can be\nincluded either as stand-alone text files, human-readable headers or\nin the appropriate machine-readable metadata fields within text or\nbinary files as long as those fields can be easily viewed by the user.\n\n3) No Modified Version of the Font Software may use the Reserved Font\nName(s) unless explicit written permission is granted by the corresponding\nCopyright Holder. This restriction only applies to the primary font name as\npresented to the users.\n\n4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font\nSoftware shall not be used to promote, endorse or advertise any\nModified Version, except to acknowledge the contribution(s) of the\nCopyright Holder(s) and the Author(s) or with their explicit written\npermission.\n\n5) The Font Software, modified or unmodified, in part or in whole,\nmust be distributed entirely under this license, and must not be\ndistributed under any other license. The requirement for fonts to\nremain under this license does not apply to any document created\nusing the Font Software.\n\nTERMINATION\nThis license becomes null and void if any of the above conditions are\nnot met.\n\nDISCLAIMER\nTHE FONT SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT\nOF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE\nCOPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,\nINCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL\nDAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING\nFROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM\nOTHER DEALINGS IN THE FONT SOFTWARE.",
+        "register": "editorial serif",
+        "personality": "Traditional editorial, documentary/press",
+        "mood": [
+          "editorial",
+          "literary",
+          "cultural"
+        ]
+      },
+      {
+        "name": "fredoka-400-normal",
+        "file": "fonts/latin/fredoka-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 15.7,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "rounded friendly",
+        "personality": "Rounded, friendly, polished cute display",
+        "mood": [
+          "cute",
+          "playful",
+          "friendly"
+        ]
+      },
+      {
+        "name": "fredoka-700-normal",
+        "file": "fonts/latin/fredoka-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 15.5,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "rounded friendly",
+        "personality": "Rounded, friendly, polished cute display",
+        "mood": [
+          "cute",
+          "playful",
+          "friendly"
+        ]
+      },
+      {
+        "name": "ibm-plex-sans-400-normal",
+        "file": "fonts/latin/ibm-plex-sans-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 22.1,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "corporate warm",
+        "personality": "Corporate but warm, data readouts",
+        "mood": [
+          "techy",
+          "corporate",
+          "clean"
+        ]
+      },
+      {
+        "name": "ibm-plex-sans-700-normal",
+        "file": "fonts/latin/ibm-plex-sans-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 22.3,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "corporate warm",
+        "personality": "Corporate but warm, data readouts",
+        "mood": [
+          "techy",
+          "corporate",
+          "clean"
+        ]
+      },
+      {
+        "name": "inter-400-normal",
+        "file": "fonts/latin/inter-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 23.1,
+        "note": "Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter) Inter-Italic[opsz,wght].ttf: Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttp://scripts.sil.org/OFL\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------\n\nPREAMBLE\nThe goals of the Open Font License (OFL) are to stimulate worldwide\ndevelopment of collaborative font projects, to support the font creation\nefforts of academic and linguistic communities, and to provide a free and\nopen framework in which fonts may be shared and improved in partnership\nwith others.\n\nThe OFL allows the licensed fonts to be used, studied, modified and\nredistributed freely as long as they are not sold by themselves. The\nfonts, including any derivative works, can be bundled, embedded,\nredistributed and/or sold with any software provided that any reserved\nnames are not used by derivative works. The fonts and derivatives,\nhowever, cannot be released under any other type of license. The\nrequirement for fonts to remain under this license does not apply\nto any document created using the fonts or their derivatives.\n\nDEFINITIONS\n\"Font Software\" refers to the set of files released by the Copyright\nHolder(s) under this license and clearly marked as such. This may\ninclude source files, build scripts and documentation.\n\n\"Reserved Font Name\" refers to any names specified as such after the\ncopyright statement(s).\n\n\"Original Version\" refers to the collection of Font Software components as\ndistributed by the Copyright Holder(s).\n\n\"Modified Version\" refers to any derivative made by adding to, deleting,\nor substituting -- in part or in whole -- any of the components of the\nOriginal Version, by changing formats or by porting the Font Software to a\nnew environment.\n\n\"Author\" refers to any designer, engineer, programmer, technical\nwriter or other person who contributed to the Font Software.\n\nPERMISSION & CONDITIONS\nPermission is hereby granted, free of charge, to any person obtaining\na copy of the Font Software, to use, study, copy, merge, embed, modify,\nredistribute, and sell modified and unmodified copies of the Font\nSoftware, subject to the following conditions:\n\n1) Neither the Font Software nor any of its individual components,\nin Original or Modified Versions, may be sold by itself.\n\n2) Original or Modified Versions of the Font Software may be bundled,\nredistributed and/or sold with any software, provided that each copy\ncontains the above copyright notice and this license. These can be\nincluded either as stand-alone text files, human-readable headers or\nin the appropriate machine-readable metadata fields within text or\nbinary files as long as those fields can be easily viewed by the user.\n\n3) No Modified Version of the Font Software may use the Reserved Font\nName(s) unless explicit written permission is granted by the corresponding\nCopyright Holder. This restriction only applies to the primary font name as\npresented to the users.\n\n4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font\nSoftware shall not be used to promote, endorse or advertise any\nModified Version, except to acknowledge the contribution(s) of the\nCopyright Holder(s) and the Author(s) or with their explicit written\npermission.\n\n5) The Font Software, modified or unmodified, in part or in whole,\nmust be distributed entirely under this license, and must not be\ndistributed under any other license. The requirement for fonts to\nremain under this license does not apply to any document created\nusing the Font Software.\n\nTERMINATION\nThis license becomes null and void if any of the above conditions are\nnot met.\n\nDISCLAIMER\nTHE FONT SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT\nOF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE\nCOPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,\nINCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL\nDAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING\nFROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM\nOTHER DEALINGS IN THE FONT SOFTWARE.",
+        "register": "neutral UI",
+        "personality": "Neutral UI, excellent small-size legibility",
+        "mood": [
+          "techy",
+          "clean",
+          "modern"
+        ]
+      },
+      {
+        "name": "inter-700-normal",
+        "file": "fonts/latin/inter-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 23.8,
+        "note": "Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter) Inter-Italic[opsz,wght].ttf: Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttp://scripts.sil.org/OFL\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------\n\nPREAMBLE\nThe goals of the Open Font License (OFL) are to stimulate worldwide\ndevelopment of collaborative font projects, to support the font creation\nefforts of academic and linguistic communities, and to provide a free and\nopen framework in which fonts may be shared and improved in partnership\nwith others.\n\nThe OFL allows the licensed fonts to be used, studied, modified and\nredistributed freely as long as they are not sold by themselves. The\nfonts, including any derivative works, can be bundled, embedded,\nredistributed and/or sold with any software provided that any reserved\nnames are not used by derivative works. The fonts and derivatives,\nhowever, cannot be released under any other type of license. The\nrequirement for fonts to remain under this license does not apply\nto any document created using the fonts or their derivatives.\n\nDEFINITIONS\n\"Font Software\" refers to the set of files released by the Copyright\nHolder(s) under this license and clearly marked as such. This may\ninclude source files, build scripts and documentation.\n\n\"Reserved Font Name\" refers to any names specified as such after the\ncopyright statement(s).\n\n\"Original Version\" refers to the collection of Font Software components as\ndistributed by the Copyright Holder(s).\n\n\"Modified Version\" refers to any derivative made by adding to, deleting,\nor substituting -- in part or in whole -- any of the components of the\nOriginal Version, by changing formats or by porting the Font Software to a\nnew environment.\n\n\"Author\" refers to any designer, engineer, programmer, technical\nwriter or other person who contributed to the Font Software.\n\nPERMISSION & CONDITIONS\nPermission is hereby granted, free of charge, to any person obtaining\na copy of the Font Software, to use, study, copy, merge, embed, modify,\nredistribute, and sell modified and unmodified copies of the Font\nSoftware, subject to the following conditions:\n\n1) Neither the Font Software nor any of its individual components,\nin Original or Modified Versions, may be sold by itself.\n\n2) Original or Modified Versions of the Font Software may be bundled,\nredistributed and/or sold with any software, provided that each copy\ncontains the above copyright notice and this license. These can be\nincluded either as stand-alone text files, human-readable headers or\nin the appropriate machine-readable metadata fields within text or\nbinary files as long as those fields can be easily viewed by the user.\n\n3) No Modified Version of the Font Software may use the Reserved Font\nName(s) unless explicit written permission is granted by the corresponding\nCopyright Holder. This restriction only applies to the primary font name as\npresented to the users.\n\n4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font\nSoftware shall not be used to promote, endorse or advertise any\nModified Version, except to acknowledge the contribution(s) of the\nCopyright Holder(s) and the Author(s) or with their explicit written\npermission.\n\n5) The Font Software, modified or unmodified, in part or in whole,\nmust be distributed entirely under this license, and must not be\ndistributed under any other license. The requirement for fonts to\nremain under this license does not apply to any document created\nusing the Font Software.\n\nTERMINATION\nThis license becomes null and void if any of the above conditions are\nnot met.\n\nDISCLAIMER\nTHE FONT SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT\nOF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE\nCOPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,\nINCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL\nDAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING\nFROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM\nOTHER DEALINGS IN THE FONT SOFTWARE.",
+        "register": "neutral UI",
+        "personality": "Neutral UI, excellent small-size legibility",
+        "mood": [
+          "techy",
+          "clean",
+          "modern"
+        ]
+      },
+      {
+        "name": "jetbrains-mono-400-normal",
+        "file": "fonts/latin/jetbrains-mono-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 20.7,
+        "note": "Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono) JetBrainsMono-Italic[wght].ttf: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttp://scripts.sil.org/OFL\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------\n\nPREAMBLE\nThe goals of the Open Font License (OFL) are to stimulate worldwide\ndevelopment of collaborative font projects, to support the font creation\nefforts of academic and linguistic communities, and to provide a free and\nopen framework in which fonts may be shared and improved in partnership\nwith others.\n\nThe OFL allows the licensed fonts to be used, studied, modified and\nredistributed freely as long as they are not sold by themselves. The\nfonts, including any derivative works, can be bundled, embedded,\nredistributed and/or sold with any software provided that any reserved\nnames are not used by derivative works. The fonts and derivatives,\nhowever, cannot be released under any other type of license. The\nrequirement for fonts to remain under this license does not apply\nto any document created using the fonts or their derivatives.\n\nDEFINITIONS\n\"Font Software\" refers to the set of files released by the Copyright\nHolder(s) under this license and clearly marked as such. This may\ninclude source files, build scripts and documentation.\n\n\"Reserved Font Name\" refers to any names specified as such after the\ncopyright statement(s).\n\n\"Original Version\" refers to the collection of Font Software components as\ndistributed by the Copyright Holder(s).\n\n\"Modified Version\" refers to any derivative made by adding to, deleting,\nor substituting -- in part or in whole -- any of the components of the\nOriginal Version, by changing formats or by porting the Font Software to a\nnew environment.\n\n\"Author\" refers to any designer, engineer, programmer, technical\nwriter or other person who contributed to the Font Software.\n\nPERMISSION & CONDITIONS\nPermission is hereby granted, free of charge, to any person obtaining\na copy of the Font Software, to use, study, copy, merge, embed, modify,\nredistribute, and sell modified and unmodified copies of the Font\nSoftware, subject to the following conditions:\n\n1) Neither the Font Software nor any of its individual components,\nin Original or Modified Versions, may be sold by itself.\n\n2) Original or Modified Versions of the Font Software may be bundled,\nredistributed and/or sold with any software, provided that each copy\ncontains the above copyright notice and this license. These can be\nincluded either as stand-alone text files, human-readable headers or\nin the appropriate machine-readable metadata fields within text or\nbinary files as long as those fields can be easily viewed by the user.\n\n3) No Modified Version of the Font Software may use the Reserved Font\nName(s) unless explicit written permission is granted by the corresponding\nCopyright Holder. This restriction only applies to the primary font name as\npresented to the users.\n\n4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font\nSoftware shall not be used to promote, endorse or advertise any\nModified Version, except to acknowledge the contribution(s) of the\nCopyright Holder(s) and the Author(s) or with their explicit written\npermission.\n\n5) The Font Software, modified or unmodified, in part or in whole,\nmust be distributed entirely under this license, and must not be\ndistributed under any other license. The requirement for fonts to\nremain under this license does not apply to any document created\nusing the Font Software.\n\nTERMINATION\nThis license becomes null and void if any of the above conditions are\nnot met.\n\nDISCLAIMER\nTHE FONT SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT\nOF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE\nCOPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,\nINCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL\nDAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING\nFROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM\nOTHER DEALINGS IN THE FONT SOFTWARE.",
+        "register": "code monospace",
+        "personality": "Code overlays, build-log aesthetics",
+        "mood": [
+          "code",
+          "terminal",
+          "techy"
+        ]
+      },
+      {
+        "name": "jetbrains-mono-700-normal",
+        "file": "fonts/latin/jetbrains-mono-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 21.4,
+        "note": "Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono) JetBrainsMono-Italic[wght].ttf: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThis license is copied below, and is also available with a FAQ at:\nhttp://scripts.sil.org/OFL\n\n\n-----------------------------------------------------------\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007\n-----------------------------------------------------------\n\nPREAMBLE\nThe goals of the Open Font License (OFL) are to stimulate worldwide\ndevelopment of collaborative font projects, to support the font creation\nefforts of academic and linguistic communities, and to provide a free and\nopen framework in which fonts may be shared and improved in partnership\nwith others.\n\nThe OFL allows the licensed fonts to be used, studied, modified and\nredistributed freely as long as they are not sold by themselves. The\nfonts, including any derivative works, can be bundled, embedded,\nredistributed and/or sold with any software provided that any reserved\nnames are not used by derivative works. The fonts and derivatives,\nhowever, cannot be released under any other type of license. The\nrequirement for fonts to remain under this license does not apply\nto any document created using the fonts or their derivatives.\n\nDEFINITIONS\n\"Font Software\" refers to the set of files released by the Copyright\nHolder(s) under this license and clearly marked as such. This may\ninclude source files, build scripts and documentation.\n\n\"Reserved Font Name\" refers to any names specified as such after the\ncopyright statement(s).\n\n\"Original Version\" refers to the collection of Font Software components as\ndistributed by the Copyright Holder(s).\n\n\"Modified Version\" refers to any derivative made by adding to, deleting,\nor substituting -- in part or in whole -- any of the components of the\nOriginal Version, by changing formats or by porting the Font Software to a\nnew environment.\n\n\"Author\" refers to any designer, engineer, programmer, technical\nwriter or other person who contributed to the Font Software.\n\nPERMISSION & CONDITIONS\nPermission is hereby granted, free of charge, to any person obtaining\na copy of the Font Software, to use, study, copy, merge, embed, modify,\nredistribute, and sell modified and unmodified copies of the Font\nSoftware, subject to the following conditions:\n\n1) Neither the Font Software nor any of its individual components,\nin Original or Modified Versions, may be sold by itself.\n\n2) Original or Modified Versions of the Font Software may be bundled,\nredistributed and/or sold with any software, provided that each copy\ncontains the above copyright notice and this license. These can be\nincluded either as stand-alone text files, human-readable headers or\nin the appropriate machine-readable metadata fields within text or\nbinary files as long as those fields can be easily viewed by the user.\n\n3) No Modified Version of the Font Software may use the Reserved Font\nName(s) unless explicit written permission is granted by the corresponding\nCopyright Holder. This restriction only applies to the primary font name as\npresented to the users.\n\n4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font\nSoftware shall not be used to promote, endorse or advertise any\nModified Version, except to acknowledge the contribution(s) of the\nCopyright Holder(s) and the Author(s) or with their explicit written\npermission.\n\n5) The Font Software, modified or unmodified, in part or in whole,\nmust be distributed entirely under this license, and must not be\ndistributed under any other license. The requirement for fonts to\nremain under this license does not apply to any document created\nusing the Font Software.\n\nTERMINATION\nThis license becomes null and void if any of the above conditions are\nnot met.\n\nDISCLAIMER\nTHE FONT SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND,\nEXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF\nMERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT\nOF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE\nCOPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,\nINCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL\nDAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING\nFROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM\nOTHER DEALINGS IN THE FONT SOFTWARE.",
+        "register": "code monospace",
+        "personality": "Code overlays, build-log aesthetics",
+        "mood": [
+          "code",
+          "terminal",
+          "techy"
+        ]
+      },
+      {
+        "name": "manrope-400-normal",
+        "file": "fonts/latin/manrope-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 13.8,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "rounded neutral",
+        "personality": "Rounded neutral, friendly products/vlog body",
+        "mood": [
+          "cozy",
+          "warm",
+          "friendly"
+        ]
+      },
+      {
+        "name": "manrope-700-normal",
+        "file": "fonts/latin/manrope-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 13.9,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "rounded neutral",
+        "personality": "Rounded neutral, friendly products/vlog body",
+        "mood": [
+          "cozy",
+          "warm",
+          "friendly"
+        ]
+      },
+      {
+        "name": "montserrat-400-normal",
+        "file": "fonts/latin/montserrat-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 18.3,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "geometric versatile",
+        "personality": "Geometric versatile, safe default for titles",
+        "mood": [
+          "modern",
+          "clean",
+          "versatile"
+        ]
+      },
+      {
+        "name": "montserrat-700-normal",
+        "file": "fonts/latin/montserrat-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 18.4,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "geometric versatile",
+        "personality": "Geometric versatile, safe default for titles",
+        "mood": [
+          "modern",
+          "clean",
+          "versatile"
+        ]
+      },
+      {
+        "name": "nunito-400-normal",
+        "file": "fonts/latin/nunito-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 15.9,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "rounded soft",
+        "personality": "Rounded soft, education/kids body text",
+        "mood": [
+          "cute",
+          "gentle",
+          "friendly"
+        ]
+      },
+      {
+        "name": "nunito-700-normal",
+        "file": "fonts/latin/nunito-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 15.8,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "rounded soft",
+        "personality": "Rounded soft, education/kids body text",
+        "mood": [
+          "cute",
+          "gentle",
+          "friendly"
+        ]
+      },
+      {
+        "name": "orbitron-400-normal",
+        "file": "fonts/latin/orbitron-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 6.2,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "space-age tech",
+        "personality": "Space-age tech, sci-fi HUD, neon",
+        "mood": [
+          "futuristic",
+          "sci-fi",
+          "neon"
+        ]
+      },
+      {
+        "name": "orbitron-700-normal",
+        "file": "fonts/latin/orbitron-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 6.4,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "space-age tech",
+        "personality": "Space-age tech, sci-fi HUD, neon",
+        "mood": [
+          "futuristic",
+          "sci-fi",
+          "neon"
+        ]
+      },
+      {
+        "name": "oswald-400-normal",
+        "file": "fonts/latin/oswald-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 12.0,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "condensed authoritative",
+        "personality": "Condensed authoritative, news/sport",
+        "mood": [
+          "authoritative",
+          "condensed",
+          "sport"
+        ]
+      },
+      {
+        "name": "oswald-700-normal",
+        "file": "fonts/latin/oswald-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 12.4,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "condensed authoritative",
+        "personality": "Condensed authoritative, news/sport",
+        "mood": [
+          "authoritative",
+          "condensed",
+          "sport"
+        ]
+      },
+      {
+        "name": "permanent-marker-400-normal",
+        "file": "fonts/latin/permanent-marker-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 28.9,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "graffiti casual",
+        "personality": "Graffiti casual, street annotations",
+        "mood": [
+          "casual",
+          "street",
+          "playful"
+        ]
+      },
+      {
+        "name": "playfair-display-400-normal",
+        "file": "fonts/latin/playfair-display-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 21.3,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "elegant serif",
+        "personality": "Elegant high-contrast serif, luxury/travel",
+        "mood": [
+          "elegant",
+          "luxury",
+          "premium"
+        ]
+      },
+      {
+        "name": "playfair-display-700-normal",
+        "file": "fonts/latin/playfair-display-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 22.7,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "elegant serif",
+        "personality": "Elegant high-contrast serif, luxury/travel",
+        "mood": [
+          "elegant",
+          "luxury",
+          "premium"
+        ]
+      },
+      {
+        "name": "rajdhani-500-normal",
+        "file": "fonts/latin/rajdhani-latin-500-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 14.7,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "techy condensed",
+        "personality": "Techy condensed, sport data/dashboards",
+        "mood": [
+          "techy",
+          "sport",
+          "data"
+        ]
+      },
+      {
+        "name": "rajdhani-700-normal",
+        "file": "fonts/latin/rajdhani-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 15.3,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "techy condensed",
+        "personality": "Techy condensed, sport data/dashboards",
+        "mood": [
+          "techy",
+          "sport",
+          "data"
+        ]
+      },
+      {
+        "name": "sora-400-normal",
+        "file": "fonts/latin/sora-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 14.4,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "modern geometric",
+        "personality": "Modern geometric clean, UI/SaaS titles",
+        "mood": [
+          "modern",
+          "clean",
+          "techy"
+        ]
+      },
+      {
+        "name": "sora-700-normal",
+        "file": "fonts/latin/sora-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 14.8,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "modern geometric",
+        "personality": "Modern geometric clean, UI/SaaS titles",
+        "mood": [
+          "modern",
+          "clean",
+          "techy"
+        ]
+      },
+      {
+        "name": "space-grotesk-400-normal",
+        "file": "fonts/latin/space-grotesk-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 13.1,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "techy modern",
+        "personality": "Techy modern, AI/tech promos",
+        "mood": [
+          "techy",
+          "modern",
+          "AI"
+        ]
+      },
+      {
+        "name": "space-grotesk-700-normal",
+        "file": "fonts/latin/space-grotesk-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 12.5,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "techy modern",
+        "personality": "Techy modern, AI/tech promos",
+        "mood": [
+          "techy",
+          "modern",
+          "AI"
+        ]
+      },
+      {
+        "name": "teko-400-normal",
+        "file": "fonts/latin/teko-latin-400-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 7.6,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "condensed bold sports",
+        "personality": "Condensed bold, scoreboard/stats",
+        "mood": [
+          "sport",
+          "data",
+          "bold"
+        ]
+      },
+      {
+        "name": "teko-700-normal",
+        "file": "fonts/latin/teko-latin-700-normal.woff2",
+        "ext": "woff2",
+        "size_kb": 7.1,
+        "note": "Google Fonts, SIL OFL 许可，免费商用",
+        "register": "condensed bold sports",
+        "personality": "Condensed bold, scoreboard/stats",
+        "mood": [
+          "sport",
+          "data",
+          "bold"
+        ]
+      }
+    ]
+  },
+  "sfx": {
+    "kind": "audio",
+    "items": [
+      {
+        "name": "sfx_chime",
+        "file": "sfx/sfx_chime.mp3",
+        "ext": "mp3",
+        "size_kb": 26.7,
+        "note": "",
+        "duration": 2.5
+      },
+      {
+        "name": "sfx_pop",
+        "file": "sfx/sfx_pop.mp3",
+        "ext": "mp3",
+        "size_kb": 22.5,
+        "note": "",
+        "duration": 0.72
+      },
+      {
+        "name": "sfx_whoosh",
+        "file": "sfx/sfx_whoosh.mp3",
+        "ext": "mp3",
+        "size_kb": 18.0,
+        "note": "qwen_tts/生成音效，商品宣传片项目产出，可自由复用",
+        "duration": 0.57
+      }
+    ]
+  },
+  "bgm": {
+    "kind": "audio",
+    "items": []
+  },
+  "images": {
+    "kind": "image",
+    "items": [
+      {
+        "name": "qwen-icon",
+        "file": "images/qwen-icon.svg",
+        "ext": "svg",
+        "size_kb": 1.5,
+        "note": "Qwen 品牌资产：不改色、不变形（Brand Guidelines v2.0）"
+      },
+      {
+        "name": "qwen-logo-en",
+        "file": "images/qwen-logo-en.svg",
+        "ext": "svg",
+        "size_kb": 3.8,
+        "note": ""
+      }
+    ]
+  },
+  "clips": {
+    "kind": "video",
+    "items": []
+  }
+}

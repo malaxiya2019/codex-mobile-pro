@@ -70,6 +70,7 @@ class CapabilityResolver {
     CapabilityType.node: const _CheckSpec('node', ['--version']),
     CapabilityType.npm: const _CheckSpec('npm', ['--version']),
     CapabilityType.python: const _CheckSpec('python3', ['--version']),
+    CapabilityType.uv: const _CheckSpec('uvx', ['--version']),
     CapabilityType.git: const _CheckSpec('git', ['--version']),
     CapabilityType.codexCli: const _CheckSpec('codex', ['--version']),
     CapabilityType.mimo2codex:

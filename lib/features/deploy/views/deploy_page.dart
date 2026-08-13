@@ -1185,8 +1185,14 @@ class _DeployPageState extends ConsumerState<DeployPage> {
       case 'python':
         tool = RuntimeTool.python;
         break;
+      case 'uv':
+        tool = RuntimeTool.uv;
+        break;
       case 'codex':
         tool = RuntimeTool.codexCli;
+        break;
+      case 'qwen_mm_plugins':
+        tool = RuntimeTool.qwenMmPlugins;
         break;
       case 'mimo2codex':
         tool = RuntimeTool.mimo2codex;

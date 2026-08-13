@@ -202,8 +202,12 @@ class RuntimeEnvironment {
         return await _binaryExists('git');
       case RuntimeTool.python:
         return await _binaryExists('python3');
+      case RuntimeTool.uv:
+        return await _binaryExists('uvx');
       case RuntimeTool.codexCli:
         return await _binaryExists('codex');
+      case RuntimeTool.qwenMmPlugins:
+        return _qwenMmPluginsDeployed();
       case RuntimeTool.mimo2codex:
         return await _binaryExists('mimo2codex');
       case RuntimeTool.deepseekKey:
@@ -246,6 +250,15 @@ class RuntimeEnvironment {
       if (f.existsSync()) return true;
     }
     return false;
+  }
+
+  /// Qwen-MM-Plugins 是否已部署：rootfs ~/.codex/config.toml 含 MCP 段
+  bool _qwenMmPluginsDeployed() {
+    if (!Directory(ubuntuRootfsDir).existsSync()) return false;
+    final config =
+        File(path.join(ubuntuRootfsDir, 'root', '.codex', 'config.toml'));
+    if (!config.existsSync()) return false;
+    return config.readAsStringSync().contains('[mcp_servers.qwen-mm-plugins');
   }
 
   bool _configFileExists() {
