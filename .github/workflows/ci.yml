@@ -204,11 +204,86 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
 
   # ============================================================
+  #  Job: Qwen-MM-Plugins 验证
+  #   1. 校验 8 个 qwen-mm skills（SKILL.md）已全量并入
+  #   2. 用 uvx --check-system 真实拉取并预构建 7 个 MCP server
+  #      （上游 install 脚本同款语义，--check-system 自检后即退出，不驻留）
+  # ============================================================
+  qwen-mm-verify:
+    name: 🧠 Qwen-MM Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v8
+        with:
+          enable-cache: true
+
+      - name: 校验 8 个 qwen-mm skills 已并入
+        run: |
+          set -eu
+          dirs=(api blender core edu-agent freecad search video-edit video-memory)
+          for name in "${dirs[@]}"; do
+            d="skills/qwen-mm-plugins-$name"
+            if [ ! -f "$d/SKILL.md" ]; then
+              echo "❌ 缺少 $d/SKILL.md"
+              exit 1
+            fi
+          done
+          n=$(find skills -maxdepth 1 -type d -name 'qwen-mm-plugins-*' | wc -l)
+          echo "✅ 8 个 qwen-mm-plugins skills 全部就位（目录数=$n）"
+          echo "- $n 个 qwen-mm skills 已并入" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: uvx --check-system 验证 7 个 MCP server
+        shell: bash
+        run: |
+          set -u
+          REPO=https://github.com/QwenLM/Qwen-MM-Plugins.git
+          # cap:tag — tag 实证自上游 .mcp.json（search 已修 v1.0.2，其余 v1.0.1）
+          caps=(
+            "core:qwen-mm-plugins-core-v1.0.1"
+            "api:qwen-mm-plugins-api-v1.0.1"
+            "search:qwen-mm-plugins-search-v1.0.2"
+            "video-memory:qwen-mm-plugins-video-memory-v1.0.1"
+            "video-edit:qwen-mm-plugins-video-edit-v1.0.1"
+            "blender:qwen-mm-plugins-blender-v1.0.1"
+            "freecad:qwen-mm-plugins-freecad-v1.0.1"
+          )
+          # blender/freecad 依赖桌面系统程序（Blender/FreeCAD/GL），CI 无头环境按上游语义容忍
+          tolerant=" blender freecad "
+          failed=0
+          for entry in "${caps[@]}"; do
+            cap="${entry%%:*}"; tag="${entry#*:}"
+            echo "--- [$cap] $tag ---"
+            if uvx --from "qwen-mm-plugins[$cap] @ git+$REPO@$tag" "qwen-mm-plugins-$cap" --check-system; then
+              echo "✅ $cap --check-system 通过"
+            else
+              code=$?
+              if [[ "$tolerant" == *" $cap "* ]]; then
+                echo "⚠️  $cap 报告系统依赖缺失（CI 无头环境，容忍，exit=$code）"
+              else
+                echo "❌ $cap --check-system 失败 (exit=$code)"
+                failed=1
+              fi
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "❌ 存在失败的 MCP 能力"
+            exit 1
+          fi
+          echo "✅ 7 个 MCP server --check-system 全部完成"
+          echo "- 7 个 MCP server 经 uvx --check-system 验证" >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================
   #  Job 4: 构建报告
   # ============================================================
   report:
     name: 📋 Report
-    needs: [analyze, test, build-android]
+    needs: [analyze, test, build-android, qwen-mm-verify]
     runs-on: ubuntu-latest
     if: always()
 
@@ -222,3 +297,4 @@ jobs:
           echo "| 🔍 Analyze | ${{ needs.analyze.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 🧪 Tests | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| 📦 Android Build (debug+release) | ${{ needs.build-android.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🧠 Qwen-MM Verify | ${{ needs.qwen-mm-verify.result }} |" >> $GITHUB_STEP_SUMMARY
