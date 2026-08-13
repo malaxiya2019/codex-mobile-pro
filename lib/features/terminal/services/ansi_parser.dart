@@ -275,7 +275,11 @@ class AnsiParser {
       switch (mode) {
         case 1:
           // 清行首到光标（真实终端：光标前字符被空格替换；此处保留旧语义删除）
-          if (cursorCol > 0) line.cells.removeRange(0, cursorCol);
+          // 防御：TUI 会「先定位后写」（如 \x1b[1;2H 再 \x1b[1K），
+          // 此时光标列可能超出该行实际 cells 长度（空行/短行），
+          // removeRange 终点取实际长度上界，避免越界 RangeError。
+          final clearEnd = cursorCol < line.cells.length ? cursorCol : line.cells.length;
+          if (clearEnd > 0) line.cells.removeRange(0, clearEnd);
           cursorCol = 0;
           break;
         case 2:
@@ -306,7 +310,9 @@ class AnsiParser {
         case 1:
           // 清光标前：保留当前行，清掉之前所有行 + 当前行光标前
           final cur = lineAt(cursorRow);
-          if (cursorCol > 0) cur.cells.removeRange(0, cursorCol);
+          // 防御：与 clearLine mode 1 相同，终点取实际长度上界
+          final clearEnd = cursorCol < cur.cells.length ? cursorCol : cur.cells.length;
+          if (clearEnd > 0) cur.cells.removeRange(0, clearEnd);
           lines
             ..clear()
             ..add(cur);

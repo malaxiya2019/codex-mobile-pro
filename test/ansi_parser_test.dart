@@ -279,5 +279,45 @@ void main() {
       final segments = parser.parse(input, cols: 5);
       expect(segments[0].text, '12345');
     });
+    test('回归: TUI 先定位后清行(1;2H + 1K) 空行不抛 RangeError', () {
+      // Codex TUI 重绘典型序列：进 alt-screen -> 定位 1;2 -> 清光标前
+      const input = '\x1b[?1049h\x1b[1;2H\x1b[1K';
+      final segments = parser.parse(input, cols: 80);
+      // 空行清除后画布仍可用，后续写入正常
+      final after = parser.parse('\x1b[?1049h\x1b[1;2H\x1b[1KOK', cols: 80);
+      expect(after[0].text, contains('OK'));
+      expect(segments, isNotNull);
+    });
+
+    test('回归: 空行定位非 0 列后 clearScreen mode 1(1J) 不抛 RangeError', () {
+      const input = '\x1b[?1049h\x1b[1;2H\x1b[1J';
+      final segments = parser.parse(input, cols: 80);
+      final after = parser.parse('\x1b[?1049h\x1b[1;2H\x1b[1JReady', cols: 80);
+      expect(after[0].text, contains('Ready'));
+      expect(segments, isNotNull);
+    });
+
+    test('回归: 已有文本时 clearLine mode 1 清除光标前字符(语义保持)', () {
+      // 行首写 ABCDEF，光标定位到 4 列后 1K -> 清掉 ABC，保留 D
+      const input = 'ABCDEF\x1b[1;4H\x1b[1K';
+      final segments = parser.parse(input, cols: 80);
+      expect(segments[0].text, 'DEF');
+    });
+
+    test('回归: 已有文本时 clearScreen mode 1 清光标前及之前所有行', () {
+      // 两行内容，光标在 2;4(第4列)，1J -> 删当前行前3字符并丢弃之前所有行
+      const input = 'line1\nline2XY\x1b[2;4H\x1b[1J';
+      final segments = parser.parse(input, cols: 80);
+      expect(segments[0].text, 'e2XY');
+    });
+
+    test('回归: 纯文本命令回显不触发(echo hello / printf / cyo --zh)', () {
+      final e1 = parser.parse('echo hello\n', cols: 80);
+      final e2 = parser.parse("printf 'hello\\n'\n", cols: 80);
+      final e3 = parser.parse('cyo --zh\r\n', cols: 80);
+      expect(e1[0].text, contains('echo hello'));
+      expect(e2, isNotEmpty);
+      expect(e3, isNotEmpty);
+    });
   });
 }
