@@ -838,6 +838,12 @@ void main() {
       expect(content, contains('[model_providers.deepseek]'));
       expect(content, contains('env_key = "DEEPSEEK_API_KEY"'));
       expect(content, contains('base_url = "https://api.deepseek.com"'));
+      // 顶层 model_catalog_json 指向 rootfs 内 models.json（消除 fallback 警告）
+      expect(content, contains('model_catalog_json = "/root/.codex/models.json"'));
+      final models =
+          File('${f.temp.path}/rootfs/root/.codex/models.json');
+      expect(models.existsSync(), isTrue, reason: 'models.json 必须部署');
+      expect(models.readAsStringSync(), contains('deepseek-chat'));
     });
 
     test('Codex 已安装（skipped）→ 补写 config.toml（自愈）', () async {
@@ -865,6 +871,34 @@ void main() {
       f.adapter.installedVersions['/usr/bin/codex'] = '0.9.0';
       final config = File('${f.temp.path}/rootfs/root/.codex/config.toml');
       config.createSync(recursive: true);
+      // 已含 DeepSeek 直连 + model_catalog_json → 幂等，完全不重写
+      config.writeAsStringSync('model = "custom-model"\n'
+          'model_catalog_json = "/root/.codex/models.json"\n'
+          '[model_providers.deepseek]\nname = "Keep"\n');
+
+      final installer = _codexInstaller(
+        loadShellAdditions: () async => '# Codex Mobile Pro\n',
+      );
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(config.readAsStringSync(), 'model = "custom-model"\n'
+          'model_catalog_json = "/root/.codex/models.json"\n'
+          '[model_providers.deepseek]\nname = "Keep"\n',
+          reason: '已完整配置时应保持用户自定义内容原样不覆盖');
+    });
+
+    test('config.toml 旧版本（缺 model_catalog_json）→ 顶层补写且保留用户内容',
+        () async {
+      // 旧 App 部署的 config 只有 [model_providers.deepseek]、没有
+      // model_catalog_json → 终端 codex 启动报 fallback metadata 警告。
+      // 升级：把 model_catalog_json 补到文件最前（TOML 顶层字段必须在
+      // 任何 table 之前），不覆盖用户已有内容。
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/codex'] = '0.9.0';
+      final config = File('${f.temp.path}/rootfs/root/.codex/config.toml');
+      config.createSync(recursive: true);
       config.writeAsStringSync(
           'model = "custom-model"\n[model_providers.deepseek]\nname = "Keep"\n');
 
@@ -874,8 +908,77 @@ void main() {
       final result = await installer.install(f.ctx);
 
       expect(result.success, isTrue);
-      expect(config.readAsStringSync(), contains('custom-model'),
-          reason: '已配置时应保持用户自定义内容不覆盖');
+      final upgraded = config.readAsStringSync();
+      expect(upgraded.startsWith(
+              'model_catalog_json = "/root/.codex/models.json"\n'),
+          isTrue, reason: 'model_catalog_json 必须补到顶层（table 之前）');
+      expect(upgraded, contains('custom-model'), reason: '用户内容不被覆盖');
+      expect(upgraded, contains('name = "Keep"'), reason: '用户内容不被覆盖');
+    });
+
+    test('Codex CLI 安装成功 → 部署 DeepSeek 模型元数据到 /root/.codex/models.json',
+        () async {
+      // 真机根因复刻：codex 启动报
+      //   ⚠ Model metadata for deepseek-chat not found. Defaulting to
+      //     fallback metadata; this can degrade performance...
+      // 修复：model_catalog_json 指向的 models.json 必须真实落盘 rootfs，
+      // 否则 codex 启动找不到目录文件，仍走 fallback。
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+      f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
+
+      const sampleCatalog =
+          '{"models":[{"slug":"deepseek-chat","display_name":"DeepSeek Chat",'
+          '"context_window":128000,"max_context_window":128000}]}\n';
+      final installer = _codexInstaller(
+        loadModelCatalog: () async => sampleCatalog,
+      );
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(result.warnings, isEmpty);
+      final dest = File('${f.temp.path}/rootfs/root/.codex/models.json');
+      expect(dest.existsSync(), isTrue, reason: 'models.json 必须部署到 rootfs');
+      expect(dest.readAsStringSync(), sampleCatalog);
+    });
+
+    test('模型目录已部署且内容一致 → 不重复写（幂等）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/codex'] = '0.9.0';
+      final dest = File('${f.temp.path}/rootfs/root/.codex/models.json');
+      dest.createSync(recursive: true);
+      const existing = '{"models":[]}\n';
+      dest.writeAsStringSync(existing);
+
+      var loadCalls = 0;
+      final installer = _codexInstaller(
+        loadModelCatalog: () async {
+          loadCalls++;
+          return existing;
+        },
+      );
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(loadCalls, 1, reason: '内容比较需读一次 asset，但不重复写入文件');
+    });
+
+    test('模型目录部署失败 → 不阻断安装但 warnings 携带原因', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+      f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
+
+      final installer = _codexInstaller(loadModelCatalog: () async {
+        throw StateError('asset 缺失');
+      });
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(result.warnings.join('\n'), contains('DeepSeek 模型目录部署失败'));
+      expect(result.warnings.join('\n'), contains('asset 缺失'));
     });
 
     test('Codex CLI 安装成功 → 部署全部 Skills 到 rootfs ~/.codex/skills/（含 .system）',
@@ -1485,6 +1588,7 @@ CodexCliInstaller _codexInstaller({
   Future<String> Function()? loadShellAdditions,
   Future<Uint8List> Function()? loadSkillsBundle,
   Future<String> Function()? loadThreadripper,
+  Future<String> Function()? loadModelCatalog,
 }) {
   return CodexCliInstaller(
     loadShellAdditions: loadShellAdditions ??
@@ -1492,5 +1596,8 @@ CodexCliInstaller _codexInstaller({
     loadSkillsBundle: loadSkillsBundle ?? () async => _buildSkillsTarGz(),
     loadThreadripper: loadThreadripper ??
         () async => 'const fs = require("fs");\nconsole.log("[Threadripper]");\n',
+    loadModelCatalog: loadModelCatalog ??
+        () async => '{"models":[{"slug":"deepseek-chat",'
+            '"display_name":"DeepSeek Chat","context_window":128000}]}\n',
   );
 }

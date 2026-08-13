@@ -64,6 +64,15 @@ class CodexCliInstaller extends ToolchainInstaller {
   /// thread_start() 用 `nohup node ~/.local/bin/threadripper.js` 拉起。
   static const String threadripperAsset = 'assets/threadripper.js';
 
+  /// DeepSeek 模型元数据目录（model_catalog_json 指向的 JSON 文件）。
+  ///
+  /// 消除 codex 启动警告 `Model metadata for deepseek-chat not found`：
+  /// Codex 内置模型目录只有 OpenAI 模型，deepseek-chat 直连时找不到
+  /// 元数据 → 退化为 fallback（上下文窗口等参数全错）。此 asset 以
+  /// ModelsResponse 格式（{"models": [...]}）提供合法 ModelInfo 条目，
+  /// 由 [_deployModelCatalog] 写入 rootfs 供 codex 启动时加载。
+  static const String modelCatalogAsset = 'assets/deepseek-models.json';
+
   /// 内置 Codex Skills 打包文件（由 skills/ 目录生成，含 .system 系统级）
   ///
   /// 为什么打包成单个 tar.gz 而非直接声明 skills/ 目录：skills/ 内含
@@ -81,6 +90,9 @@ class CodexCliInstaller extends ToolchainInstaller {
   /// threadripper.js 内容加载器（测试注入用；null = 从 asset 读取）
   final Future<String> Function()? loadThreadripper;
 
+  /// DeepSeek 模型元数据内容加载器（测试注入用；null = 从 asset 读取）
+  final Future<String> Function()? loadModelCatalog;
+
   /// 幂等标记（与 deploy.sh setup_shell 的 grep 标记一致）
   static const String shellMarker = '# Codex Mobile Pro';
 
@@ -96,6 +108,7 @@ class CodexCliInstaller extends ToolchainInstaller {
   static const String codexConfigToml = '''
 model = "deepseek-chat"
 model_provider = "deepseek"
+model_catalog_json = "/root/.codex/models.json"
 
 [model_providers.deepseek]
 name = "DeepSeek"
@@ -107,10 +120,23 @@ wire_api = "responses"
   /// config.toml 已配置的幂等标记
   static const String codexConfigMarker = '[model_providers.deepseek]';
 
+  /// 模型元数据目录在 rootfs 内的绝对路径（与 [codexConfigToml] 中
+  /// model_catalog_json 保持一致；codex 在 HOME=/root 下读取）。
+  static const String modelCatalogPath = '/root/.codex/models.json';
+
+  /// config.toml 顶层 model_catalog_json 行的幂等标记（旧版本部署的
+  /// config 只含 [codexConfigMarker]、不含本行 → 需幂等补写）。
+  static const String modelCatalogMarker = 'model_catalog_json';
+
+  /// config.toml 顶层 model_catalog_json 行（必须位于任何 table 之前）
+  static const String modelCatalogLine =
+      'model_catalog_json = "$modelCatalogPath"';
+
   CodexCliInstaller({
     this.loadShellAdditions,
     this.loadSkillsBundle,
     this.loadThreadripper,
+    this.loadModelCatalog,
   });
 
   @override
@@ -151,6 +177,7 @@ wire_api = "responses"
       final warnings = <String>[];
       await _injectShellAdditions(ctx, warnings);
       await _writeCodexConfig(ctx, warnings);
+      await _deployModelCatalog(ctx, warnings);
       await _deploySkills(ctx, warnings);
       await _deployThreadripper(ctx, warnings);
       return success(ver, skipped: true, warnings: warnings);
@@ -192,6 +219,7 @@ wire_api = "responses"
     final warnings = <String>[];
     await _injectShellAdditions(ctx, warnings);
     await _writeCodexConfig(ctx, warnings);
+    await _deployModelCatalog(ctx, warnings);
     await _deploySkills(ctx, warnings);
     await _deployThreadripper(ctx, warnings);
     // 启动指引（部署中心进度区展示，覆盖一键部署与单工具两条路径）
@@ -373,6 +401,49 @@ wire_api = "responses"
     return rel;
   }
 
+  /// 部署 DeepSeek 模型元数据到 rootfs `~/.codex/models.json`。
+  ///
+  /// 真机现象：终端 `codex` / `cyo` 启动输出
+  ///   ⚠ Model metadata for deepseek-chat not found.
+  ///     Defaulting to fallback metadata; this can degrade performance...
+  /// 根因：config.toml 用 model_provider=deepseek 直连 api.deepseek.com，
+  ///   但 Codex 内置模型目录只有 OpenAI 模型，找不到 deepseek-chat → 退化
+  ///   fallback 元数据（上下文窗口等参数全错）。
+  /// 修复：把 asset（assets/deepseek-models.json，源自 Codex ModelInfo
+  ///   schema + deepseek-chat 官方参数，非凭空编写）写入 [modelCatalogPath]，
+  ///   config.toml 顶层 model_catalog_json 指向它，codex 启动加载该目录
+  ///   即可命中 deepseek-chat 元数据。
+  ///
+  /// 幂等：目标已存在且内容与 asset 一致 → 跳过；不一致 → 更新。
+  /// 失败不阻断安装：元数据缺失只影响上下文窗口精度，Codex 仍可运行，
+  /// 但原因必须透出到 [warnings]（UI 可见）。
+  Future<void> _deployModelCatalog(
+      ToolchainContext ctx, List<String> warnings) async {
+    try {
+      final paths = await ctx.resolvePaths();
+      final dest = File('${paths.rootfsDir}$modelCatalogPath');
+      final content = await _resolveModelCatalog();
+
+      if (dest.existsSync() && dest.readAsStringSync() == content) {
+        report(ctx, InstallPhase.completed, 1.0, 'DeepSeek 模型目录已部署');
+        return;
+      }
+
+      await dest.parent.create(recursive: true);
+      await dest.writeAsString(content);
+      report(ctx, InstallPhase.completed, 1.0,
+          'DeepSeek 模型目录已部署 ~/.codex/models.json');
+    } catch (e) {
+      _recordWarning(warnings, 'DeepSeek 模型目录部署失败', e);
+    }
+  }
+
+  /// 读取 DeepSeek 模型元数据内容（测试注入 → 默认从 asset 读取）
+  Future<String> _resolveModelCatalog() async {
+    if (loadModelCatalog != null) return loadModelCatalog!();
+    return rootBundle.loadString(modelCatalogAsset);
+  }
+
   /// 写入 rootfs `~/.codex/config.toml`（DeepSeek 直连，幂等）
   ///
   /// 真机现象：终端 `codex` / `cyo --zh` 进 Welcome to Codex 登录引导
@@ -389,10 +460,22 @@ wire_api = "responses"
       final paths = await ctx.resolvePaths();
       final config = File('${paths.rootfsDir}/root/.codex/config.toml');
 
-      if (config.existsSync() &&
-          config.readAsStringSync().contains(codexConfigMarker)) {
-        report(ctx, InstallPhase.completed, 1.0, 'Codex 已配置 DeepSeek 直连');
-        return;
+      if (config.existsSync()) {
+        final existing = config.readAsStringSync();
+        if (existing.contains(codexConfigMarker)) {
+          if (existing.contains(modelCatalogMarker)) {
+            report(ctx, InstallPhase.completed, 1.0,
+                'Codex 已配置 DeepSeek 直连 + 模型目录');
+          } else {
+            // 旧版本部署的 config：已 DeepSeek 直连但缺 model_catalog_json。
+            // TOML 顶层字段必须在任何 table 之前 → 插到文件最前，不覆盖
+            // 用户已有内容，消除 codex 启动的 fallback metadata 警告。
+            await config.writeAsString('$modelCatalogLine\n$existing');
+            report(ctx, InstallPhase.completed, 1.0,
+                'Codex 已补写 model_catalog_json（旧 config 升级）');
+          }
+          return;
+        }
       }
 
       await config.parent.create(recursive: true);

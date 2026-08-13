@@ -1,0 +1,25 @@
+{
+  "models": [
+    {
+      "slug": "deepseek-chat",
+      "display_name": "DeepSeek Chat",
+      "description": "DeepSeek-V3 general-purpose chat model via api.deepseek.com",
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 10,
+      "base_instructions": "",
+      "support_verbosity": false,
+      "truncation_policy": { "mode": "tokens", "limit": 10000 },
+      "supports_parallel_tool_calls": true,
+      "experimental_supported_tools": [],
+      "supports_search_tool": false,
+      "context_window": 128000,
+      "max_context_window": 128000,
+      "auto_compact_token_limit": null,
+      "effective_context_window_percent": 95,
+      "input_modalities": ["text"]
+    }
+  ]
+}
