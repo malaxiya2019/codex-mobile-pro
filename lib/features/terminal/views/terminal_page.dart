@@ -310,6 +310,7 @@ class _TerminalPageState extends ConsumerState<TerminalPage>
                         padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
                         child: TerminalOutput(
                           text: activeSession.outputText,
+                          cols: activeSession.cols,
                           fontSize: settings.fontSize,
                           fontFamily: settings.fontFamily,
                           defaultForeground: settings.foregroundColor,

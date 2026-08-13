@@ -20,6 +20,10 @@ class TerminalOutput extends StatelessWidget {
   final bool cursorBlink;
   final Color cursorColor;
 
+  /// PTY 列宽（>0 时按列宽截断行，与 Codex TUI 排版一致；0 = 不限制）
+  final int cols;
+
+
   const TerminalOutput({
     super.key,
     required this.text,
@@ -29,6 +33,7 @@ class TerminalOutput extends StatelessWidget {
     this.fontFamily = 'monospace',
     this.cursorBlink = true,
     this.cursorColor = Colors.greenAccent,
+    this.cols = 0,
   });
 
   @override
@@ -38,7 +43,7 @@ class TerminalOutput extends StatelessWidget {
     }
 
     final parser = AnsiParser();
-    final segments = parser.parse(text);
+    final segments = parser.parse(text, cols: cols);
 
     if (segments.isEmpty) return const SizedBox.shrink();
 

@@ -128,6 +128,10 @@ class TerminalSession {
   final ShellInfo shellInfo;
   String cwd;
   TerminalSessionStatus status;
+
+  /// PTY 尺寸（App 内终端按此列宽排版，与后端一致；渲染器按 cols 截断行宽）
+  int rows;
+  int cols;
   final RingBuffer<TerminalLine> outputBuffer;
   Process? _process;
   StreamSubscription? _stdoutSub;
@@ -158,6 +162,8 @@ class TerminalSession {
     required this.shellInfo,
     required this.cwd,
     this.status = TerminalSessionStatus.running,
+    this.rows = 60,
+    this.cols = 120,
     RingBuffer<TerminalLine>? outputBuffer,
     ITerminalBackend? backend,
   }) : outputBuffer = outputBuffer ?? RingBuffer<TerminalLine>(maxBufferSize),
@@ -378,7 +384,11 @@ class TerminalSession {
     if (_disposed) return;
     try {
       if (_nativeSession != null) {
-        _nativeSession!.write('$command\n');
+        // 提交回车统一用 \r：
+        //   - bash（canonical + ICRNL）把输入 \r 由内核转换为 \n 再执行，行为不变；
+        //   - Codex TUI 等 raw-mode 全屏程序把 \r 识别为 Enter（\n 在某些
+        //     crossterm 输入解析下不会被当成回车，导致命令无法提交）。
+        _nativeSession!.write('$command\r');
       } else if (_process != null) {
         _process!.stdin.writeln(command);
       }
@@ -423,6 +433,8 @@ class TerminalSession {
   /// 调整终端大小（仅 Native PTY 支持）
   void resize(int rows, int cols) {
     if (_disposed) return;
+    this.rows = rows;
+    this.cols = cols;
     if (_nativeSession != null) {
       _nativeSession!.resize(rows, cols);
     }

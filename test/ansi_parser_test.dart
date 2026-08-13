@@ -197,4 +197,87 @@ void main() {
       expect(segments[1].underline, false);
     });
   });
+
+  group('Codex TUI (ratatui alt-screen 光栅重绘)', () {
+    late AnsiParser parser;
+    setUp(() {
+      parser = AnsiParser();
+    });
+
+    test('全屏重绘：绝对定位各行内容正确分布（不再压成一行）', () {
+      // Codex TUI 每次事件：进 alt screen → 清屏 → 用 \x1b[{r};{c}H 逐行绘制
+      final input = [
+        '\x1b[?1049h', // 进入 alt screen
+        '\x1b[2J', // 清屏
+        '\x1b[1;1H介绍一下自己吧',
+        '\x1b[2;1H> 怎么回事',
+        '\x1b[3;1Hdeepseek-chat default · ~',
+      ].join();
+      final segments = parser.parse(input);
+      expect(segments.length, 1);
+      expect(
+        segments[0].text,
+        '介绍一下自己吧\n> 怎么回事\ndeepseek-chat default · ~',
+      );
+    });
+
+    test('重复重绘后只保留最后一帧（2J 清屏 + 定位覆盖）', () {
+      final input = [
+        '\x1b[?1049h',
+        '\x1b[2J\x1b[1;1Hframe1-line1',
+        '\x1b[2;1Hframe1-line2',
+        '\x1b[2J\x1b[1;1Hframe2-only', // 第二次全量重绘
+      ].join();
+      final segments = parser.parse(input);
+      expect(segments[0].text, 'frame2-only');
+    });
+
+    test('离开 alt screen 后恢复主屏内容', () {
+      final input = [
+        'bash-prompt: ', // 主屏内容
+        '\x1b[?1049h', // 进入 TUI
+        '\x1b[2J\x1b[1;1Htui-line',
+        '\x1b[?1049l', // 退出 TUI
+        'after-exit',
+      ].join();
+      final segments = parser.parse(input);
+      expect(segments[0].text, 'bash-prompt: after-exit');
+    });
+
+    test('绝对定位到较远行会自动补空行', () {
+      const input = '\x1b[1;1Ha\x1b[3;1Hc';
+      final segments = parser.parse(input);
+      expect(segments[0].text, 'a\n\nc');
+    });
+
+    test('光标移动 C/D 后继续写入', () {
+      const input = '\x1b[1;1HABCD\x1b[1;1H\x1b[2CXY';
+      // 定位行首 → 右移 2 列 → 写 XY → 覆盖 C、D
+      final segments = parser.parse(input);
+      expect(segments[0].text, 'ABXY');
+    });
+
+    test('底部状态栏与输入行共存（典型 Codex 屏）', () {
+      final input = [
+        '\x1b[?1049h',
+        '\x1b[2J',
+        '\x1b[1;1H你：介绍一下自己吧',
+        '\x1b[2;1H我是 Codex，很高兴认识你！',
+        '\x1b[3;1H─────────────────────────────',
+        '\x1b[4;1H> ',
+        '\x1b[4;3Hdeepseek-chat default · ~',
+      ].join();
+      final segments = parser.parse(input, cols: 30);
+      expect(segments[0].text.split('\n').length, 4);
+      expect(segments[0].text, contains('你：介绍一下自己吧'));
+      expect(segments[0].text, contains('deepseek-chat default · ~'));
+      expect(segments[0].text.split('\n').last, '> deepseek-chat default · ~');
+    });
+
+    test('cols 限制：超宽行被截断', () {
+      const input = '\x1b[1;1H123456789';
+      final segments = parser.parse(input, cols: 5);
+      expect(segments[0].text, '12345');
+    });
+  });
 }

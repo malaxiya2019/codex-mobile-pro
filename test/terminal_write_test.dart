@@ -1,9 +1,11 @@
-/// 回归测试：交互终端写入换行行为
+/// 回归测试：交互终端写入回车行为
 ///
 /// 覆盖真实实现 `terminal_service.dart`（非测试桩）：
-///   - `write()`（主输入栏提交）必须以换行符结尾，
-///     bash 收到回车才执行命令 —— Native PTY 后端缺换行会导致
-///     命令一直挂在 stdin 缓冲区（真机复现：终端里 apt 无输出）。
+///   - `write()`（主输入栏提交）必须以 `\r`（回车）结尾：
+///     * bash（canonical + ICRNL）把输入 `\r` 由内核转换为 `\n` 再执行；
+///     * Codex TUI 等 raw-mode 全屏程序把 `\r` 识别为 Enter（`\n` 在部分
+///       crossterm 输入解析下不会被当成回车，导致命令无法提交）。
+///     若后端缺回车，命令会一直挂在 stdin 缓冲区。
 ///   - `writeRaw()`（ExtraKeys 原始按键）不得追加换行。
 ///
 /// 通过继承 NativePtyBackend 覆写 createSession + 注入记录型
@@ -114,16 +116,16 @@ void main() {
       await session.dispose();
     });
 
-    test('write() 提交命令以换行符结尾（bash 回车执行）', () {
+    test('write() 提交命令以回车结尾（bash ICRNL 转 \n 执行 / Codex raw 识别 Enter）', () {
       session.write('apt update --fix-missing');
-      expect(handle.writes, ['apt update --fix-missing\n'],
-          reason: 'Native PTY 后端必须追加 \\n，否则 bash 不执行命令');
+      expect(handle.writes, ['apt update --fix-missing\r'],
+          reason: 'Native PTY 后端必须追加 \\r 回车，否则命令不执行');
     });
 
-    test('write() 多命令均带换行', () {
+    test('write() 多命令均带回车', () {
       session.write('echo hello');
       session.write('cd /tmp');
-      expect(handle.writes, ['echo hello\n', 'cd /tmp\n']);
+      expect(handle.writes, ['echo hello\r', 'cd /tmp\r']);
     });
 
     test('writeRaw() 保持原始数据不追加换行（ExtraKeys 按键语义）', () {

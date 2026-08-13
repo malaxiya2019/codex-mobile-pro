@@ -192,9 +192,9 @@ void main() {
   });
 
   group('命令回显', () {
-    test('write() 提交命令带换行，且不追加 UI 回显（ECHO 已回显）', () {
+    test('write() 提交命令带回车，且不追加 UI 回显（ECHO 已回显）', () {
       session.write('echo hi');
-      expect(handle.writes, ['echo hi\n']);
+      expect(handle.writes, ['echo hi\r']);
       expect(session.outputText, isNot(contains('\$ echo hi')),
           reason: 'Native PTY ICANON|ECHO 下命令由终端驱动回显，UI 追加会造成双回显');
     });

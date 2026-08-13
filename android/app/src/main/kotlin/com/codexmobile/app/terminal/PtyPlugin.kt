@@ -362,6 +362,9 @@ class PtyPlugin(private val context: Context) {
         val readJob = scope.launch {
             try {
                 val buf = ByteArray(4096)
+                // UTF-8 累积缓冲：保留末尾不完整的多字节序列，
+                // 与下一 chunk 拼接后再解码，避免中文等字符被切断成 U+FFFD（�）
+                var pending = ByteArray(0)
                 while (isActive && session.isAlive) {
                     val nread = try {
                         PtyNative.readFromPty(session.ptyFd, buf, 0, buf.size)
@@ -374,16 +377,22 @@ class PtyPlugin(private val context: Context) {
                         delay(10)
                         continue
                     }
-                    val chunk = ByteArray(nread)
-                    System.arraycopy(buf, 0, chunk, 0, nread)
-                    val text = String(chunk, Charsets.UTF_8)
+                    val combined = ByteArray(pending.size + nread)
+                    System.arraycopy(pending, 0, combined, 0, pending.size)
+                    System.arraycopy(buf, 0, combined, pending.size, nread)
+                    // 只解码完整前缀；未完成的尾随字节留到下一轮
+                    val completeLen = utf8CompleteLength(combined)
+                    val text = String(combined, 0, completeLen, Charsets.UTF_8)
+                    pending = combined.copyOfRange(completeLen, combined.size)
 
-                    withContext(Dispatchers.Main) {
-                        outputSinks[sessionId]?.success(mapOf(
-                            "sessionId" to sessionId,
-                            "data" to text,
-                            "isStderr" to false
-                        ))
+                    if (text.isNotEmpty()) {
+                        withContext(Dispatchers.Main) {
+                            outputSinks[sessionId]?.success(mapOf(
+                                "sessionId" to sessionId,
+                                "data" to text,
+                                "isStderr" to false
+                            ))
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -407,6 +416,31 @@ class PtyPlugin(private val context: Context) {
             "shellPath" to shellPath,
             "binDir" to binDir?.absolutePath
         ))
+    }
+
+    /**
+     * 计算 [data] 中「完整 UTF-8 前缀」的字节长度。
+     *
+     * PTY 按 4096 字节分块读取，一个多字节 UTF-8 字符（如中文）可能被切断在
+     * 块边界；逐块 `String(bytes, UTF_8)` 会把被切断的尾部解码成 U+FFFD（�）。
+     * 本函数从尾部定位最后一个可能未完成的序列，返回其起始字节之前的位置；
+     * 不完整的尾随字节由调用方保留，待下一 chunk 拼接后再解码。
+     */
+    private fun utf8CompleteLength(data: ByteArray): Int {
+        var i = data.size
+        // 从末尾回退，跳过连续 continuation 字节（10xxxxxx），定位序列起始字节
+        while (i > 0 && (data[i - 1].toInt() and 0xC0) == 0x80) i--
+        if (i == 0) return 0 // 全为 continuation 字节（异常流），保守视为不完整
+        val start = data[i - 1].toInt() and 0xFF
+        val need = when {
+            start and 0x80 == 0x00 -> 1 // ASCII
+            start and 0xE0 == 0xC0 -> 2 // 2 字节序列
+            start and 0xF0 == 0xE0 -> 3 // 3 字节序列
+            start and 0xF8 == 0xF0 -> 4 // 4 字节序列
+            else -> 1                    // 非法起始字节，按单字节处理
+        }
+        // 该序列所需字节数在缓冲内是否完整
+        return if (i - 1 + need <= data.size) data.size else i - 1
     }
 
     private fun handleWrite(call: MethodCall, result: MethodChannel.Result) {
