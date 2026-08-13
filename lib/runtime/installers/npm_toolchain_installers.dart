@@ -22,7 +22,6 @@
 library;
 
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/services.dart';
@@ -40,11 +39,30 @@ class CodexCliInstaller extends ToolchainInstaller {
   /// npm 包名（npm registry 实证）
   static const String npmPackage = '@openai/codex';
 
-  /// rootfs 内可执行名
-  static const String binary = '/usr/bin/codex';
+  /// npm -g 可执行名（rootfs PATH 解析用）
+  static const String binaryName = 'codex';
+
+  /// 候选安装路径（npm -g 在 Ubuntu rootfs 的常见 prefix）
+  ///
+  /// 真机实证：Ubuntu noble rootfs 中 npm -g 实际装到 /usr/local/bin/codex
+  /// （npm 默认 prefix），早期/特定布局为 /usr/bin/codex。禁止只写死一个
+  /// 路径——installedVersion 找不到真实路径会让 install() 验证失败，
+  /// 注入（cyo 等）永不执行（cyo: command not found 的根因）。
+  /// 统一由 [_resolveNpmGlobalBinary] 解析（rootfs PATH 优先 + 候选兜底）。
+  static const List<String> binaryCandidates = [
+    '/usr/local/bin/codex',
+    '/usr/bin/codex',
+  ];
 
   /// Shell 快捷命令 asset（打包自 config/bashrc-additions.sh，两处保持同步）
   static const String shellAdditionsAsset = 'assets/bashrc-additions.sh';
+
+  /// threadripper 会话监控脚本 asset。
+  ///
+  /// 来源：deploy.sh install_threadripper() heredoc（手动部署路径），
+  /// 此处抽为 asset 供 App 一键部署复制到 rootfs ~/.local/bin/，
+  /// thread_start() 用 `nohup node ~/.local/bin/threadripper.js` 拉起。
+  static const String threadripperAsset = 'assets/threadripper.js';
 
   /// 内置 Codex Skills 打包文件（由 skills/ 目录生成，含 .system 系统级）
   ///
@@ -59,6 +77,9 @@ class CodexCliInstaller extends ToolchainInstaller {
 
   /// Skills 打包内容加载器（测试注入用；null = 从 asset 读取）
   final Future<Uint8List> Function()? loadSkillsBundle;
+
+  /// threadripper.js 内容加载器（测试注入用；null = 从 asset 读取）
+  final Future<String> Function()? loadThreadripper;
 
   /// 幂等标记（与 deploy.sh setup_shell 的 grep 标记一致）
   static const String shellMarker = '# Codex Mobile Pro';
@@ -86,7 +107,11 @@ wire_api = "responses"
   /// config.toml 已配置的幂等标记
   static const String codexConfigMarker = '[model_providers.deepseek]';
 
-  CodexCliInstaller({this.loadShellAdditions, this.loadSkillsBundle});
+  CodexCliInstaller({
+    this.loadShellAdditions,
+    this.loadSkillsBundle,
+    this.loadThreadripper,
+  });
 
   @override
   RuntimeTool get tool => RuntimeTool.codexCli;
@@ -96,12 +121,22 @@ wire_api = "responses"
 
   @override
   Future<bool> isInstalled(ToolchainContext ctx) async {
-    return await ctx.versionOf(binary) != null;
+    return await _resolveBinary(ctx) != null;
   }
 
   @override
   Future<String?> installedVersion(ToolchainContext ctx) async {
-    return ctx.versionOf(binary);
+    final resolved = await _resolveBinary(ctx);
+    if (resolved == null) return null;
+    return ctx.versionOf(resolved);
+  }
+
+  /// 解析 Codex CLI 实际安装路径。
+  ///
+  /// installedVersion / isInstalled / 安装后健康检查统一走这里，
+  /// 保证三处看到同一个真实路径。
+  Future<String?> _resolveBinary(ToolchainContext ctx) async {
+    return _resolveNpmGlobalBinary(ctx, binaryName, binaryCandidates);
   }
 
   @override
@@ -113,10 +148,12 @@ wire_api = "responses"
       // 幂等补注入 cyo/cy/cs（含标记则跳过），避免「已安装跳过→永不注入」；
       // 同时补写 ~/.codex/config.toml（DeepSeek 直连），否则终端 codex
       // 会弹 ChatGPT 登录引导。
-      await _injectShellAdditions(ctx);
-      await _writeCodexConfig(ctx);
-      await _deploySkills(ctx);
-      return success(ver, skipped: true);
+      final warnings = <String>[];
+      await _injectShellAdditions(ctx, warnings);
+      await _writeCodexConfig(ctx, warnings);
+      await _deploySkills(ctx, warnings);
+      await _deployThreadripper(ctx, warnings);
+      return success(ver, skipped: true, warnings: warnings);
     }
 
     // npm 缺失 → 结构化依赖错误
@@ -152,9 +189,11 @@ wire_api = "responses"
       );
     }
     report(ctx, InstallPhase.completed, 1.0, 'Codex CLI 安装完成');
-    await _injectShellAdditions(ctx);
-    await _writeCodexConfig(ctx);
-    await _deploySkills(ctx);
+    final warnings = <String>[];
+    await _injectShellAdditions(ctx, warnings);
+    await _writeCodexConfig(ctx, warnings);
+    await _deploySkills(ctx, warnings);
+    await _deployThreadripper(ctx, warnings);
     // 启动指引（部署中心进度区展示，覆盖一键部署与单工具两条路径）
     report(
       ctx,
@@ -162,7 +201,7 @@ wire_api = "responses"
       1.0,
       '✅ Codex 已就绪：首页「终端」→ 输入 cyo --zh（中文）或 cs（安全模式）即可启动',
     );
-    return success(vCodex);
+    return success(vCodex, warnings: warnings);
   }
 
   /// 注入 Shell 快捷命令（cyo/cy/cs 等）到 rootfs /root/.bashrc
@@ -177,7 +216,8 @@ wire_api = "responses"
   ///
   /// 幂等：/root/.bashrc 已含 [shellMarker] → 跳过（不重复追加）。
   /// 失败不阻断安装：快捷命令为增强步骤，Codex 本体已可用。
-  Future<void> _injectShellAdditions(ToolchainContext ctx) async {
+  Future<void> _injectShellAdditions(
+      ToolchainContext ctx, List<String> warnings) async {
     try {
       final paths = await ctx.resolvePaths();
       final bashrc = File('${paths.rootfsDir}/root/.bashrc');
@@ -193,7 +233,7 @@ wire_api = "responses"
       await bashrc.writeAsString(content, mode: FileMode.append);
       report(ctx, InstallPhase.completed, 1.0, 'Shell 快捷命令已注入 ~/.bashrc');
     } catch (e) {
-      LogService.warning('Toolchain', 'Shell 快捷命令注入失败（不阻断安装）: $e');
+      _recordWarning(warnings, 'Shell 快捷命令注入失败', e);
     }
   }
 
@@ -201,6 +241,60 @@ wire_api = "responses"
   Future<String> _resolveShellAdditions() async {
     if (loadShellAdditions != null) return loadShellAdditions!();
     return rootBundle.loadString(shellAdditionsAsset);
+  }
+
+  /// 记录非致命失败到 [warnings]（不吞掉，供 InstallResult / UI 展示）。
+  ///
+  /// 增强步骤（shell 注入 / config / skills / threadripper）失败不阻断
+  /// Codex 本体安装，但原因必须透出——不再只打 LogService.warning 静默。
+  void _recordWarning(List<String> warnings, String what, Object e) {
+    final msg = '$what（Codex 本体仍可用）: $e';
+    LogService.warning('Toolchain', msg);
+    warnings.add(msg);
+  }
+
+  /// 部署 threadripper 会话监控脚本到 rootfs `~/.local/bin/threadripper.js`。
+  ///
+  /// 真机根因：bashrc-additions.sh 的 thread_start() 用
+  /// `nohup node ~/.local/bin/threadripper.js` 拉起，但 App 一键部署从不
+  /// 复制该脚本 → cyo 即使注入成功，thread_start 也拉不起来。此处把
+  /// asset assets/threadripper.js（源自 deploy.sh install_threadripper()
+  /// heredoc，非凭空编写）复制到 rootfs 并加可执行位，闭合
+  /// cyo → thread_start → threadripper.js → codex 真实闭环。
+  ///
+  /// 幂等：目标已存在且内容与 asset 一致 → 跳过；不一致 → 更新。
+  Future<void> _deployThreadripper(
+      ToolchainContext ctx, List<String> warnings) async {
+    try {
+      final paths = await ctx.resolvePaths();
+      final dest = File('${paths.rootfsDir}/root/.local/bin/threadripper.js');
+      final content = await _resolveThreadripper();
+
+      if (dest.existsSync() && dest.readAsStringSync() == content) {
+        report(ctx, InstallPhase.completed, 1.0, 'threadripper 已部署');
+        return;
+      }
+
+      await dest.parent.create(recursive: true);
+      await dest.writeAsString(content);
+      try {
+        Process.runSync('chmod', ['+x', dest.path]);
+      } catch (_) {}
+      report(
+        ctx,
+        InstallPhase.completed,
+        1.0,
+        'threadripper 已部署 ~/.local/bin/threadripper.js',
+      );
+    } catch (e) {
+      _recordWarning(warnings, 'threadripper 部署失败', e);
+    }
+  }
+
+  /// 读取 threadripper.js 内容（测试注入 → 默认从 asset 加载）
+  Future<String> _resolveThreadripper() async {
+    if (loadThreadripper != null) return loadThreadripper!();
+    return rootBundle.loadString(threadripperAsset);
   }
 
 
@@ -213,7 +307,8 @@ wire_api = "responses"
   /// 实现：读 asset 内 tar.gz → archive 包解压（纯 Dart，不依赖 rootfs
   /// 工具）→ 写 rootfs 文件，保留可执行位（rev-dex-dumper 二进制）。
   /// 幂等：[skillsMarker] 存在 → 跳过。失败不阻断安装。
-  Future<void> _deploySkills(ToolchainContext ctx) async {
+  Future<void> _deploySkills(
+      ToolchainContext ctx, List<String> warnings) async {
     try {
       final paths = await ctx.resolvePaths();
       final target = Directory('${paths.rootfsDir}/root/.codex/skills');
@@ -254,7 +349,7 @@ wire_api = "responses"
         'Codex Skills 已部署 $count 个文件（含 .system 系统级）',
       );
     } catch (e) {
-      LogService.warning('Toolchain', 'Codex Skills 部署失败（不阻断安装）: $e');
+      _recordWarning(warnings, 'Codex Skills 部署失败', e);
     }
   }
 
@@ -288,7 +383,8 @@ wire_api = "responses"
   /// export），直连 DeepSeek、跳过登录。
   ///
   /// 幂等：已含 [codexConfigMarker] → 跳过。失败不阻断安装。
-  Future<void> _writeCodexConfig(ToolchainContext ctx) async {
+  Future<void> _writeCodexConfig(
+      ToolchainContext ctx, List<String> warnings) async {
     try {
       final paths = await ctx.resolvePaths();
       final config = File('${paths.rootfsDir}/root/.codex/config.toml');
@@ -303,7 +399,7 @@ wire_api = "responses"
       await config.writeAsString(codexConfigToml);
       report(ctx, InstallPhase.completed, 1.0, 'Codex 已配置 DeepSeek 直连');
     } catch (e) {
-      LogService.warning('Toolchain', 'Codex config 写入失败（不阻断安装）: $e');
+      _recordWarning(warnings, 'Codex config 写入失败', e);
     }
   }
 }
@@ -313,8 +409,14 @@ class Mimo2codexInstaller extends ToolchainInstaller {
   /// npm 包名（npm registry 实证）
   static const String npmPackage = 'mimo2codex';
 
-  /// rootfs 内可执行名
-  static const String binary = '/usr/bin/mimo2codex';
+  /// npm -g 可执行名（rootfs PATH 解析用）
+  static const String binaryName = 'mimo2codex';
+
+  /// 候选安装路径（npm -g 在 Ubuntu rootfs 的常见 prefix，禁止硬编码单一路径）
+  static const List<String> binaryCandidates = [
+    '/usr/local/bin/mimo2codex',
+    '/usr/bin/mimo2codex',
+  ];
 
   @override
   RuntimeTool get tool => RuntimeTool.mimo2codex;
@@ -324,12 +426,22 @@ class Mimo2codexInstaller extends ToolchainInstaller {
 
   @override
   Future<bool> isInstalled(ToolchainContext ctx) async {
-    return await ctx.versionOf(binary) != null;
+    return await _resolveBinary(ctx) != null;
   }
 
   @override
   Future<String?> installedVersion(ToolchainContext ctx) async {
-    return ctx.versionOf(binary);
+    final resolved = await _resolveBinary(ctx);
+    if (resolved == null) return null;
+    return ctx.versionOf(resolved);
+  }
+
+  /// 解析 mimo2codex 实际安装路径。
+  ///
+  /// installedVersion / isInstalled / 安装后健康检查统一走这里，
+  /// 保证三处看到同一个真实路径。
+  Future<String?> _resolveBinary(ToolchainContext ctx) async {
+    return _resolveNpmGlobalBinary(ctx, binaryName, binaryCandidates);
   }
 
   @override
@@ -374,4 +486,30 @@ class Mimo2codexInstaller extends ToolchainInstaller {
     report(ctx, InstallPhase.completed, 1.0, 'mimo2codex 安装完成');
     return success(vMimo);
   }
+}
+
+/// 解析 npm -g 全局工具在 rootfs 内的实际安装路径。
+///
+/// 优先级：
+///   1. rootfs 实际 PATH（`command -v`）——最真实，反映 npm prefix；
+///   2. 候选路径兜底（versionOf 能跑通即视为存在）。
+///
+/// 背景（cyo: command not found 根因）：binary 曾硬编码 /usr/bin/codex，
+/// 但 Ubuntu noble rootfs 中 npm -g 实际装到 /usr/local/bin/codex，
+/// installedVersion 查 /usr/bin/codex 恒 null → install() 验证失败 →
+/// shell 注入永不执行。这里统一解析，保证 installedVersion / isInstalled /
+/// 安装后健康检查三处看到同一个真实路径。
+Future<String?> _resolveNpmGlobalBinary(
+  ToolchainContext ctx,
+  String name,
+  List<String> candidates,
+) async {
+  // 1. rootfs 实际 PATH 解析（npm -g prefix 决定，最真实）
+  final inPath = await ctx.whichInRootfs(name);
+  if (inPath != null && inPath.isNotEmpty) return inPath;
+  // 2. 候选路径探测（--version 可执行即视为存在）
+  for (final cand in candidates) {
+    if (await ctx.versionOf(cand) != null) return cand;
+  }
+  return null;
 }

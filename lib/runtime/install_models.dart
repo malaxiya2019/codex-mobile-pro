@@ -46,12 +46,18 @@ class InstallResult {
   final String? version;
   final InstallPhase phase;
 
+  /// 非致命告警：主体安装成功，但增强步骤（shell 快捷命令注入 /
+  /// config 写入 / skills 部署 / threadripper 部署）失败的原因列表。
+  /// UI 在成功态可据此展示「成功但有警告」。为空时 UI 不展示。
+  final List<String> warnings;
+
   const InstallResult({
     required this.tool,
     required this.success,
     this.errorMessage,
     this.version,
     this.phase = InstallPhase.completed,
+    this.warnings = const [],
   });
 }
 

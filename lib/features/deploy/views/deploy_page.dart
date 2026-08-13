@@ -80,6 +80,11 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                 // ── 顶部状态卡片 ──
                 _buildSummaryCard(context, status),
 
+                // ── 部署成功但有警告（增强步骤失败原因，如 shell 注入失败） ──
+                if (status.state == DeployState.completed &&
+                    status.warnings.isNotEmpty)
+                  _buildWarningsCard(context, status),
+
                 // ── 部署完成：Codex 启动指引（codex 就绪时显示） ──
                 if (_isCodexReady(status)) _buildCodexLaunchGuide(context),
 
@@ -489,6 +494,63 @@ class _DeployPageState extends ConsumerState<DeployPage> {
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // 部署成功但有非致命告警
+  // ════════════════════════════════════════════════════════════════
+
+  /// 部署成功但增强步骤失败（shell 快捷命令注入 / skills / threadripper 等）
+  /// 的告警卡片。Codex 本体可用，但辅助组件可能缺失，原因需让用户可见。
+  Widget _buildWarningsCard(BuildContext context, DeployStatus status) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      color: Colors.orange.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.warning_amber,
+                    color: Colors.orange.shade800, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '✅ 部署成功 · ⚠️ 有增强步骤失败',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange.shade900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            for (final w in status.warnings)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '• $w',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    height: 1.5,
+                    color: Colors.orange.shade900,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 4),
+            Text(
+              'Codex 本体已可用，但快捷命令/辅助组件可能有缺失。可重新部署重试，或使用「🔧 修复环境」。',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.orange.shade800,
+              ),
+            ),
           ],
         ),
       ),

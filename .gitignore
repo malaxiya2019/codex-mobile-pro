@@ -4,6 +4,7 @@
 build/
 *.js
 *.js.map
+!assets/threadripper.js
 
 # Android
 android/.gradle/

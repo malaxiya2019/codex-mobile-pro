@@ -34,6 +34,10 @@ class DeployStatus {
   /// 安装结果列表
   final Map<RuntimeTool, InstallResult> installResults;
 
+  /// 部署成功但带非致命告警（增强步骤失败原因），UI 展示「成功但有警告」。
+  /// 空列表 → 正常成功态，不展示。
+  final List<String> warnings;
+
   const DeployStatus({
     this.state = DeployState.idle,
     this.detectionResult,
@@ -41,6 +45,7 @@ class DeployStatus {
     this.lastChecked,
     this.currentProgress,
     this.installResults = const {},
+    this.warnings = const [],
   });
 
   DeployStatus copyWith({
@@ -50,6 +55,7 @@ class DeployStatus {
     DateTime? lastChecked,
     InstallProgress? currentProgress,
     Map<RuntimeTool, InstallResult>? installResults,
+    List<String>? warnings,
   }) {
     return DeployStatus(
       state: state ?? this.state,
@@ -58,6 +64,7 @@ class DeployStatus {
       lastChecked: lastChecked ?? this.lastChecked,
       currentProgress: currentProgress ?? this.currentProgress,
       installResults: installResults ?? this.installResults,
+      warnings: warnings ?? this.warnings,
     );
   }
 
@@ -240,8 +247,17 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
       state: DeployState.completed,
       detectionResult: mgr.lastDetection,
       installResults: resultMap,
+      warnings: _collectWarnings(results),
       lastChecked: DateTime.now(),
     );
+  }
+
+  /// 收集部署结果中的非致命告警（成功但增强步骤失败），供 UI 展示。
+  List<String> _collectWarnings(Iterable<InstallResult> results) {
+    return [
+      for (final r in results)
+        if (r.success && r.warnings.isNotEmpty) ...r.warnings,
+    ];
   }
 
   /// 安装单个工具
@@ -291,7 +307,10 @@ class DeployNotifier extends StateNotifier<DeployStatus> {
 
     // 成功后重新检测（单工具路径不经过 _startInstallCoding 的 detectAll）
     await checkAll();
-    state = state.copyWith(installResults: resultMap);
+    state = state.copyWith(
+      installResults: resultMap,
+      warnings: _collectWarnings(resultMap.values),
+    );
   }
 
   /// 🔧 一键修复环境

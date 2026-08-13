@@ -32,14 +32,15 @@ import 'package:codex_mobile_pro/runtime/installers/apt_source_manager.dart';
 import 'package:codex_mobile_pro/runtime/installers/apt_toolchain_installers.dart';
 import 'package:codex_mobile_pro/runtime/installers/npm_toolchain_installers.dart';
 import 'package:codex_mobile_pro/runtime/installers/qwen_mm_plugins_installer.dart';
-import 'package:codex_mobile_pro/runtime/installers/uv_toolchain_installer.dart';
 import 'package:codex_mobile_pro/runtime/installers/toolchain_context.dart';
 import 'package:codex_mobile_pro/runtime/installers/toolchain_orchestrator.dart';
+import 'package:codex_mobile_pro/runtime/installers/uv_toolchain_installer.dart';
 import 'package:codex_mobile_pro/runtime/process/process_runner.dart';
 import 'package:codex_mobile_pro/runtime/process/runner_models.dart';
 import 'package:codex_mobile_pro/runtime/provider/linux_runtime_provider.dart';
 import 'package:codex_mobile_pro/runtime/runtime_dependency.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 /// 内存 Fake 执行适配器：模拟 Ubuntu rootfs 内的命令行为
 ///
@@ -210,14 +211,31 @@ class FakeToolchainAdapter implements IExecutionAdapter {
           );
         }
         final pkg = args.last;
+        // 真机实证：Ubuntu noble rootfs 中 npm -g 实际装到 /usr/local/bin
+        // （npm 默认 prefix），早期布局为 /usr/bin。两者都要能识别。
         if (pkg == '@openai/codex') {
-          installedVersions['/usr/bin/codex'] = '0.9.0';
+          installedVersions['/usr/local/bin/codex'] = '0.9.0';
         } else if (pkg == 'mimo2codex') {
-          installedVersions['/usr/bin/mimo2codex'] = '1.2.0';
+          installedVersions['/usr/local/bin/mimo2codex'] = '1.2.0';
         }
         return _ok(request);
       }
-      // npm --version
+      // bash -lc 'command -v X'（ToolchainContext.whichInRootfs）：
+    // 在 installedVersions 中按 basename 匹配 PATH 解析结果
+    if (exe == '/usr/bin/bash') {
+      final m = RegExp(r'command -v (\S+)').firstMatch(args.join(' '));
+      if (m != null) {
+        final name = m.group(1)!;
+        final hits = installedVersions.keys
+            .where((k) => p.posix.basename(k) == name)
+            .toList();
+        if (hits.isNotEmpty) return _ok(request, hits.first);
+        return RuntimeProcessResult(exitCode: 1, request: request);
+      }
+      return _ok(request);
+    }
+
+    // npm --version
       final v = installedVersions['/usr/bin/npm'];
       return v != null
           ? _ok(request, v)
@@ -621,12 +639,15 @@ void main() {
 
   group('Codex CLI / mimo2codex（npm）', () {
     test('Node+npm 已装 → npm install -g @openai/codex → 验证', () async {
+      // 真机根因复刻：npm -g 在 Ubuntu noble 实际装到 /usr/local/bin/codex，
+      // 而非 /usr/bin/codex。安装器必须通过 rootfs PATH（command -v）解析
+      // 到真实路径，验证通过并完成注入（cyo 等）。
       final f = ToolchainFixture();
       addTearDown(f.dispose);
       f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
       f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
 
-      final installer = CodexCliInstaller();
+      final installer = _codexInstaller();
       final result = await installer.install(f.ctx);
 
       expect(result.success, isTrue);
@@ -634,7 +655,11 @@ void main() {
           f.adapter.log,
           contains(
               '/usr/bin/npm install -g --no-fund --no-audit @openai/codex'));
-      expect(f.adapter.installedVersions['/usr/bin/codex'], '0.9.0');
+      expect(f.adapter.installedVersions['/usr/local/bin/codex'], '0.9.0',
+          reason: 'npm -g 应落到 /usr/local/bin（真实 prefix）');
+      expect(result.version, contains('0.9.0'));
+      expect(result.warnings, isEmpty,
+          reason: '完整成功路径不应有增强步骤告警');
     });
 
     test('Node+npm 已装 → npm install -g mimo2codex → 验证', () async {
@@ -649,7 +674,8 @@ void main() {
       expect(result.success, isTrue);
       expect(f.adapter.log,
           contains('/usr/bin/npm install -g --no-fund --no-audit mimo2codex'));
-      expect(f.adapter.installedVersions['/usr/bin/mimo2codex'], '1.2.0');
+      expect(f.adapter.installedVersions['/usr/local/bin/mimo2codex'], '1.2.0',
+          reason: 'npm -g 应落到 /usr/local/bin（真实 prefix）');
     });
 
     test('npm 缺失 → 依赖 blocked（dependencyMissing）', () async {
@@ -689,11 +715,14 @@ void main() {
       const sample = '# Codex Mobile Pro — Shell 快捷命令\n'
           'cy() { echo cy; }\n'
           'cyo() { echo cyo; }\n';
-      final installer =
-          CodexCliInstaller(loadShellAdditions: () async => sample);
+      final installer = _codexInstaller(
+        loadShellAdditions: () async => sample,
+      );
       final result = await installer.install(f.ctx);
 
       expect(result.success, isTrue);
+      expect(result.warnings, isEmpty,
+          reason: '完整注入路径不应有增强步骤告警');
       final bashrc = File('${f.temp.path}/rootfs/root/.bashrc');
       expect(bashrc.existsSync(), isTrue);
       final content = bashrc.readAsStringSync();
@@ -712,7 +741,7 @@ void main() {
           .writeAsStringSync('# Codex Mobile Pro — 已存在\ncyo() { echo old; }\n');
 
       var loadCalls = 0;
-      final installer = CodexCliInstaller(loadShellAdditions: () async {
+      final installer = _codexInstaller(loadShellAdditions: () async {
         loadCalls++;
         return '# Codex Mobile Pro — NEW\ncyo() { echo new; }\n';
       });
@@ -733,12 +762,14 @@ void main() {
 
       const sample = '# Codex Mobile Pro — Shell 快捷命令\n'
           'cyo() { echo cyo; }\n';
-      final installer =
-          CodexCliInstaller(loadShellAdditions: () async => sample);
+      final installer = _codexInstaller(
+        loadShellAdditions: () async => sample,
+      );
       final result = await installer.install(f.ctx);
 
       expect(result.success, isTrue);
       expect(result.version, contains('已安装'), reason: '已安装应走 skipped 分支');
+      expect(result.warnings, isEmpty, reason: '自愈路径也不应有告警');
       final bashrc = File('${f.temp.path}/rootfs/root/.bashrc');
       expect(bashrc.existsSync(), isTrue, reason: 'skipped 分支也应补注入');
       expect(bashrc.readAsStringSync(), contains('cyo()'));
@@ -753,7 +784,7 @@ void main() {
       bashrc.writeAsStringSync('# Codex Mobile Pro — 已存在\ncyo() { echo old; }\n');
 
       var loadCalls = 0;
-      final installer = CodexCliInstaller(loadShellAdditions: () async {
+      final installer = _codexInstaller(loadShellAdditions: () async {
         loadCalls++;
         return '# Codex Mobile Pro — NEW\ncyo() { echo new; }\n';
       });
@@ -764,20 +795,24 @@ void main() {
       expect(bashrc.readAsStringSync(), isNot(contains('NEW')));
     });
 
-    test('Shell 快捷命令注入失败 → 不阻断 Codex 安装', () async {
+    test('Shell 快捷命令注入失败 → 不阻断安装但 warnings 携带原因', () async {
       final f = ToolchainFixture();
       addTearDown(f.dispose);
       f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
       f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
 
-      final installer = CodexCliInstaller(loadShellAdditions: () async {
+      final installer = _codexInstaller(loadShellAdditions: () async {
         throw StateError('asset 加载失败');
       });
       final result = await installer.install(f.ctx);
 
-      // 快捷命令为增强步骤：注入失败仅 warning，Codex 安装仍成功
+      // 快捷命令为增强步骤：注入失败不阻断 Codex 本体安装
       expect(result.success, isTrue);
       expect(result.version, contains('0.9.0'));
+      // 但失败原因必须透出（UI 能看到），不再静默
+      expect(result.warnings, isNotEmpty);
+      expect(result.warnings.join('\n'), contains('Shell 快捷命令注入失败'));
+      expect(result.warnings.join('\n'), contains('asset 加载失败'));
     });
 
     test('Codex CLI 安装成功 → 写 ~/.codex/config.toml（DeepSeek 直连）', () async {
@@ -789,11 +824,13 @@ void main() {
       f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
       f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
 
-      final installer =
-          CodexCliInstaller(loadShellAdditions: () async => '# Codex Mobile Pro\n');
+      final installer = _codexInstaller(
+        loadShellAdditions: () async => '# Codex Mobile Pro\n',
+      );
       final result = await installer.install(f.ctx);
 
       expect(result.success, isTrue);
+      expect(result.warnings, isEmpty);
       final config = File('${f.temp.path}/rootfs/root/.codex/config.toml');
       expect(config.existsSync(), isTrue);
       final content = config.readAsStringSync();
@@ -810,8 +847,9 @@ void main() {
       addTearDown(f.dispose);
       f.adapter.installedVersions['/usr/bin/codex'] = '0.9.0';
 
-      final installer =
-          CodexCliInstaller(loadShellAdditions: () async => '# Codex Mobile Pro\n');
+      final installer = _codexInstaller(
+        loadShellAdditions: () async => '# Codex Mobile Pro\n',
+      );
       final result = await installer.install(f.ctx);
 
       expect(result.success, isTrue);
@@ -830,8 +868,9 @@ void main() {
       config.writeAsStringSync(
           'model = "custom-model"\n[model_providers.deepseek]\nname = "Keep"\n');
 
-      final installer =
-          CodexCliInstaller(loadShellAdditions: () async => '# Codex Mobile Pro\n');
+      final installer = _codexInstaller(
+        loadShellAdditions: () async => '# Codex Mobile Pro\n',
+      );
       final result = await installer.install(f.ctx);
 
       expect(result.success, isTrue);
@@ -849,13 +888,14 @@ void main() {
       f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
       f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
 
-      final installer = CodexCliInstaller(
+      final installer = _codexInstaller(
         loadShellAdditions: () async => '# Codex Mobile Pro\n',
         loadSkillsBundle: () async => _buildSkillsTarGz(),
       );
       final result = await installer.install(f.ctx);
 
       expect(result.success, isTrue);
+      expect(result.warnings, isEmpty, reason: 'skills/threadripper 都应成功');
       final skillsDir = '${f.temp.path}/rootfs/root/.codex/skills';
       // 普通 skill
       final analyze = File('$skillsDir/analyze/SKILL.md');
@@ -883,7 +923,7 @@ void main() {
           .writeAsStringSync('deployed=old\n');
 
       var loadCalls = 0;
-      final installer = CodexCliInstaller(
+      final installer = _codexInstaller(
         loadShellAdditions: () async => '# Codex Mobile Pro\n',
         loadSkillsBundle: () async {
           loadCalls++;
@@ -899,13 +939,13 @@ void main() {
           reason: 'marker 存在时应跳过部署');
     });
 
-    test('Skills 部署失败 → 不阻断 Codex 安装', () async {
+    test('Skills 部署失败 → 不阻断安装但 warnings 携带原因', () async {
       final f = ToolchainFixture();
       addTearDown(f.dispose);
       f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
       f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
 
-      final installer = CodexCliInstaller(
+      final installer = _codexInstaller(
         loadShellAdditions: () async => '# Codex Mobile Pro\n',
         loadSkillsBundle: () async {
           throw StateError('skills 包损坏');
@@ -913,9 +953,128 @@ void main() {
       );
       final result = await installer.install(f.ctx);
 
-      // skills 部署为增强步骤：失败仅 warning，Codex 本体安装仍成功
+      // skills 部署为增强步骤：失败不阻断 Codex 本体安装
       expect(result.success, isTrue);
       expect(result.version, contains('0.9.0'));
+      // 但失败原因必须透出
+      expect(result.warnings.join('\n'), contains('Codex Skills 部署失败'));
+      expect(result.warnings.join('\n'), contains('skills 包损坏'));
+    });
+
+    test('codex 已装在 /usr/local/bin/codex（npm -g 真实位置）→ 识别已安装并自愈',
+        () async {
+      // 真机根因复刻：修复前部署的 rootfs 里 codex 装在 /usr/local/bin/codex，
+      // 但 binary 曾硬编码 /usr/bin/codex → 检测恒「未安装」→ 重复安装 /
+      // 验证失败 → cyo 永不注入。修复后必须能识别 /usr/local/bin/codex。
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/local/bin/codex'] = '0.9.0';
+
+      final installer = _codexInstaller();
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(result.version, contains('已安装'),
+          reason: '/usr/local/bin/codex 应被识别为已安装（skipped）');
+      expect(result.warnings, isEmpty);
+      // 自愈：.bashrc 补注入 cyo
+      final bashrc = File('${f.temp.path}/rootfs/root/.bashrc');
+      expect(bashrc.readAsStringSync(), contains('cyo()'),
+          reason: 'skipped 分支也应自愈补注入快捷命令');
+    });
+
+    test('codex 已装在 /usr/bin/codex（旧布局）→ 兼容识别已安装', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/codex'] = '0.9.0';
+
+      final installer = _codexInstaller();
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(result.version, contains('已安装'),
+          reason: '/usr/bin/codex 旧布局也应兼容识别');
+    });
+
+    test('installedVersion 优先用 rootfs PATH（command -v）解析', () async {
+      // 两个候选路径同时存在时（罕见），command -v 返回 PATH 中第一个；
+      // 正常场景只有一处安装。这里验证 command -v 优先于候选探测。
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/local/bin/codex'] = '0.9.0';
+      f.adapter.installedVersions['/usr/bin/codex'] = '0.8.0';
+
+      final installer = CodexCliInstaller();
+      final v = await installer.installedVersion(f.ctx);
+
+      expect(v, '0.9.0', reason: 'PATH 解析应命中 /usr/local/bin/codex 的版本');
+      expect(f.adapter.log, contains('/usr/bin/bash -lc command -v codex'),
+          reason: '应优先执行 command -v 而非候选路径探测');
+    });
+
+    test('Codex CLI 安装成功 → threadripper.js 部署到 /root/.local/bin 且可执行',
+        () async {
+      // cyo → thread_start → nohup node ~/.local/bin/threadripper.js 闭环：
+      // 脚本必须真实存在于 rootfs /root/.local/bin/，否则 thread_start 拉不起来。
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+      f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
+
+      const sampleThread = 'const fs = require("fs");\n'
+          'console.log("[Threadripper] mock");\n';
+      final installer = _codexInstaller(
+        loadThreadripper: () async => sampleThread,
+      );
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(result.warnings, isEmpty);
+      final dest = File('${f.temp.path}/rootfs/root/.local/bin/threadripper.js');
+      expect(dest.existsSync(), isTrue, reason: 'threadripper.js 必须部署');
+      expect(dest.readAsStringSync(), sampleThread);
+      if (!Platform.isWindows) {
+        final mode = dest.statSync().mode;
+        expect(mode & 0x40, isNot(0), reason: '应保留可执行位（chmod +x）');
+      }
+    });
+
+    test('threadripper 已部署且内容一致 → 不重复写（幂等）', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/codex'] = '0.9.0';
+      final dest = File('${f.temp.path}/rootfs/root/.local/bin/threadripper.js');
+      dest.createSync(recursive: true);
+      const existing = 'const fs = require("fs");\nconsole.log("same");\n';
+      dest.writeAsStringSync(existing);
+
+      var loadCalls = 0;
+      final installer = _codexInstaller(
+        loadThreadripper: () async {
+          loadCalls++;
+          return existing;
+        },
+      );
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(loadCalls, 1, reason: '内容比较需读一次 asset，但不重复写入文件');
+    });
+
+    test('threadripper 部署失败 → 不阻断安装但 warnings 携带原因', () async {
+      final f = ToolchainFixture();
+      addTearDown(f.dispose);
+      f.adapter.installedVersions['/usr/bin/node'] = 'v18.19.1';
+      f.adapter.installedVersions['/usr/bin/npm'] = '9.2.0';
+
+      final installer = _codexInstaller(loadThreadripper: () async {
+        throw StateError('asset 缺失');
+      });
+      final result = await installer.install(f.ctx);
+
+      expect(result.success, isTrue);
+      expect(result.warnings.join('\n'), contains('threadripper 部署失败'));
+      expect(result.warnings.join('\n'), contains('asset 缺失'));
     });
   });
 
@@ -1228,8 +1387,8 @@ void main() {
       for (final r in second) {
         expect(r.success, isTrue, reason: '${r.tool} 重试应成功');
       }
-      expect(f.adapter.installedVersions['/usr/bin/codex'], '0.9.0');
-      expect(f.adapter.installedVersions['/usr/bin/mimo2codex'], '1.2.0');
+      expect(f.adapter.installedVersions['/usr/local/bin/codex'], '0.9.0');
+      expect(f.adapter.installedVersions['/usr/local/bin/mimo2codex'], '1.2.0');
     });
   });
 
@@ -1316,4 +1475,22 @@ Uint8List _buildSkillsTarGz() {
   a.addFile(bin);
   final tarBytes = TarEncoder().encode(a);
   return Uint8List.fromList(GZipEncoder().encode(tarBytes)!);
+}
+
+/// 构造带完整注入的 CodexCliInstaller（shell 快捷命令 + skills 包 + threadripper）。
+///
+/// 生产 install() 成功路径会执行四项注入，测试默认全部注入有效内容，
+/// 确保走「完整成功路径」且可断言 warnings 为空；专项测试用具名参数覆盖。
+CodexCliInstaller _codexInstaller({
+  Future<String> Function()? loadShellAdditions,
+  Future<Uint8List> Function()? loadSkillsBundle,
+  Future<String> Function()? loadThreadripper,
+}) {
+  return CodexCliInstaller(
+    loadShellAdditions: loadShellAdditions ??
+        () async => '# Codex Mobile Pro\ncyo() { echo cyo; }\n',
+    loadSkillsBundle: loadSkillsBundle ?? () async => _buildSkillsTarGz(),
+    loadThreadripper: loadThreadripper ??
+        () async => 'const fs = require("fs");\nconsole.log("[Threadripper]");\n',
+  );
 }

@@ -53,11 +53,16 @@ abstract class ToolchainInstaller {
   }
 
   /// 构造成功结果
-  InstallResult success(String version, {bool skipped = false}) {
+  InstallResult success(
+    String version, {
+    bool skipped = false,
+    List<String>? warnings,
+  }) {
     return InstallResult(
       tool: tool,
       success: true,
       version: skipped ? '已安装 $version' : version,
+      warnings: warnings ?? const [],
     );
   }
 

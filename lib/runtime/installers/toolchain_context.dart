@@ -121,6 +121,24 @@ class ToolchainContext {
     return null;
   }
 
+  /// 解析 rootfs 内命令的绝对路径（`command -v`）。
+  ///
+  /// 在 Ubuntu rootfs 的 bash 中执行 `command -v <name>`，返回 PATH 中
+  /// 第一个匹配的绝对路径；未找到返回 null。用于解析 npm -g 全局工具
+  /// 的实际安装位置（Ubuntu 上 npm prefix 通常为 /usr/local，但不同
+  /// rootfs / npm 版本可能不同，不可硬编码单一路径）。
+  Future<String?> whichInRootfs(String name, {Duration? timeout}) async {
+    final result = await runInRootfs(
+      '/usr/bin/bash',
+      arguments: ['-lc', 'command -v $name'],
+      timeout: timeout ?? const Duration(seconds: 30),
+      label: 'which:$name',
+    );
+    if (!result.isSuccess) return null;
+    final out = result.stdout.trim();
+    return out.isEmpty ? null : out;
+  }
+
   /// 确保 dpkg 状态健康（幂等：同轮已确认则不重复执行）。
   ///
   /// 真机曾出现 dpkg interrupted（apt 安装中断遗留），此时 apt-get
