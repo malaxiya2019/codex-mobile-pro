@@ -219,7 +219,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v8
+        uses: astral-sh/setup-uv@v8.3.2  # setup-uv 自 v8 起只发完整版本 tag（无 floating v8），@v8 无法解析
         with:
           enable-cache: true
 
