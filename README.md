@@ -101,9 +101,11 @@ codex-mobile-pro/
 
 本项目基于 **MIT License** 开源（见 [LICENSE](LICENSE)），免费使用，随意修改与分发，保留版权声明即可。
 
-> ⚠️ 第三方组件保留各自许可：
-> - `assets/busybox-arm64` — [meefik/busybox](https://github.com/meefik/busybox) 静态构建，**GPL-2.0**
-> - 内置 `skills/` 中的部分技能来自上游开源项目，均保留原作者许可声明
+> ⚠️ 第三方组件保留各自许可，完整清单见 **[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)**：
+> - `assets/busybox-arm64` / `libbusybox.so` — [meefik/busybox](https://github.com/meefik/busybox) 静态构建，**GPL-2.0**
+> - `libproot.so` — [termux/proot](https://github.com/termux/proot)（PRoot），**GPL-2.0-or-later**
+> - `skills/qwen-mm-plugins-*`（8 个）— [QwenLM/Qwen-MM-Plugins](https://github.com/QwenLM/Qwen-MM-Plugins)，**Apache-2.0**
+> - 内置 `skills/` 中的其余技能来自上游开源项目，版权归原作者（见 `skills/README.md`）
 > - 其余第三方依赖见 `pubspec.yaml`
 
 ---
