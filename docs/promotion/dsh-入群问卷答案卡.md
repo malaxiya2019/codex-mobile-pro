@@ -19,24 +19,20 @@
 
 ## 字段 7 正文（版本 A，主推）
 
-> 我长期在自研的移动端 agent harness（codex-mobile-pro，GitHub: malaxiya2019，MIT 开源）上跑任务，最近实打实干完的事：
-> 1. **真机跑通**：在手机 Termux 上把 Codex/DeepSeek 编程 agent 完整跑起来，中文交互、国内直连不用翻墙，这套 harness 现在就是我日常主力开发工具；
+> 我长期在自研的轻量级 agent harness（codex-mobile-pro，GitHub: malaxiya2019，MIT 开源，跑在手机 Termux 和 Linux 上）上跑任务，最近实打实干完的事：
+> 1. **真机跑通**：在手机 Termux 和 Linux 服务器上把 Codex/DeepSeek 编程 agent 完整跑起来，中文交互、国内直连不用翻墙，这套 harness 现在就是我日常主力开发工具；
 > 2. **啃了一堆硬骨头**：Termux 上 node-gyp 失效 → 改手搓 clang++ 编译原生模块；ANSI 渲染乱码 → 重写成画布化 + UTF-8 累积解码；PTY 尺寸异常 → 逐轮排查根因；
 > 3. **插件体系**：整合 70 个预装 skills（代码审查/TDD/调试/逆向/多模态），并做完第三方插件版权合规（THIRD-PARTY-NOTICES 全套声明）。
-> 结果：全部跑通，60+ 测试文件 CI 在跑，我每天都在用它写代码。现在 DSH 开源了，特别想第一时间把 DSH 接入移动端场景。
+> 结果：全部跑通，60+ 测试文件 CI 在跑，我每天都在用它写代码。现在 DSH 开源了，特别想第一时间把 DSH 的插件生态接进我这套 harness。
 
 ## 字段 7 正文（版本 B，短平快）
 
-> 天天拿自研的移动端 agent harness（codex-mobile-pro，GitHub: malaxiya2019）干活：真机跑通 Codex/DeepSeek、修 TUI 的 ANSI/PTY/中文乱码一堆硬骨头、整合 70 个 skills。结果都跑通了，现在 DSH 开源了想第一时间接入。
+> 天天拿自研的 agent harness（codex-mobile-pro，GitHub: malaxiya2019，手机和 Linux 都能跑）干活：真机跑通 Codex/DeepSeek、修 TUI 的 ANSI/PTY/中文乱码一堆硬骨头、整合 70 个 skills。结果都跑通了，现在 DSH 开源了想第一时间接入。
 
 ## 一致性提醒
 - 字段 1 仍选「还没有实际使用过」——那题选项明确限定 "DeepSeek Harness"，别编。
 - 字段 7 写其他 harness 干过的活，与字段 1 不冲突（一个问 DSH 本体，一个问 harness 经验）。
 
-
-> Harness 昨天（8/13）开源当晚我就在关注，还没正式跑起来，但我是 **Agent Harness 开源项目 codex-mobile-pro 的作者**（GitHub: malaxiya2019，MIT 开源，每天在维护，自带 70 个预装 skills，手机 Termux 真机跑通 Codex / DeepSeek，中文交互国内直连）。
-> 最近在做：移动端 agent 终端渲染（自己写 ANSI/PTY 解析）、skills 插件体系整合、第三方插件版权合规（THIRD-PARTY-NOTICES 全套声明）。
-> 特别想尽快接入 DSH 的插件生态，把 DSH 带到移动端场景——这也是我入群的主要目的。
 
 ## 添加小助手步骤（字段 8 前置动作，必须本人做）
 
