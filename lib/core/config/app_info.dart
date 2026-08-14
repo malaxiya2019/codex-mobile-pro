@@ -9,6 +9,6 @@ abstract class AppInfo {
   /// 仓库地址（GitHub）
   static const githubUrl = 'https://github.com/malaxiya2019/codex-mobile-pro';
 
-  /// 开源许可说明（仓库未附带 LICENSE 文件，先声明 MIT）
-  static const license = 'MIT License（详见仓库 README）';
+  /// 开源许可说明（MIT，见仓库 LICENSE）
+  static const license = 'MIT License（详见仓库 LICENSE）';
 }
