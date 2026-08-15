@@ -1,0 +1,282 @@
+[
+  {
+    "name": "ai-slop-cleaner",
+    "description": "清除 AI 话术（AI slop cleaner）。扫描并精简「AI 味」表达：空洞套话、冗余过渡词、过度形容词、样板化结构。当用户要求「去 AI 味」「清除 AI 话术」「文字精简自然」「ai-slop-cleaner」时使用。保持技术准确性，不删信息。"
+  },
+  {
+    "name": "analyze",
+    "description": "只读项目分析（read-only analysis）。用在前置理解任务：读懂一个项目/代码库的结构、分层、模块依赖与近期变更，输出项目地图并附文件证据。当用户说「先读懂项目」「analyze 项目」「项目结构是什么」「这个仓库是干什么的」时使用。禁止用于修改代码。"
+  },
+  {
+    "name": "ask-matt",
+    "description": "Ask which skill or flow fits your situation. A router over the skills in this repo."
+  },
+  {
+    "name": "autoresearch",
+    "description": "查证式研究（verify-your-claims research）。为结论提供可验证来源与复现命令：官方文档、API 实测、本地历史证据。当用户要求「查证」「验证来源」「结论可复现」「autoresearch」「研究要验证」时使用。无法验证的结论明确标注，不猜。"
+  },
+  {
+    "name": "batch-grill-me",
+    "description": "A relentless interview that asks every frontier question at once, round by round."
+  },
+  {
+    "name": "claude-handoff",
+    "description": "Hand the current conversation off to a fresh background agent that picks up the work immediately."
+  },
+  {
+    "name": "code-review",
+    "description": "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/PRD asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"."
+  },
+  {
+    "name": "codebase-design",
+    "description": "Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary."
+  },
+  {
+    "name": "deep-interview",
+    "description": "需求访谈（requirements interview）。把需求问透、不脑补。当任务目标、范围、输出格式或验收标准含糊，或用户给出多选方案让你决定时使用。最多 3 个问题，每个问题带推荐选项；用户不答复时声明默认假设并继续，不阻塞等待。"
+  },
+  {
+    "name": "design-an-interface",
+    "description": "Generate multiple radically different interface designs for a module using parallel sub-agents. Use when user wants to design an API, explore interface options, compare module shapes, or mentions \"design it twice\"."
+  },
+  {
+    "name": "diagnosing-bugs",
+    "description": "Diagnosis loop for hard bugs and performance regressions. Use when the user says \"diagnose\"/\"debug this\", or reports something broken/throwing/failing/slow."
+  },
+  {
+    "name": "domain-modeling",
+    "description": "Build and sharpen a project's domain model. Use when the user wants to pin down domain terminology or a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model."
+  },
+  {
+    "name": "edit-article",
+    "description": "Edit and improve articles by restructuring sections, improving clarity, and tightening prose. Use when user wants to edit, revise, or improve an article draft."
+  },
+  {
+    "name": "firecrawl",
+    "description": "|"
+  },
+  {
+    "name": "firecrawl-patterns",
+    "description": "参考 Firecrawl 高性能爬虫系统架构模式来优化 codex-mobile-pro。使用场景：DNS 缓存与网络检测优化、多引擎 fallback 安装策略、结构化错误处理、镜像切换与备用下载源。当用户提到 Firecrawl、引擎降级、DNS 问题、安装失败、网络检测时触发。"
+  },
+  {
+    "name": "git-guardrails-claude-code",
+    "description": "Set up Claude Code hooks to block dangerous git commands (push, reset --hard, clean, branch -D, etc.) before they execute. Use when user wants to prevent destructive git operations, add git safety hooks, or block git push/reset in Claude Code."
+  },
+  {
+    "name": "grill-me",
+    "description": "A relentless interview to sharpen a plan or design."
+  },
+  {
+    "name": "grill-with-docs",
+    "description": "A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go."
+  },
+  {
+    "name": "grilling",
+    "description": "Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases."
+  },
+  {
+    "name": "handoff",
+    "description": "Compact the current conversation into a handoff document for another agent to pick up."
+  },
+  {
+    "name": "implement",
+    "description": "\"Implement a piece of work based on a spec or set of tickets.\""
+  },
+  {
+    "name": "improve-codebase-architecture",
+    "description": "Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick."
+  },
+  {
+    "name": "lnn",
+    "description": "\"Liquid Neural Network (LNN/LTC) — 液态时间常数神经网络，用于分类和回归任务。使用 Liquid Time-Constant (LTC) 网络，支持可学习时间常数、自注意力机制、多层结构。\""
+  },
+  {
+    "name": "loop-me",
+    "description": "Grill me about specs for the workflows I want to build, within this workspace."
+  },
+  {
+    "name": "migrate-to-shoehorn",
+    "description": "Migrate test files from `as` type assertions to @total-typescript/shoehorn. Use when user mentions shoehorn, wants to replace `as` in tests, or needs partial test data."
+  },
+  {
+    "name": "obsidian-vault",
+    "description": "Search, create, and manage notes in the Obsidian vault with wikilinks and index notes. Use when user wants to find, create, or organize notes in Obsidian."
+  },
+  {
+    "name": "phoneharness",
+    "description": "Android 手机代理（phone agent）的混合动作编排框架与基准评测参考。当用户需要评测或构建 Android 手机代理、设计 CLI+GUI+MCP 混合动作编排 loop、按真实副作用（文件、系统设置、app 状态、安全）而非点击轨迹评分、审计 JSONL trace 并分类失败、搭建 Android 模拟器 + Termux 评测环境，或借鉴 PhoneHarness 的 deterministic-first 路由与 trace-backed grading 架构时使用。"
+  },
+  {
+    "name": "\"playwright\"",
+    "description": "\"Use when the task requires automating a real browser from the terminal (navigation, form filling, snapshots, screenshots, data extraction, UI-flow debugging) via `playwright-cli` or the bundled wrapper script.\""
+  },
+  {
+    "name": "prototype",
+    "description": "Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like."
+  },
+  {
+    "name": "qa",
+    "description": "Interactive QA session where user reports bugs or issues conversationally, and the agent files GitHub issues. Explores the codebase in the background for context and domain language. Use when user wants to report bugs, do QA, file issues conversationally, or mentions \"QA session\"."
+  },
+  {
+    "name": "qwen-mm-plugins-api",
+    "description": "\"Cloud MCP tools for understanding media, by model family. VL model: vision_chat (caption/VQA), ocr, grounding (detect/locate objects). Omni model (reads frames + audio together): timestamped captioning, ASR (plain / controllable / multi-speaker diarized), temporal grounding, event counting, music captioning. Plus transcribe_audio (ASR) and segmentation (SAM3). Use when a question about an image/video/audio needs an external model, not just local reading.\""
+  },
+  {
+    "name": "qwen-mm-plugins-blender",
+    "description": "Use whenever a task involves building or editing a 3D scene or asset in Blender — modeling, characters/people, architecture/interiors, terrain/landscapes, props, materials, lighting, or rendering. Covers discovering installed add-ons, using generators, importing and REFINING ready-made assets, and matching the result to the spec. Requires a running Blender instance with the blender-mcp addon (see Prerequisite)."
+  },
+  {
+    "name": "qwen-mm-plugins-core",
+    "description": "Local MCP tools to read and visualize any file — images, video, documents, code, data, 3D, notebooks, and more — plus image tools for cropping, annotating, and extracting frames."
+  },
+  {
+    "name": "qwen-mm-plugins-edu-agent",
+    "description": "|"
+  },
+  {
+    "name": "qwen-mm-plugins-freecad",
+    "description": "Use whenever a task involves parametric CAD in FreeCAD — modeling parts and assemblies, editing object properties, technical drawings, importing/exporting STEP/STL/OBJ/DXF, PDF/Excel reports from a model, or finite-element (FEM/CalculiX) analysis. Requires a running FreeCAD instance with the FreeCADMCP addon (see Prerequisite)."
+  },
+  {
+    "name": "qwen-mm-plugins-search",
+    "description": "Web search and page extraction MCP tools (Serper, Exa, or Tavily) plus Serper Lens reverse-image search for confirming facts — web_search (find facts), web_extractor (read a page in depth), image_search (reverse-search a frame to identify an entity). Use to verify anything you cannot confirm from the media alone."
+  },
+  {
+    "name": "qwen-mm-plugins-video-edit",
+    "description": "Editing-director skill that OWNS every video task built from EXISTING REAL FOOTAGE the user supplies (vlog, montage, intro, recap, eating/travel/family edits, style replication, compositing, subtitles, voiceover, B-roll). When footage files are the input, use THIS skill first — not the generic hyperframes entry and not the general-video workflow: it contributes footage judgment (selection, pacing, beat-sync, sound, looks, per-scene design) and then hands the designed composition to the HyperFrames pipeline for assembly and rendering, so the two are complementary rather than alternatives. It enforces the taste contract, scene-loop assembly with a Scene Ledger, and evidence-based independent review via its own plan-gate and review-gate scripts. Only tasks with NO real footage at all (a motion graphic or promo invented from a brief) go straight to hyperframes. Governance scales by mode instead of confirming every step."
+  },
+  {
+    "name": "qwen-mm-plugins-video-memory",
+    "description": "\"Triggered for long videos (30+ minutes), whether a single file or a directory of multiple videos. Vision-language MCP tools designed for efficient reading and semantic analysis of long videos (30+ minutes), supporting memory construction and semantic search.\""
+  },
+  {
+    "name": "request-refactor-plan",
+    "description": "Create a detailed refactor plan with tiny commits via user interview, then file it as a GitHub issue. Use when user wants to plan a refactor, create a refactoring RFC, or break a refactor into safe incremental steps."
+  },
+  {
+    "name": "research",
+    "description": "Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent."
+  },
+  {
+    "name": "resolving-merge-conflicts",
+    "description": "\"Use when you need to resolve an in-progress git merge/rebase conflict.\""
+  },
+  {
+    "name": "rev-dex-dumper",
+    "description": "Dump DEX files from a running Android app for unpacking/deobfuscation. Activate when the user wants to unpack an Android APK, dump DEX from memory, extract decrypted DEX files, or defeat class-loading packing."
+  },
+  {
+    "name": "rev-frida",
+    "description": "Generate Frida hook scripts using modern Frida API. Activate when the user wants to write Frida scripts, hook functions at runtime, trace calls or arguments or return values, intercept native or ObjC or Java methods, dump memory or exports, or handle native module load timing for Android and other targets."
+  },
+  {
+    "name": "rev-idapython",
+    "description": "IDAPython and IDALib script reference for reverse engineering. Activate when the user needs to write IDAPython scripts in IDA, use IDALib for headless analysis, operate on IDB databases, debug with IDA, manipulate memory/registers, traverse functions/blocks/instructions, work with Hex-Rays decompiler API, handle obfuscation, or batch-process binaries."
+  },
+  {
+    "name": "rev-ios-dump",
+    "description": "Dump decrypted iOS app binaries (砸壳) from jailbroken devices using frida-ios-dump. Activate when the user wants to decrypt an iOS app, dump an IPA from a device, or extract a decrypted Mach-O binary for reverse engineering."
+  },
+  {
+    "name": "rev-struct",
+    "description": "Reconstruct data structures by analyzing memory access patterns across functions"
+  },
+  {
+    "name": "rev-symbol",
+    "description": "Restore function symbols by analyzing code patterns, strings, constants, and cross-references"
+  },
+  {
+    "name": "rev-u3d-dump",
+    "description": "Dump Unity IL2CPP symbols from iOS/Android builds. Extract method names, addresses, and type info from IL2CPP binaries and global-metadata.dat, then generate IDA/Ghidra import scripts."
+  },
+  {
+    "name": "rev-unicorn-debug",
+    "description": "Debug and emulate specific code fragments or functions using the Unicorn engine. Activate when the user wants to emulate a function with Unicorn, trace binary execution without running the full program, decrypt or decode data by emulating the algorithm, or bypass environment dependencies (JNI, syscalls, libc) during emulation."
+  },
+  {
+    "name": "scaffold-exercises",
+    "description": "Create exercise directory structures with sections, problems, solutions, and explainers that pass linting. Use when user wants to scaffold exercises, create exercise stubs, or set up a new course section."
+  },
+  {
+    "name": "security-review",
+    "description": "专项安全排查（security review）。扫描代码/仓库中的真实敏感信息风险：token、API key、secret、密码、私钥、签名 keystore、明文存储。当用户要求「安全审查」「security-review」「排查泄露」「检查敏感信息」时使用。发现真实凭证时立即停止修改，只报告位置。"
+  },
+  {
+    "name": "setup-matt-pocock-skills",
+    "description": "Configure this repo for the engineering skills — set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills."
+  },
+  {
+    "name": "setup-pre-commit",
+    "description": "Set up Husky pre-commit hooks with lint-staged (Prettier), type checking, and tests in the current repo. Use when user wants to add pre-commit hooks, set up Husky, configure lint-staged, or add commit-time formatting/typechecking/testing."
+  },
+  {
+    "name": "setup-ts-deep-modules",
+    "description": "Wire dependency-cruiser into a TypeScript repo so each package is a deep module — implementation hidden in subfolders, reachable only through its entry-point files. User-invoked."
+  },
+  {
+    "name": "simplecadapi",
+    "description": "Thin SimpleCAD SDK reference skill focused on the public API surface, core types, and current modeling workflows."
+  },
+  {
+    "name": "taskmaster",
+    "description": "|"
+  },
+  {
+    "name": "tdd",
+    "description": "Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions \"red-green-refactor\", or wants integration tests."
+  },
+  {
+    "name": "teach",
+    "description": "Teach the user a new skill or concept, within this workspace."
+  },
+  {
+    "name": "to-questionnaire",
+    "description": "Turn a decision you can't fully answer into a questionnaire for someone else to fill in."
+  },
+  {
+    "name": "to-spec",
+    "description": "Turn the current conversation into a spec and publish it to the project issue tracker — no interview, just synthesis of what you've already discussed."
+  },
+  {
+    "name": "to-tickets",
+    "description": "Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker — edges as text in one file per ticket locally, or native blocking links on a real tracker."
+  },
+  {
+    "name": "triage",
+    "description": "Move issues and external PRs through a state machine of triage roles — categorise, verify, grill if needed, and write agent-ready briefs."
+  },
+  {
+    "name": "ubiquitous-language",
+    "description": "Extract a DDD-style ubiquitous language glossary from the current conversation, flagging ambiguities and proposing canonical terms. Saves to UBIQUITOUS_LANGUAGE.md. Use when user wants to define domain terms, build a glossary, harden terminology, create a ubiquitous language, or mentions \"domain model\" or \"DDD\"."
+  },
+  {
+    "name": "ultraqa",
+    "description": "循环验收（ultra QA loop）。自测直至通过：跑全量测试、定性每个失败（flaky / 环境依赖 / 真实 bug）、修复真实问题、回归到全绿或明确上报。当用户要求「循环自测」「验收」「把测试跑通」「QA 循环」时使用。"
+  },
+  {
+    "name": "wayfinder",
+    "description": "Plan a huge chunk of work — more than one agent session can hold — as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear."
+  },
+  {
+    "name": "wizard",
+    "description": "Generate an interactive bash wizard that walks a human through a manual procedure — third-party setup, a one-off migration, an A→B state transition — opening URLs, capturing values, confirming each step, and writing .env files and GitHub Actions secrets."
+  },
+  {
+    "name": "writing-beats",
+    "description": "Writing, exploit — assemble raw material into a journey of beats, grounding each term before a beat leans on it."
+  },
+  {
+    "name": "writing-fragments",
+    "description": "Writing, explore — mine raw fragments, no structure yet."
+  },
+  {
+    "name": "writing-great-skills",
+    "description": "Reference for writing and editing skills well — the vocabulary and principles that make a skill predictable."
+  },
+  {
+    "name": "writing-shape",
+    "description": "Writing, exploit — shape raw material into an article, paragraph by paragraph."
+  }
+]

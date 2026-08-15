@@ -6,6 +6,11 @@ build/
 *.js.map
 !assets/threadripper.js
 
+# dsh-plugin: cmp-skill-index 的 JS 源文件需纳入版本控制（豁免上面的 *.js）
+!dsh-plugin/cmp-skill-index/index.js
+!dsh-plugin/cmp-skill-index/data/skills.js
+!dsh-plugin/cmp-skill-index/scripts/smoke.js
+
 # Android
 android/.gradle/
 android/app/build/
